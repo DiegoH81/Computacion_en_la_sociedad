@@ -1,3 +1,4 @@
+
 import type { ReactNode } from 'react';
 
 interface MainMenuLayoutProps {
@@ -27,18 +28,23 @@ export function MainMenuLayout({
               Volver
             </button>
           )}
+
           <span className="rounded-full bg-teal-700 px-3 py-1 text-xs font-semibold text-white">
             {parroquiaActivaNombre}
           </span>
         </div>
 
         <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <span aria-hidden="true">👤</span>
+          <span aria-hidden="true">IMG</span>
           {usuarioNombre}
         </div>
       </header>
 
-      <main className="p-6">{children}</main>
+      <main className="w-full px-6 py-8">
+        <div className="mx-auto w-full max-w-5xl">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

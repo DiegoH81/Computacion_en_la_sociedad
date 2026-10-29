@@ -30,7 +30,7 @@ export function LoginPage() {
 
       <div className="flex w-full max-w-md flex-col items-center gap-6 rounded-lg bg-teal-700 p-10">
         <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white text-4xl">
-          ⛪
+          IMG
         </div>
 
         <LoginForm

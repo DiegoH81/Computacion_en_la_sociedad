@@ -1,3 +1,5 @@
+// src/pages/DashboardPage.tsx
+
 import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { MenuActionButton } from '../components/ui/MenuActionButton';
@@ -30,33 +32,33 @@ export function DashboardPage() {
         ¿Qué gestión desea realizar el día de hoy?
       </p>
 
-      <div className="grid grid-cols-3 gap-4 sm:grid-cols-5">
-        <MenuActionButton icon="📊" label="Estadísticas" onClick={() => {}} disabled />
+      <div className="grid grid-cols-3 gap-4 sm:grid-cols-5 w-full">
+        <MenuActionButton icon="IMG" label="Estadísticas" onClick={() => {}} disabled />
         <MenuActionButton
-          icon="✝️"
+          icon="IMG"
           label="Partida de bautismo"
           onClick={() => navigate('/bautismos')}
         />
         <MenuActionButton
-          icon="🕊️"
+          icon="IMG"
           label="Partida de confirmación"
           onClick={() => navigate('/confirmaciones')}
         />
         <MenuActionButton
-          icon="💍"
+          icon="IMG"
           label="Partida de matrimonio"
           onClick={() => navigate('/matrimonios')}
         />
-        <MenuActionButton icon="📤" label="Exportar datos" onClick={() => {}} disabled />
+        <MenuActionButton icon="IMG" label="Exportar datos" onClick={() => {}} disabled />
         <MenuActionButton
-          icon="📍"
+          icon="IMG"
           label="Cambiar parroquia"
           onClick={() => navigate('/parroquias/seleccionar')}
         />
 
         {isViewingOwnParish && (
           <MenuActionButton
-            icon="🧑‍🤝‍🧑"
+            icon="IMG"
             label="Agregar sacerdote"
             onClick={() => navigate('/sacerdotes')}
             variant="admin"
@@ -66,7 +68,7 @@ export function DashboardPage() {
         {/* Gestión de usuarios: solo admin (mockup: "Agregar usuario solo para superusuario"). */}
         {rol === 'admin' && (
           <MenuActionButton
-            icon="➕"
+            icon="IMG"
             label="Agregar usuario"
             onClick={() => navigate('/usuarios')}
             variant="admin"
