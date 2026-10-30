@@ -52,7 +52,7 @@ export async function searchBaptisms(
   const offset = (filters.page - 1) * filters.pageSize;
 
   const countResult = await db
-    .prepare(`SELECT COUNT(*) as total FROM bautismos b ${whereClause}`)
+    .prepare(`SELECT COUNT(*) as total FROM bautismos_legacy b ${whereClause}`)
     .bind(...params)
     .first<{ total: number }>();
 
@@ -64,7 +64,7 @@ export async function searchBaptisms(
       `SELECT b.id, b.parroquia_id, p.nombre as parroquia_nombre,
               b.numero_libro, b.numero_folio, b.numero_registro,
               b.nombre, b.apellido_paterno, b.apellido_materno, b.estado
-       FROM bautismos b
+       FROM bautismos_legacy b
        JOIN parroquias p ON p.id = b.parroquia_id
        ${whereClause}
        ORDER BY b.${sortField} ${sortDirection}
@@ -126,13 +126,18 @@ export async function createBaptism(
     return { success: false, message: 'Nombre y apellidos son requeridos.', status: 400 };
   }
 
+  // created_at/updated_at van explícitos y en ISO: el DEFAULT de la columna usa
+  // otro formato. client_id identifica la partida sin depender del ID del servidor.
+  const now = new Date().toISOString();
+
   const result = await db
     .prepare(
-      `INSERT INTO bautismos (
+      `INSERT INTO bautismos_legacy (
         parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
         nombre, apellido_paterno, apellido_materno, fecha_nacimiento, lugar_nacimiento,
-        padre_nombre, madre_nombre, fecha_bautizo, celebrante_id, padrino, madrina, anotaciones
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        padre_nombre, madre_nombre, fecha_bautizo, celebrante_id, padrino, madrina, anotaciones,
+        client_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       targetParroquiaId,
@@ -152,6 +157,9 @@ export async function createBaptism(
       input.padrino ?? null,
       input.madrina ?? null,
       input.anotaciones ?? null,
+      crypto.randomUUID(),
+      now,
+      now,
     )
     .run();
 
@@ -168,7 +176,7 @@ async function assertCanManageBaptism(
   }
 
   const baptism = await db
-    .prepare('SELECT parroquia_id FROM bautismos WHERE id = ?')
+    .prepare('SELECT parroquia_id FROM bautismos_legacy WHERE id = ?')
     .bind(baptismId)
     .first<{ parroquia_id: number }>();
 
@@ -200,12 +208,11 @@ export async function updateBaptism(
 
   await db
     .prepare(
-      `UPDATE bautismos SET
+      `UPDATE bautismos_legacy SET
         fecha_sacramento = ?, numero_libro = ?, numero_folio = ?, numero_registro = ?,
         nombre = ?, apellido_paterno = ?, apellido_materno = ?,
         fecha_nacimiento = ?, lugar_nacimiento = ?, padre_nombre = ?, madre_nombre = ?,
-        fecha_bautizo = ?, celebrante_id = ?, padrino = ?, madrina = ?, anotaciones = ?,
-        updated_at = ?
+        fecha_bautizo = ?, celebrante_id = ?, padrino = ?, madrina = ?, anotaciones = ?
        WHERE id = ?`,
     )
     .bind(
@@ -225,7 +232,6 @@ export async function updateBaptism(
       input.padrino ?? null,
       input.madrina ?? null,
       input.anotaciones ?? null,
-      new Date().toISOString(),
       baptismId,
     )
     .run();
@@ -251,7 +257,7 @@ export async function annulBaptism(
 
   await db
     .prepare(
-      `UPDATE bautismos
+      `UPDATE bautismos_legacy
        SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?
        WHERE id = ?`,
     )
@@ -271,7 +277,7 @@ export async function getBaptismById(
     .prepare(
       `SELECT b.*, p.nombre as parroquia_nombre,
               s.nombre || ' ' || s.apellido_paterno || ' ' || s.apellido_materno as celebrante_nombre
-       FROM bautismos b
+       FROM bautismos_legacy b
        JOIN parroquias p ON p.id = b.parroquia_id
        LEFT JOIN sacerdotes s ON s.id = b.celebrante_id
        WHERE b.id = ?`,

@@ -14,10 +14,9 @@ describe('searchConfirmations (integración con D1)', () => {
 
     await env.prelatura_db
       .prepare(
-        `INSERT INTO confirmaciones (
-          id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
+        `INSERT INTO confirmaciones_legacy (client_id, id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
           nombre, apellido_paterno, apellido_materno, estado
-        ) VALUES (1, 1, '2024-01-01', '1', '1', '1', 'Juan', 'Garcia', 'Lopez', 'vigente')`,
+        ) VALUES (lower(hex(randomblob(16))), 1, 1, '2024-01-01', '1', '1', '1', 'Juan', 'Garcia', 'Lopez', 'vigente')`,
       )
       .run();
   });
@@ -49,7 +48,7 @@ describe('searchConfirmations (integración con D1)', () => {
   it('usa "nombre" como fallback seguro si sortBy no está en la lista blanca', async () => {
     const result = await searchConfirmations(env.prelatura_db, {
       // @ts-expect-error -- simula un valor malicioso de sortBy
-      sortBy: 'id; DROP TABLE confirmaciones; --',
+      sortBy: 'id; DROP TABLE confirmaciones_legacy; --',
       sortDirection: 'asc',
       page: 1,
       pageSize: 20,

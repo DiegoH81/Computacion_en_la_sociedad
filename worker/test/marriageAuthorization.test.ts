@@ -18,7 +18,7 @@ describe('marriageService - autorización y anulación (integración con D1)', (
       .bind('Parroquia 1', 'Parroquia 2')
       .run();
 
-    // Usuario real necesario porque matrimonios.anulado_por_usuario_id
+    // Usuario real necesario porque matrimonios_legacy.anulado_por_usuario_id
     // es FK hacia usuarios(id); los tests de anulación referencian id=99.
     await env.prelatura_db
       .prepare(
@@ -30,11 +30,10 @@ describe('marriageService - autorización y anulación (integración con D1)', (
 
     await env.prelatura_db
       .prepare(
-        `INSERT INTO matrimonios (
-          id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
+        `INSERT INTO matrimonios_legacy (client_id, id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
           esposo_nombre, esposo_apellido_paterno, esposo_apellido_materno,
           esposa_nombre, esposa_apellido_paterno, esposa_apellido_materno, estado
-        ) VALUES (1, 1, '2024-01-01', '1', '1', '1', 'Juan', 'Perez', 'Lopez', 'Maria', 'Rojas', 'Diaz', 'vigente')`,
+        ) VALUES (lower(hex(randomblob(16))), 1, 1, '2024-01-01', '1', '1', '1', 'Juan', 'Perez', 'Lopez', 'Maria', 'Rojas', 'Diaz', 'vigente')`,
       )
       .run();
   });
@@ -58,7 +57,7 @@ describe('marriageService - autorización y anulación (integración con D1)', (
       expect(result.success).toBe(true);
       if (result.success) {
         const created = await env.prelatura_db
-          .prepare('SELECT parroquia_id FROM matrimonios WHERE id = ?')
+          .prepare('SELECT parroquia_id FROM matrimonios_legacy WHERE id = ?')
           .bind(result.id)
           .first<{ parroquia_id: number }>();
         expect(created?.parroquia_id).toBe(1);
@@ -88,11 +87,10 @@ describe('marriageService - autorización y anulación (integración con D1)', (
     it('un usuario_parroquia NO puede editar una partida de otra parroquia', async () => {
       await env.prelatura_db
         .prepare(
-          `INSERT INTO matrimonios (
-            id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
+          `INSERT INTO matrimonios_legacy (client_id, id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
             esposo_nombre, esposo_apellido_paterno, esposo_apellido_materno,
             esposa_nombre, esposa_apellido_paterno, esposa_apellido_materno, estado
-          ) VALUES (2, 2, '2024-01-01', '1', '1', '1', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'vigente')`,
+          ) VALUES (lower(hex(randomblob(16))), 2, 2, '2024-01-01', '1', '1', '1', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'vigente')`,
         )
         .run();
 
@@ -159,7 +157,7 @@ describe('marriageService - autorización y anulación (integración con D1)', (
 
       const annulled = await env.prelatura_db
         .prepare(
-          'SELECT estado, motivo_anulacion, anulado_por_usuario_id, anulado_en FROM matrimonios WHERE id = ?',
+          'SELECT estado, motivo_anulacion, anulado_por_usuario_id, anulado_en FROM matrimonios_legacy WHERE id = ?',
         )
         .bind(1)
         .first<{
@@ -178,11 +176,10 @@ describe('marriageService - autorización y anulación (integración con D1)', (
     it('un usuario_parroquia no puede anular una partida de otra parroquia', async () => {
       await env.prelatura_db
         .prepare(
-          `INSERT INTO matrimonios (
-            id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
+          `INSERT INTO matrimonios_legacy (client_id, id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
             esposo_nombre, esposo_apellido_paterno, esposo_apellido_materno,
             esposa_nombre, esposa_apellido_paterno, esposa_apellido_materno, estado
-          ) VALUES (3, 2, '2024-01-01', '1', '1', '1', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'vigente')`,
+          ) VALUES (lower(hex(randomblob(16))), 3, 2, '2024-01-01', '1', '1', '1', 'X', 'X', 'X', 'Y', 'Y', 'Y', 'vigente')`,
         )
         .run();
 

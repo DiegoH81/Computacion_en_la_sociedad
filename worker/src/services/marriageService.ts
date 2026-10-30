@@ -57,7 +57,7 @@ export async function searchMarriages(
   const offset = (filters.page - 1) * filters.pageSize;
 
   const countResult = await db
-    .prepare(`SELECT COUNT(*) as total FROM matrimonios m ${whereClause}`)
+    .prepare(`SELECT COUNT(*) as total FROM matrimonios_legacy m ${whereClause}`)
     .bind(...params)
     .first<{ total: number }>();
 
@@ -73,7 +73,7 @@ export async function searchMarriages(
               m.esposo_nombre, m.esposo_apellido_paterno, m.esposo_apellido_materno,
               m.esposa_nombre, m.esposa_apellido_paterno, m.esposa_apellido_materno,
               m.estado
-       FROM matrimonios m
+       FROM matrimonios_legacy m
        JOIN parroquias p ON p.id = m.parroquia_id
        ${whereClause}
        ORDER BY m.esposo_${sortField} ${sortDirection}
@@ -170,11 +170,16 @@ export async function createMarriage(
   const esposoCols = personToColumns('esposo', input.esposo);
   const esposaCols = personToColumns('esposa', input.esposa);
 
+  // created_at/updated_at van explícitos y en ISO: el DEFAULT de la columna usa
+  // otro formato. client_id identifica la partida sin depender del ID del servidor.
+  const now = new Date().toISOString();
+
   const columns = [
     'parroquia_id', 'fecha_sacramento', 'numero_libro', 'numero_folio', 'numero_registro',
     ...Object.keys(esposoCols), ...Object.keys(esposaCols),
     'fecha_matrimonio', 'celebrante_id', 'lugar_matrimonio',
     'testigo_1', 'testigo_2', 'testigo_3', 'testigo_4', 'notas_marginales',
+    'client_id', 'created_at', 'updated_at',
   ];
 
   const values = [
@@ -183,12 +188,13 @@ export async function createMarriage(
     input.fechaMatrimonio ?? null, input.celebranteId ?? null, input.lugarMatrimonio ?? null,
     input.testigo1 ?? null, input.testigo2 ?? null, input.testigo3 ?? null, input.testigo4 ?? null,
     input.notasMarginales ?? null,
+    crypto.randomUUID(), now, now,
   ];
 
   const placeholders = columns.map(() => '?').join(', ');
 
   const result = await db
-    .prepare(`INSERT INTO matrimonios (${columns.join(', ')}) VALUES (${placeholders})`)
+    .prepare(`INSERT INTO matrimonios_legacy (${columns.join(', ')}) VALUES (${placeholders})`)
     .bind(...values)
     .run();
 
@@ -205,7 +211,7 @@ async function assertCanManageMarriage(
   }
 
   const marriage = await db
-    .prepare('SELECT parroquia_id FROM matrimonios WHERE id = ?')
+    .prepare('SELECT parroquia_id FROM matrimonios_legacy WHERE id = ?')
     .bind(marriageId)
     .first<{ parroquia_id: number }>();
 
@@ -253,7 +259,6 @@ export async function updateMarriage(
     testigo_3: input.testigo3 ?? null,
     testigo_4: input.testigo4 ?? null,
     notas_marginales: input.notasMarginales ?? null,
-    updated_at: new Date().toISOString(),
   };
 
   const setClause = Object.keys(updates)
@@ -261,7 +266,7 @@ export async function updateMarriage(
     .join(', ');
 
   await db
-    .prepare(`UPDATE matrimonios SET ${setClause} WHERE id = ?`)
+    .prepare(`UPDATE matrimonios_legacy SET ${setClause} WHERE id = ?`)
     .bind(...Object.values(updates), marriageId)
     .run();
 
@@ -286,7 +291,7 @@ export async function annulMarriage(
 
   await db
     .prepare(
-      `UPDATE matrimonios
+      `UPDATE matrimonios_legacy
        SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?
        WHERE id = ?`,
     )
@@ -303,7 +308,7 @@ export async function getMarriageById(
   const marriage = await db
     .prepare(
       `SELECT m.*, p.nombre as parroquia_nombre
-       FROM matrimonios m
+       FROM matrimonios_legacy m
        JOIN parroquias p ON p.id = m.parroquia_id
        WHERE m.id = ?`,
     )

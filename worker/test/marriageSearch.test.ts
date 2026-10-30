@@ -14,21 +14,19 @@ describe('searchMarriages (integración con D1)', () => {
 
     await env.prelatura_db
       .prepare(
-        `INSERT INTO matrimonios (
-          id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
+        `INSERT INTO matrimonios_legacy (client_id, id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
           esposo_nombre, esposo_apellido_paterno, esposo_apellido_materno,
           esposa_nombre, esposa_apellido_paterno, esposa_apellido_materno, estado
-        ) VALUES (1, 1, '2024-01-01', '1', '1', '1', 'Juan', 'Garcia', 'Lopez', 'Maria', 'Rojas', 'Diaz', 'vigente')`,
+        ) VALUES (lower(hex(randomblob(16))), 1, 1, '2024-01-01', '1', '1', '1', 'Juan', 'Garcia', 'Lopez', 'Maria', 'Rojas', 'Diaz', 'vigente')`,
       )
       .run();
 
     await env.prelatura_db
       .prepare(
-        `INSERT INTO matrimonios (
-          id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
+        `INSERT INTO matrimonios_legacy (client_id, id, parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
           esposo_nombre, esposo_apellido_paterno, esposo_apellido_materno,
           esposa_nombre, esposa_apellido_paterno, esposa_apellido_materno, estado
-        ) VALUES (2, 1, '2024-02-01', '1', '2', '2', 'Pedro', 'Sanchez', 'Torres', 'Ana', 'Garcia', 'Perez', 'vigente')`,
+        ) VALUES (lower(hex(randomblob(16))), 2, 1, '2024-02-01', '1', '2', '2', 'Pedro', 'Sanchez', 'Torres', 'Ana', 'Garcia', 'Perez', 'vigente')`,
       )
       .run();
   });
@@ -74,7 +72,7 @@ describe('searchMarriages (integración con D1)', () => {
   it('usa "nombre" como fallback seguro si sortBy no está en la lista blanca', async () => {
     const result = await searchMarriages(env.prelatura_db, {
       // @ts-expect-error -- simula un valor malicioso de sortBy
-      sortBy: 'id; DROP TABLE matrimonios; --',
+      sortBy: 'id; DROP TABLE matrimonios_legacy; --',
       sortDirection: 'asc',
       page: 1,
       pageSize: 20,

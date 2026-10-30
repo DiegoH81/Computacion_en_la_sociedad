@@ -50,7 +50,7 @@ export async function searchConfirmations(
   const offset = (filters.page - 1) * filters.pageSize;
 
   const countResult = await db
-    .prepare(`SELECT COUNT(*) as total FROM confirmaciones c ${whereClause}`)
+    .prepare(`SELECT COUNT(*) as total FROM confirmaciones_legacy c ${whereClause}`)
     .bind(...params)
     .first<{ total: number }>();
 
@@ -62,7 +62,7 @@ export async function searchConfirmations(
       `SELECT c.id, c.parroquia_id, p.nombre as parroquia_nombre,
               c.numero_libro, c.numero_folio, c.numero_registro,
               c.nombre, c.apellido_paterno, c.apellido_materno, c.estado
-       FROM confirmaciones c
+       FROM confirmaciones_legacy c
        JOIN parroquias p ON p.id = c.parroquia_id
        ${whereClause}
        ORDER BY c.${sortField} ${sortDirection}
@@ -122,13 +122,18 @@ export async function createConfirmation(
     return { success: false, message: 'Nombre y apellidos son requeridos.', status: 400 };
   }
 
+  // created_at/updated_at van explícitos y en ISO: el DEFAULT de la columna usa
+  // otro formato. client_id identifica la partida sin depender del ID del servidor.
+  const now = new Date().toISOString();
+
   const result = await db
     .prepare(
-      `INSERT INTO confirmaciones (
+      `INSERT INTO confirmaciones_legacy (
         parroquia_id, fecha_sacramento, numero_libro, numero_folio, numero_registro,
         nombre, apellido_paterno, apellido_materno, fecha_nacimiento, lugar_nacimiento,
-        padre_nombre, madre_nombre, fecha_confirmacion, celebrante_id, padrino, madrina, anotaciones
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        padre_nombre, madre_nombre, fecha_confirmacion, celebrante_id, padrino, madrina, anotaciones,
+        client_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       targetParroquiaId,
@@ -148,6 +153,9 @@ export async function createConfirmation(
       input.padrino ?? null,
       input.madrina ?? null,
       input.anotaciones ?? null,
+      crypto.randomUUID(),
+      now,
+      now,
     )
     .run();
 
@@ -164,7 +172,7 @@ async function assertCanManageConfirmation(
   }
 
   const confirmation = await db
-    .prepare('SELECT parroquia_id FROM confirmaciones WHERE id = ?')
+    .prepare('SELECT parroquia_id FROM confirmaciones_legacy WHERE id = ?')
     .bind(confirmationId)
     .first<{ parroquia_id: number }>();
 
@@ -196,12 +204,11 @@ export async function updateConfirmation(
 
   await db
     .prepare(
-      `UPDATE confirmaciones SET
+      `UPDATE confirmaciones_legacy SET
         fecha_sacramento = ?, numero_libro = ?, numero_folio = ?, numero_registro = ?,
         nombre = ?, apellido_paterno = ?, apellido_materno = ?,
         fecha_nacimiento = ?, lugar_nacimiento = ?, padre_nombre = ?, madre_nombre = ?,
-        fecha_confirmacion = ?, celebrante_id = ?, padrino = ?, madrina = ?, anotaciones = ?,
-        updated_at = ?
+        fecha_confirmacion = ?, celebrante_id = ?, padrino = ?, madrina = ?, anotaciones = ?
        WHERE id = ?`,
     )
     .bind(
@@ -221,7 +228,6 @@ export async function updateConfirmation(
       input.padrino ?? null,
       input.madrina ?? null,
       input.anotaciones ?? null,
-      new Date().toISOString(),
       confirmationId,
     )
     .run();
@@ -247,7 +253,7 @@ export async function annulConfirmation(
 
   await db
     .prepare(
-      `UPDATE confirmaciones
+      `UPDATE confirmaciones_legacy
        SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?
        WHERE id = ?`,
     )
@@ -265,7 +271,7 @@ export async function getConfirmationById(
     .prepare(
       `SELECT c.*, p.nombre as parroquia_nombre,
               s.nombre || ' ' || s.apellido_paterno || ' ' || s.apellido_materno as celebrante_nombre
-       FROM confirmaciones c
+       FROM confirmaciones_legacy c
        JOIN parroquias p ON p.id = c.parroquia_id
        LEFT JOIN sacerdotes s ON s.id = c.celebrante_id
        WHERE c.id = ?`,
