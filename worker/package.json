@@ -7,7 +7,8 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "db:setup": "wrangler d1 execute prelatura-db --local --file=src/db/schema.sql"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",

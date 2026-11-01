@@ -145,6 +145,7 @@ export function PriestsPage() {
 
   return (
     <MainMenuLayout
+      title="Sacerdotes"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}

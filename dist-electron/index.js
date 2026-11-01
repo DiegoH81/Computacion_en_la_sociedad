@@ -15,6 +15,7 @@ function createWindow() {
 			nodeIntegration: false
 		}
 	});
+	mainWindow.maximize();
 	if (VITE_DEV_SERVER_URL) {
 		mainWindow.loadURL(VITE_DEV_SERVER_URL);
 		mainWindow.webContents.openDevTools();

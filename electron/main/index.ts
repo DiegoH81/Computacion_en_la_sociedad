@@ -19,6 +19,9 @@ function createWindow(): void {
     },
   });
 
+  // La letra grande necesita más ancho: así las tablas muestran todas sus columnas.
+  mainWindow.maximize();
+
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
-import { PersonSearchFilters } from '../components/features/PersonSearchFilters';
-import { MarriageTable } from '../components/features/MarriageTable';
+import { SacramentSearchPanel, type SortField } from '../components/features/SacramentSearchPanel';
 import { MarriageForm, type MarriageFormValues } from '../components/features/MarriageForm';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
 import { MarriagePrintView } from '../components/features/MarriagePrintView';
+import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
+import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
 import { useSessionStore } from '../store/sessionStore';
 import {
   searchMarriages,
@@ -17,8 +18,6 @@ import {
 } from '../controllers/MarriageController';
 import { searchPriests } from '../controllers/PriestController';
 import { MarriageService } from '../services/MarriageService';
-
-type SortField = 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
 
 interface PriestOption {
   id: number;
@@ -51,6 +50,7 @@ export function MarriagesPage() {
   const [printData, setPrintData] = useState<Parameters<typeof MarriagePrintView>[0]['data'] | null>(
     null,
   );
+  const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<PriestOption[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
 
@@ -75,6 +75,8 @@ export function MarriagesPage() {
     loadMarriages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, sortBy, sortDirection]);
+
+  const canWrite = rol === 'admin' || parroquiaActivaId === parroquiaId;
 
   function canManage(marriageParroquiaId: number): boolean {
     if (rol === 'admin') return true;
@@ -250,56 +252,42 @@ export function MarriagesPage() {
 
   return (
     <MainMenuLayout
+      title="Matrimonio"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-800">Buscar partida Matrimonio</h1>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingInitialValues(undefined);
-              setFormState({ mode: 'create' });
-            }}
-            className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-          >
-            + Agregar partida
-          </button>
-        </div>
-
-        {errorMessage && (
-          <p role="alert" className="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <PersonSearchFilters
-          onSearch={handleSearch}
-          onClear={handleClear}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSortChange={(field, direction) => {
-            setSortBy(field as SortField);
-            setSortDirection(direction);
-          }}
-          isLoading={isLoading}
-        />
-
-        <MarriageTable
-          marriages={marriages}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          onEdit={handleOpenEdit}
-          onPrint={handlePrint}
-          onPrintSelected={(ids) => console.log('print selected placeholder', ids)}
-          onAnnul={(id) => setAnnulmentTargetId(id)}
-          canManage={canManage}
-          isLoading={isLoading}
-        />
-      </div>
+      <SacramentSearchPanel<MarriageRowUI>
+        title="Buscar partida de matrimonio"
+        errorMessage={errorMessage}
+        rows={marriages}
+        columns={[
+          { header: 'Esposo', render: (row) => row.esposoNombreCompleto },
+          { header: 'Esposa', render: (row) => row.esposaNombreCompleto },
+        ]}
+        isLoading={isLoading}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={(field, direction) => {
+          setSortBy(field);
+          setSortDirection(direction);
+        }}
+        onSearch={handleSearch}
+        onClear={handleClear}
+        canWrite={canWrite}
+        canManage={canManage}
+        onAdd={() => {
+          setEditingInitialValues(undefined);
+          setFormState({ mode: 'create' });
+        }}
+        onEdit={handleOpenEdit}
+        onPrint={handlePrint}
+        onAnnul={(id) => setAnnulmentTargetId(id)}
+        onPrintIndex={() => setIsIndexOpen(true)}
+      />
 
       {formState.mode !== 'closed' && (
         <MarriageForm
@@ -326,18 +314,24 @@ export function MarriagesPage() {
       )}
 
       {printData && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
-          <div className="flex justify-end p-4 print:hidden">
-            <button
-              type="button"
-              onClick={() => setPrintData(null)}
-              className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
-            >
-              Volver
-            </button>
-          </div>
-          <MarriagePrintView data={printData} />
-        </div>
+        <A4PrintPreview
+          title="Imprimir certificado"
+          onClose={() => setPrintData(null)}
+          pages={[
+            <A4Page key="certificado">
+              <MarriagePrintView data={printData} />
+            </A4Page>,
+          ]}
+        />
+      )}
+
+      {isIndexOpen && (
+        <SacramentIndexPreview
+          tipo="matrimonio"
+          sacramentName="matrimonio"
+          parroquiaNombre={parroquiaActivaNombre ?? ''}
+          onClose={() => setIsIndexOpen(false)}
+        />
       )}
     </MainMenuLayout>
   );

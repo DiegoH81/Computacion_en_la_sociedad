@@ -2,12 +2,13 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { SelectParishPage } from '../pages/SelectParishPage';
-import { ProfilePage } from '../pages/ProfilePage';
 import { PriestsPage } from '../pages/PriestsPage';
 import { MarriagesPage } from '../pages/MarriagesPage';
 import { BaptismsPage } from '../pages/BaptismsPage';
 import { ConfirmationsPage } from '../pages/ConfirmationsPage';
 import { UsersPage } from '../pages/UsersPage';
+import { SettingsPage } from '../pages/SettingsPage'
+
 import { useSessionStore } from '../store/sessionStore';
 
 function ProtectedRoute({
@@ -56,15 +57,6 @@ export function AppRoutes() {
       />
 
       <Route
-        path="/perfil"
-        element={
-          <ProtectedRoute>
-            <ProfilePage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
         path="/sacerdotes"
         element={
           <ProtectedRoute>
@@ -106,6 +98,15 @@ export function AppRoutes() {
           <ProtectedRoute requireAdmin>
             <UsersPage />
           </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/configuracion"
+        element={
+        <ProtectedRoute>
+          <SettingsPage />
+        </ProtectedRoute>
         }
       />
 

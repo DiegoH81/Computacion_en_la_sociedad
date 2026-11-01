@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 
 interface LoginFormProps {
   onSubmit: (username: string, password: string) => void;
@@ -6,7 +6,12 @@ interface LoginFormProps {
   errorMessage: string | null;
 }
 
+const LABEL = 'mb-1 block font-semibold text-dark-app';
+const INPUT =
+  'w-full rounded-xl border-2 border-slate-300 bg-white px-4 py-2 text-black placeholder-slate-500 outline-none transition-colors focus:border-darker-app';
+
 export function LoginForm({ onSubmit, isLoading, errorMessage }: LoginFormProps) {
+  const fieldId = useId();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -16,29 +21,42 @@ export function LoginForm({ onSubmit, isLoading, errorMessage }: LoginFormProps)
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex w-full max-w-xs flex-col gap-3">
-      <input
-        type="text"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="Nombre de usuario"
-        autoComplete="username"
-        required
-        className="rounded-md border border-white/40 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/70 outline-none focus:border-white"
-      />
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-3">
+      <div>
+        <label htmlFor={`${fieldId}-username`} className={LABEL}>
+          Usuario
+        </label>
+        <input
+          id={`${fieldId}-username`}
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Nombre de usuario"
+          autoComplete="username"
+          autoFocus
+          required
+          className={INPUT}
+        />
+      </div>
 
-      <input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Contraseña"
-        autoComplete="current-password"
-        required
-        className="rounded-md border border-white/40 bg-white/10 px-4 py-2 text-sm text-white placeholder-white/70 outline-none focus:border-white"
-      />
+      <div>
+        <label htmlFor={`${fieldId}-password`} className={LABEL}>
+          Contraseña
+        </label>
+        <input
+          id={`${fieldId}-password`}
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Contraseña"
+          autoComplete="current-password"
+          required
+          className={INPUT}
+        />
+      </div>
 
       {errorMessage && (
-        <p role="alert" className="text-sm font-medium text-red-200">
+        <p role="alert" className="rounded-xl bg-red-50 px-4 py-2 font-medium text-solid-red">
           {errorMessage}
         </p>
       )}
@@ -46,7 +64,7 @@ export function LoginForm({ onSubmit, isLoading, errorMessage }: LoginFormProps)
       <button
         type="submit"
         disabled={isLoading}
-        className="mt-2 rounded-md bg-white px-4 py-2 text-sm font-semibold text-teal-800 transition-opacity hover:opacity-90 disabled:opacity-50"
+        className="mt-1 rounded-xl bg-icon-button px-4 py-3 font-bold text-white shadow-md transition-colors hover:bg-dark-app disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isLoading ? 'Ingresando...' : 'Iniciar sesión'}
       </button>
