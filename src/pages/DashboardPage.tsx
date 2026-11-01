@@ -1,6 +1,7 @@
 // src/pages/DashboardPage.tsx
 
 import { useNavigate } from 'react-router-dom';
+import { DecorativeWave } from '../components/ui/DecorativeWave';
 import { MenuActionButton } from '../components/ui/MenuActionButton';
 import {
   BaptismIcon,
@@ -22,15 +23,7 @@ export function DashboardPage() {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-app">
-      {/*Linea decorativa*/}
-      <svg
-        viewBox="0 0 487 347"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full fill-darker-app"
-      >
-        <path d="M155 0C170 40 230 55 300 55C370 55 420 75 418 120C416 165 365 190 365 235C365 275 420 290 487 282L487 0Z" />
-      </svg>
+      <DecorativeWave />
 
       <div className="relative">
         <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-8 py-4">
