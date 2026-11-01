@@ -5,6 +5,7 @@ import { MenuActionButton } from '../components/ui/MenuActionButton';
 import {
   BaptismIcon,
   ConfirmationIcon,
+  CrestIcon,
   MarriageIcon,
   ParishIcon,
   SettingsIcon,
@@ -34,8 +35,8 @@ export function DashboardPage() {
       <div className="relative">
         <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-8 py-4">
           <div className="flex items-center gap-4">
-            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white p-2 shadow-md">
-              <img src="./icons/escudo.png" alt="" className="h-full w-full object-contain" />
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white p-2 text-icon-button shadow-md">
+              <CrestIcon className="h-full w-full" />
             </div>
             <span className="text-xl font-semibold text-slate-950">{parroquiaActivaNombre}</span>
           </div>

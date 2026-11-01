@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
+import { CrestIcon } from '../components/ui/MenuIcons';
 import { useSessionStore } from '../store/sessionStore';
 
 const ROL_LABELS: Record<string, string> = {
@@ -45,8 +46,8 @@ export function SettingsPage() {
     >
       <div className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center gap-8">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-40 w-40 items-center justify-center rounded-full bg-white p-4">
-            <img src="./icons/escudo.png" alt="" className="h-full w-full object-contain" />
+          <div className="flex h-40 w-40 items-center justify-center rounded-full bg-white p-4 text-icon-button">
+            <CrestIcon className="h-full w-full" />
           </div>
 
           <span className="rounded-xl bg-darker-app px-8 py-2 font-semibold text-white uppercase">
