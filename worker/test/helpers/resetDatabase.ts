@@ -4,24 +4,24 @@
 // y al final las padres. Al agregar una tabla nueva con FKs, se añade AQUÍ
 // y ningún archivo de test necesita tocarse.
 //
+//   sync_feed                                -> sacramentos
+//   dispositivos                             -> parroquias
 //   cambios_persona                          -> personas, sacramentos, usuarios
 //   matrimonios, bautismos, confirmaciones   -> sacramentos, personas
-//   sacramentos                              -> parroquias, sacerdotes, usuarios
+//   sacramentos                              -> parroquias, ministros, usuarios
 //   personas                                 -> parroquias
-//   *_legacy (modelo antiguo)                -> parroquias, sacerdotes, usuarios
-//   sacerdotes, usuarios                     -> parroquias
+//   ministros, usuarios                      -> parroquias
 //   parroquias                               -> raíz
 const TABLES_IN_DELETE_ORDER = [
+  'sync_feed',
+  'dispositivos',
   'cambios_persona',
   'matrimonios',
   'bautismos',
   'confirmaciones',
   'sacramentos',
   'personas',
-  'matrimonios_legacy',
-  'bautismos_legacy',
-  'confirmaciones_legacy',
-  'sacerdotes',
+  'ministros',
   'usuarios',
   'parroquias',
 ] as const;

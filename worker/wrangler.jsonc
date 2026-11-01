@@ -15,7 +15,8 @@
 		{
 			"binding": "prelatura_db",
 			"database_name": "prelatura-db",
-			"database_id": "2db8a9ad-d5b9-4e34-aaa7-36e7b981d909"
+			"database_id": "2db8a9ad-d5b9-4e34-aaa7-36e7b981d909",
+			"migrations_dir": "src/db/migrations"
 		}
 	]
 	/**

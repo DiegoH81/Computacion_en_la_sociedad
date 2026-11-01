@@ -116,10 +116,8 @@ describe('authMiddleware (integración con D1)', () => {
   describe('endpoints protegidos exigen una cuenta activa', () => {
     const PROTECTED_ENDPOINTS = [
       '/api/parishes',
-      '/api/priests',
-      '/api/marriages',
-      '/api/baptisms',
-      '/api/confirmations',
+      '/api/reference',
+      '/api/sync/pull',
     ];
 
     it.each(PROTECTED_ENDPOINTS)('%s responde 200 a un usuario activo', async (path) => {

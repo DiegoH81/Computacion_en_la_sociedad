@@ -68,7 +68,7 @@ beforeEach(() => {
       { id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 },
       { id: 2, nombre: 'Parroquia 2', ubicacion: null, activa: 1 },
     ],
-    ministros: [{ id: 1, client_id: 'ministro-1', parroquia_id: 1, nombre: 'Manuel', apellido_paterno: 'Torres', apellido_materno: 'Rios', activo: 1 }],
+    ministros: [{ id: 1, client_id: 'ministro-1', parroquia_id: 1, titulo: null, nombre: 'Manuel', apellido_paterno: 'Torres', apellido_materno: 'Rios', activo: 1, version: 1 }],
     usuarios: [user(1, 1, 'usuario_parroquia'), user(2, 2, 'usuario_parroquia'), user(3, null, 'admin')],
   });
 });

@@ -1,6 +1,7 @@
 // src/pages/DashboardPage.tsx
 
 import { useNavigate } from 'react-router-dom';
+import { SyncStatusBadge } from '../components/features/SyncStatusBadge';
 import { DecorativeWave } from '../components/ui/DecorativeWave';
 import { MenuActionButton } from '../components/ui/MenuActionButton';
 import {
@@ -35,6 +36,7 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-6 text-slate-950">
+            <SyncStatusBadge />
             <button
               type="button"
               onClick={() => navigate('/configuracion')}

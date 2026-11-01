@@ -1,23 +1,24 @@
 import { safeStorage } from 'electron';
-import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
-
-export function loadOrCreateDatabaseKey(keyPath: string, databasePath: string): string {
+function assertSecureStorage(): void {
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error('El sistema operativo no ofrece almacenamiento seguro para la clave.');
   }
+}
 
-  if (existsSync(keyPath)) {
+/** null si falta el archivo o Windows ya no puede descifrarlo, por ejemplo tras reinstalarlo. */
+export function readDatabaseKey(keyPath: string): string | null {
+  assertSecureStorage();
+  if (!existsSync(keyPath)) return null;
+  try {
     return safeStorage.decryptString(readFileSync(keyPath));
+  } catch {
+    return null;
   }
+}
 
-  
-  if (existsSync(databasePath)) {
-    throw new Error('Existe una base local, pero falta el archivo con su clave.');
-  }
-
-  const key = randomBytes(32).toString('hex');
-  writeFileSync(keyPath, safeStorage.encryptString(key), { flag: 'wx', mode: 0o600 });
-  return key;
+export function writeDatabaseKey(keyPath: string, key: string): void {
+  assertSecureStorage();
+  writeFileSync(keyPath, safeStorage.encryptString(key), { mode: 0o600 });
 }

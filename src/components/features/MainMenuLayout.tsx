@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BackIcon, SettingsIcon, UserIcon } from '../ui/MenuIcons';
 import { AppSidebar } from './AppSidebar';
+import { SyncStatusBadge } from './SyncStatusBadge';
 
 interface MainMenuLayoutProps {
   title: string;
@@ -45,6 +46,7 @@ export function MainMenuLayout({
         </div>
 
         <div className="flex min-w-0 items-center justify-end gap-3 pl-4">
+          <SyncStatusBadge />
           <span className="truncate">{usuarioNombre}</span>
           <UserIcon className="h-12 w-12 shrink-0 text-user-avatar" detailColor="#4C3A8C" />
           <button

@@ -207,4 +207,26 @@ export const LOCAL_MIGRATIONS: readonly string[] = [
   INSERT INTO sync_cola (entidad, client_id)
   SELECT 'ministro', client_id FROM ministros ORDER BY id;
   `,
+  `
+  -- cola_id: identifica la fila mientras siga pendiente, para reconocer un reenvío tras un corte.
+  -- revision: sube con cada edición; si cambió durante el envío, la fila no se quita al confirmarse.
+  ALTER TABLE sync_cola ADD COLUMN cola_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE sync_cola ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE sync_cola ADD COLUMN estado TEXT NOT NULL DEFAULT 'pendiente'
+    CHECK (estado IN ('pendiente', 'conflicto', 'rechazado'));
+  ALTER TABLE sync_cola ADD COLUMN motivo TEXT;
+  UPDATE sync_cola SET cola_id = lower(hex(randomblob(16)));
+
+  CREATE TABLE sync_estado (
+    clave TEXT PRIMARY KEY,
+    valor TEXT
+  );
+
+  -- Verificación para entrar sin internet. Solo existe para quien ya entró con conexión en esta PC.
+  CREATE TABLE credenciales_locales (
+    usuario_id     INTEGER PRIMARY KEY REFERENCES usuarios(id),
+    verificador    TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+  `,
 ];

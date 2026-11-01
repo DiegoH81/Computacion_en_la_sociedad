@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { openLocalDatabase } from '../../electron/main/localDb/database';
 
-// Requiere "npx wrangler dev" en worker/: el login y los datos de referencia todavía vienen de ahí.
+// El primer login y los datos de referencia vienen del Worker de pruebas (global-setup.ts).
 
 let userData: string;
 let app: ElectronApplication | null = null;
@@ -131,7 +131,7 @@ test('ministros: se crean en la PC y quedan disponibles en las partidas tras rei
   await expect(field(window, 'Título')).toHaveValue('Mons.');
 });
 
-test('cola: lo que se guarda por pantalla queda pendiente de subir', async () => {
+test('cola: lo que se guarda por pantalla queda pendiente, y al cerrar se sube', async () => {
   const window = await launchAndLogin();
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
   await window.getByRole('button', { name: '+ Agregar' }).click();
@@ -151,13 +151,17 @@ test('cola: lo que se guarda por pantalla queda pendiente de subir', async () =>
     ({ safeStorage }, encrypted) => safeStorage.decryptString(Buffer.from(encrypted, 'base64')),
     encryptedKey,
   );
+  const readQueue = () => {
+    const db = openLocalDatabase(path.join(userData, 'prelatura-local.db'), key);
+    const queue = db.prepare('SELECT entidad, version_base FROM sync_cola').all();
+    db.close();
+    return queue;
+  };
+  expect(readQueue()).toEqual([{ entidad: 'bautismo', version_base: null }]);
+
   await app!.close();
   app = null;
-
-  const db = openLocalDatabase(path.join(userData, 'prelatura-local.db'), key);
-  const queue = db.prepare('SELECT entidad, version_base FROM sync_cola').all();
-  db.close();
-  expect(queue).toEqual([{ entidad: 'bautismo', version_base: null }]);
+  expect(readQueue()).toEqual([]);
 });
 
 test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () => {
