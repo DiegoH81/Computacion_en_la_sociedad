@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BackIcon, SettingsIcon, UserIcon } from '../ui/MenuIcons';
+import { AppSidebar } from './AppSidebar';
 
 interface MainMenuLayoutProps {
   title: string;
@@ -22,6 +23,8 @@ export function MainMenuLayout({
 
   return (
     <div className="min-h-screen bg-app">
+      <AppSidebar />
+
       <header className="grid h-16 grid-cols-[1fr_auto_1fr] items-center bg-darker-app px-4 text-lg font-semibold text-white uppercase">
         <div className="flex min-w-0 items-center gap-4 pr-4">
           {onBack && (
