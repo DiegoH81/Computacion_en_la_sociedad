@@ -13,3 +13,15 @@
     --color-icon-button: #377C81;
     --color-icon-button-light: #5F969A;
 }
+
+@layer base {
+    html {
+        font-size: clamp(20px, 1.1vw, 28px);
+    }
+
+    @media print {
+        html {
+            font-size: 100%;
+        }
+    }
+}
