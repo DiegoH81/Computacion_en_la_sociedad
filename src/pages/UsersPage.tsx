@@ -167,6 +167,7 @@ export function UsersPage() {
 
   return (
     <MainMenuLayout
+      title="Usuarios"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}

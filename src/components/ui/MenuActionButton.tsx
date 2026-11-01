@@ -21,7 +21,7 @@ export function MenuActionButton({
   const variantStyles =
     variant === 'admin'
       ? 'bg-emerald-900 text-white hover:bg-emerald-800'
-      : 'bg-teal-600 text-white hover:bg-teal-500';
+      : 'bg-icon-button text-white hover:bg-icon-button-light';
 
   return (
     <button

@@ -13,10 +13,7 @@ export function DashboardPage() {
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
 
-  // Regla de negocio (§0): los accesos administrativos solo se muestran
-  // si el usuario opera sobre SU PROPIA parroquia (o es admin).
-  // Esto es solo control de UI: la autorización real y definitiva
-  // ocurre siempre en el Worker (Fase 5), nunca se confía en esto.
+  
   const isViewingOwnParish =
     rol === 'admin' || parroquiaActivaId === parroquiaId;
 
@@ -24,11 +21,12 @@ export function DashboardPage() {
 
   return (
     <MainMenuLayout
+      title="Menú principal"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={isViewingAnotherParish ? () => navigate('/dashboard') : undefined}
     >
-      <p className="mb-4 text-sm text-slate-600">
+      <p className="mb-4 w-fit rounded-2xl bg-white px-8 py-6 text-xl text-slate-600 shadow-sm">
         ¿Qué gestión desea realizar el día de hoy?
       </p>
 

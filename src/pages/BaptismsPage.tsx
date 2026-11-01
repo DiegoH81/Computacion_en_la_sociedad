@@ -224,6 +224,7 @@ export function BaptismsPage() {
 
   return (
     <MainMenuLayout
+      title="Bautismos"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}

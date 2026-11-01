@@ -250,6 +250,7 @@ export function MarriagesPage() {
 
   return (
     <MainMenuLayout
+      title="Matrimonios"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}

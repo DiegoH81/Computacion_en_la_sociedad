@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@import "tailwindcss";
+
+@theme {
+    --color-app: #A0C6C9;
+    --color-darker-app: #409197;
+    --color-dark-app: #1D3D40;
+    --color-lighter-green: #E1EDED;
+    --color-solid-green: #399660;
+    --color-solid-red: #A90303;
+    --color-solid-blue: #3B5AA8;
+    --color-icon-button: #377C81;
+    --color-icon-button-light: #5F969A;
+}

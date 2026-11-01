@@ -246,6 +246,7 @@ export function ConfirmationsPage() {
 
   return (
     <MainMenuLayout
+      title="Confirmaciones"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}
