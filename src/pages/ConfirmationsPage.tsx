@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
-import { PersonSearchFilters } from '../components/features/PersonSearchFilters';
-import { SacramentTable, type SacramentRowBase } from '../components/features/SacramentTable';
+import {
+  SacramentSearchPanel,
+  type SacramentRowBase,
+  type SortField,
+} from '../components/features/SacramentSearchPanel';
 import {
   ConfirmationForm,
   type ConfirmationFormValues,
 } from '../components/features/ConfirmationForm';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
 import { SacramentPrintView } from '../components/features/SacramentPrintView';
+import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
+import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
 import { useSessionStore } from '../store/sessionStore';
 import {
   searchConfirmations,
@@ -25,8 +30,6 @@ interface ConfirmationRow extends SacramentRowBase {
   apellidoPaterno: string;
   apellidoMaterno: string;
 }
-
-type SortField = 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
 
 interface PriestOption {
   id: number;
@@ -61,6 +64,7 @@ export function ConfirmationsPage() {
   const [printData, setPrintData] = useState<Parameters<typeof SacramentPrintView>[0] | null>(
     null,
   );
+  const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<PriestOption[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
 
@@ -85,6 +89,8 @@ export function ConfirmationsPage() {
     loadConfirmations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, sortBy, sortDirection]);
+
+  const canWrite = rol === 'admin' || parroquiaActivaId === parroquiaId;
 
   function canManage(confirmationParroquiaId: number): boolean {
     if (rol === 'admin') return true;
@@ -246,62 +252,43 @@ export function ConfirmationsPage() {
 
   return (
     <MainMenuLayout
-      title="Confirmaciones"
+      title="Confirmación"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-800">Buscar partida Confirmación</h1>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingInitialValues(undefined);
-              setFormState({ mode: 'create' });
-            }}
-            className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-          >
-            + Agregar partida
-          </button>
-        </div>
-
-        {errorMessage && (
-          <p role="alert" className="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <PersonSearchFilters
-          onSearch={handleSearch}
-          onClear={handleClear}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSortChange={(field, direction) => {
-            setSortBy(field as SortField);
-            setSortDirection(direction);
-          }}
-          isLoading={isLoading}
-        />
-
-        <SacramentTable<ConfirmationRow>
-          rows={confirmations}
-          columns={[
-            { header: 'Nombres', render: (row) => row.nombreCompleto },
-            { header: 'Apellido paterno', render: (row) => row.apellidoPaterno },
-            { header: 'Apellido materno', render: (row) => row.apellidoMaterno },
-          ]}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          onEdit={handleOpenEdit}
-          onPrint={handlePrint}
-          onAnnul={(id) => setAnnulmentTargetId(id)}
-          onPrintSelected={(ids) => console.log('print selected placeholder', ids)}
-          canManage={canManage}
-          isLoading={isLoading}
-        />
-      </div>
+      <SacramentSearchPanel<ConfirmationRow>
+        title="Buscar partida de confirmación"
+        errorMessage={errorMessage}
+        rows={confirmations}
+        columns={[
+          { header: 'Nombres', render: (row) => row.nombreCompleto },
+          { header: 'Apellido paterno', render: (row) => row.apellidoPaterno },
+          { header: 'Apellido materno', render: (row) => row.apellidoMaterno },
+        ]}
+        isLoading={isLoading}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={(field, direction) => {
+          setSortBy(field);
+          setSortDirection(direction);
+        }}
+        onSearch={handleSearch}
+        onClear={handleClear}
+        canWrite={canWrite}
+        canManage={canManage}
+        onAdd={() => {
+          setEditingInitialValues(undefined);
+          setFormState({ mode: 'create' });
+        }}
+        onEdit={handleOpenEdit}
+        onPrint={handlePrint}
+        onAnnul={(id) => setAnnulmentTargetId(id)}
+        onPrintIndex={() => setIsIndexOpen(true)}
+      />
 
       {formState.mode !== 'closed' && (
         <ConfirmationForm
@@ -328,18 +315,24 @@ export function ConfirmationsPage() {
       )}
 
       {printData && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
-          <div className="flex justify-end p-4 print:hidden">
-            <button
-              type="button"
-              onClick={() => setPrintData(null)}
-              className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
-            >
-              Volver
-            </button>
-          </div>
-          <SacramentPrintView {...printData} />
-        </div>
+        <A4PrintPreview
+          title="Imprimir certificado"
+          onClose={() => setPrintData(null)}
+          pages={[
+            <A4Page key="certificado">
+              <SacramentPrintView {...printData} />
+            </A4Page>,
+          ]}
+        />
+      )}
+
+      {isIndexOpen && (
+        <SacramentIndexPreview
+          tipo="confirmacion"
+          sacramentName="confirmación"
+          parroquiaNombre={parroquiaActivaNombre ?? ''}
+          onClose={() => setIsIndexOpen(false)}
+        />
       )}
     </MainMenuLayout>
   );

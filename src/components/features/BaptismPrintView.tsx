@@ -22,7 +22,7 @@ interface BaptismPrintViewProps {
 
 export function BaptismPrintView({ data }: BaptismPrintViewProps) {
   return (
-    <div className="mx-auto max-w-2xl bg-white p-8 text-sm text-slate-800 print:p-0">
+    <div className="text-sm text-slate-800">
       <h1 className="mb-1 text-center text-lg font-bold">PRELATURA DE AYAVIRI</h1>
       <p className="mb-4 text-center text-xs text-slate-500">{data.parroquiaNombre}</p>
       <h2 className="mb-4 text-center text-base font-semibold underline">

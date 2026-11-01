@@ -5,6 +5,7 @@ import { handleMarriageRoutes } from './services/marriageRoutes';
 import { handleBaptismRoutes } from './services/baptismRoutes';
 import { handleConfirmationRoutes } from './services/confirmationRoutes';
 import { handleUserRoutes } from './services/userRoutes';
+import { handleSacramentIndexRoutes } from './services/sacramentIndexRoutes';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -91,6 +92,12 @@ export default {
     const userResponse = await handleUserRoutes(request, env, url);
     if (userResponse) {
       return userResponse;
+    }
+
+    // --- /api/sacrament-index/* (índices alfabéticos para imprimir) ---
+    const indexResponse = await handleSacramentIndexRoutes(request, env, url);
+    if (indexResponse) {
+      return indexResponse;
     }
 
     return jsonResponse({ message: 'Not Found' }, 404);

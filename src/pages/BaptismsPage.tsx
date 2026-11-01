@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
-import { PersonSearchFilters } from '../components/features/PersonSearchFilters';
-import { BaptismTable } from '../components/features/BaptismTable';
+import { SacramentSearchPanel, type SortField } from '../components/features/SacramentSearchPanel';
 import { BaptismForm, type BaptismFormValues } from '../components/features/BaptismForm';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
 import { BaptismPrintView } from '../components/features/BaptismPrintView';
+import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
+import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
 import { useSessionStore } from '../store/sessionStore';
 import {
   searchBaptisms,
@@ -17,8 +18,6 @@ import {
 } from '../controllers/BaptismController';
 import { searchPriests } from '../controllers/PriestController';
 import { BaptismService } from '../services/BaptismService';
-
-type SortField = 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
 
 interface PriestOption {
   id: number;
@@ -51,6 +50,7 @@ export function BaptismsPage() {
   const [printData, setPrintData] = useState<Parameters<typeof BaptismPrintView>[0]['data'] | null>(
     null,
   );
+  const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<PriestOption[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
 
@@ -75,6 +75,8 @@ export function BaptismsPage() {
     loadBaptisms();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, sortBy, sortDirection]);
+
+  const canWrite = rol === 'admin' || parroquiaActivaId === parroquiaId;
 
   function canManage(baptismParroquiaId: number): boolean {
     if (rol === 'admin') return true;
@@ -224,57 +226,43 @@ export function BaptismsPage() {
 
   return (
     <MainMenuLayout
-      title="Bautismos"
+      title="Bautismo"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-800">Buscar partida Bautismo</h1>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingInitialValues(undefined);
-              setFormState({ mode: 'create' });
-            }}
-            className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-          >
-            + Agregar partida
-          </button>
-        </div>
-
-        {errorMessage && (
-          <p role="alert" className="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <PersonSearchFilters
-          onSearch={handleSearch}
-          onClear={handleClear}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSortChange={(field, direction) => {
-            setSortBy(field as SortField);
-            setSortDirection(direction);
-          }}
-          isLoading={isLoading}
-        />
-
-        <BaptismTable
-          baptisms={baptisms}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          onEdit={handleOpenEdit}
-          onPrint={handlePrint}
-          onAnnul={(id) => setAnnulmentTargetId(id)}
-          onPrintAllResults={() => console.log('print all placeholder')}
-          canManage={canManage}
-          isLoading={isLoading}
-        />
-      </div>
+      <SacramentSearchPanel<BaptismRowUI>
+        title="Buscar partida de bautismo"
+        errorMessage={errorMessage}
+        rows={baptisms}
+        columns={[
+          { header: 'Nombres', render: (row) => row.nombreCompleto },
+          { header: 'Apellido paterno', render: (row) => row.apellidoPaterno },
+          { header: 'Apellido materno', render: (row) => row.apellidoMaterno },
+        ]}
+        isLoading={isLoading}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={(field, direction) => {
+          setSortBy(field);
+          setSortDirection(direction);
+        }}
+        onSearch={handleSearch}
+        onClear={handleClear}
+        canWrite={canWrite}
+        canManage={canManage}
+        onAdd={() => {
+          setEditingInitialValues(undefined);
+          setFormState({ mode: 'create' });
+        }}
+        onEdit={handleOpenEdit}
+        onPrint={handlePrint}
+        onAnnul={(id) => setAnnulmentTargetId(id)}
+        onPrintIndex={() => setIsIndexOpen(true)}
+      />
 
       {formState.mode !== 'closed' && (
         <BaptismForm
@@ -301,18 +289,24 @@ export function BaptismsPage() {
       )}
 
       {printData && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
-          <div className="flex justify-end p-4 print:hidden">
-            <button
-              type="button"
-              onClick={() => setPrintData(null)}
-              className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
-            >
-              Volver
-            </button>
-          </div>
-          <BaptismPrintView data={printData} />
-        </div>
+        <A4PrintPreview
+          title="Imprimir certificado"
+          onClose={() => setPrintData(null)}
+          pages={[
+            <A4Page key="certificado">
+              <BaptismPrintView data={printData} />
+            </A4Page>,
+          ]}
+        />
+      )}
+
+      {isIndexOpen && (
+        <SacramentIndexPreview
+          tipo="bautismo"
+          sacramentName="bautismo"
+          parroquiaNombre={parroquiaActivaNombre ?? ''}
+          onClose={() => setIsIndexOpen(false)}
+        />
       )}
     </MainMenuLayout>
   );

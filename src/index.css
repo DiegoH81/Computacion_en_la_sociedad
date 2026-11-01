@@ -8,6 +8,9 @@
     --color-solid-green: #399660;
     --color-solid-red: #A90303;
     --color-solid-blue: #3B5AA8;
+    --color-solid-purple: #9A55BD;
+    --color-table-panel: #2F6E72;
+    --color-table-body: #EDEDED;
     --color-icon-button: #377C81;
     --color-icon-button-light: #5F969A;
     --color-user-avatar: #E9DDFB;
@@ -18,9 +21,62 @@
         font-size: clamp(20px, 1.1vw, 28px);
     }
 
+    /* En la vista previa A4 todo se mide igual que en el papel. */
+    html.print-preview-open {
+        font-size: 16px;
+    }
+
     @media print {
         html {
             font-size: 100%;
         }
+    }
+}
+
+@page {
+    size: A4;
+    margin: 0;
+}
+
+.a4-page {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    width: 210mm;
+    min-height: 297mm;
+    padding: 12mm 15mm;
+    background: white;
+}
+
+@media print {
+    #root {
+        display: none !important;
+    }
+
+    .a4-print-root,
+    .a4-print-sheets {
+        position: static !important;
+        display: block !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        background: white !important;
+    }
+
+    .a4-print-sheet {
+        box-shadow: none !important;
+        margin: 0 !important;
+        break-after: page;
+    }
+
+    .a4-print-sheet:last-child {
+        break-after: auto;
+    }
+
+    .a4-page {
+        min-height: 296mm;
+    }
+
+    .a4-table-head {
+        print-color-adjust: exact;
     }
 }
