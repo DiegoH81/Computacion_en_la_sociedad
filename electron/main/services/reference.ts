@@ -24,6 +24,10 @@ export interface ReferenceData {
 }
 
 
+export function listParishes(db: LocalDatabase) {
+  return db.prepare('SELECT id, nombre FROM parroquias WHERE activa = 1 ORDER BY nombre ASC').all();
+}
+
 export function applyReferenceData(db: LocalDatabase, data: ReferenceData): void {
   const parish = db.prepare(
     `INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)

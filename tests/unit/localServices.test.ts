@@ -9,7 +9,7 @@ import { LOCAL_MIGRATIONS } from '../../electron/main/localDb/schema';
 import type { Session } from '../../electron/main/services/common';
 import { marriages, type MarriageInput } from '../../electron/main/services/marriages';
 import { ministers } from '../../electron/main/services/ministers';
-import { applyReferenceData } from '../../electron/main/services/reference';
+import { applyReferenceData, listParishes } from '../../electron/main/services/reference';
 import { getIndexEntries, listIndexBooks } from '../../electron/main/services/sacramentIndex';
 import { singlePersonSacrament, type SinglePersonInput } from '../../electron/main/services/singlePersonSacraments';
 
@@ -298,6 +298,23 @@ describe('índice de sacramentos', () => {
 });
 
 describe('datos de referencia', () => {
+  it('lista las parroquias activas de la copia local, en orden', () => {
+    applyReferenceData(db, {
+      parroquias: [
+        { id: 1, nombre: 'Zeta', ubicacion: null, activa: 1 },
+        { id: 2, nombre: 'Alfa', ubicacion: null, activa: 1 },
+        { id: 3, nombre: 'Cerrada', ubicacion: null, activa: 0 },
+      ],
+      ministros: [],
+      usuarios: [],
+    });
+
+    expect(listParishes(db)).toEqual([
+      { id: 2, nombre: 'Alfa' },
+      { id: 1, nombre: 'Zeta' },
+    ]);
+  });
+
   it('actualiza parroquias, y no pisa ni duplica los ministros que ya están en la PC', () => {
     const id = baptisms.create(db, parish1, baptismInput({ celebranteId: 1 }), undefined);
     ministers.update(db, parish1, 1, { nombre: 'Manolo', apellidoPaterno: 'Torres', apellidoMaterno: 'Rios' });

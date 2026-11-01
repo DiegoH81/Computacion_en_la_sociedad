@@ -98,41 +98,41 @@ function b(e, t, n) {
 		anotaciones: m(n)
 	};
 }
-function ie(e, t, n, r, i, a) {
+function x(e, t, n, r, i, a) {
 	let o = b(r, i, a), s = crypto.randomUUID();
 	return f(e, t, s, null), Number(e.prepare("INSERT INTO sacramentos\n           (client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(s, t, n, o.ministroId, o.libro, o.folio, o.numero, o.fechaEmision, o.fechaEvento, o.anotaciones).lastInsertRowid);
 }
-function ae(e, t) {
+function ie(e, t) {
 	let n = e.prepare("SELECT tipo, client_id, version FROM sacramentos WHERE id = ?").get(t);
 	f(e, n.tipo, n.client_id, n.version);
 }
-function x(e, t, n, r, i) {
-	let a = b(n, r, i);
-	ae(e, t), e.prepare("UPDATE sacramentos\n     SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?\n     WHERE id = ?").run(a.ministroId, a.libro, a.folio, a.numero, a.fechaEmision, a.fechaEvento, a.anotaciones, t);
-}
 function S(e, t, n, r, i) {
+	let a = b(n, r, i);
+	ie(e, t), e.prepare("UPDATE sacramentos\n     SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?\n     WHERE id = ?").run(a.ministroId, a.libro, a.folio, a.numero, a.fechaEmision, a.fechaEvento, a.anotaciones, t);
+}
+function C(e, t, n, r, i) {
 	y(e, t, n, r);
 	let a = m(i);
 	if (!a) throw new p("El motivo de anulación es requerido.", 400);
 	e.transaction(() => {
-		ae(e, n), e.prepare("UPDATE sacramentos\n       SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?\n       WHERE id = ?").run(t.usuarioId, (/* @__PURE__ */ new Date()).toISOString(), a, n);
+		ie(e, n), e.prepare("UPDATE sacramentos\n       SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?\n       WHERE id = ?").run(t.usuarioId, (/* @__PURE__ */ new Date()).toISOString(), a, n);
 	})();
 }
-var C = "\n  s.id, s.parroquia_id, par.nombre AS parroquia_nombre,\n  s.fecha_emision AS fecha_sacramento, s.libro AS numero_libro, s.folio AS numero_folio,\n  s.numero AS numero_registro, s.estado", w = "\n  min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS celebrante_nombre", T = null;
-function oe() {
+var w = "\n  s.id, s.parroquia_id, par.nombre AS parroquia_nombre,\n  s.fecha_emision AS fecha_sacramento, s.libro AS numero_libro, s.folio AS numero_folio,\n  s.numero AS numero_registro, s.estado", T = "\n  min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS celebrante_nombre", E = null;
+function ae() {
 	let e = t.getPath("userData"), n = i.join(e, "prelatura-local.db");
-	T = ne(n, re(i.join(e, "prelatura-local.key"), n));
+	E = ne(n, re(i.join(e, "prelatura-local.key"), n));
 }
-function E() {
-	if (!T) throw new p("La base local no está disponible.", 503);
-	return T;
+function D() {
+	if (!E) throw new p("La base local no está disponible.", 503);
+	return E;
 }
-function se() {
-	T?.close(), T = null;
+function oe() {
+	E?.close(), E = null;
 }
 //#endregion
 //#region electron/shared/index.ts
-var ce = "local:request", D = [
+var se = "local:request", O = [
 	"dni",
 	"nombres",
 	"apellido_paterno",
@@ -143,38 +143,38 @@ var ce = "local:request", D = [
 	"padre",
 	"madre"
 ];
-function le(e) {
+function ce(e) {
 	if (e == null || e === "") return null;
 	let t = Number(e);
 	if (!Number.isInteger(t) || t < 0 || t > 150) throw new p("La edad debe ser un número entre 0 y 150.", 400);
 	return t;
 }
-function O(e) {
+function k(e) {
 	return {
 		dni: m(e.dni),
 		nombres: m(e.nombre) ?? "",
 		apellido_paterno: m(e.apellidoPaterno) ?? "",
 		apellido_materno: m(e.apellidoMaterno) ?? "",
 		fecha_nacimiento: m(e.fechaNacimiento),
-		edad: le(e.edad),
+		edad: ce(e.edad),
 		lugar_nacimiento: m(e.lugarNacimiento),
 		padre: m(e.padreNombre),
 		madre: m(e.madreNombre)
 	};
 }
-function k(e, t, n) {
-	let r = O(n);
-	return Number(e.prepare(`INSERT INTO personas (client_id, parroquia_id, ${D.join(", ")})
-         VALUES (?, ?, ${D.map(() => "?").join(", ")})`).run(crypto.randomUUID(), t, ...D.map((e) => r[e])).lastInsertRowid);
+function A(e, t, n) {
+	let r = k(n);
+	return Number(e.prepare(`INSERT INTO personas (client_id, parroquia_id, ${O.join(", ")})
+         VALUES (?, ?, ${O.map(() => "?").join(", ")})`).run(crypto.randomUUID(), t, ...O.map((e) => r[e])).lastInsertRowid);
 }
-function A(e, t, n, r, i) {
-	let a = O(i), o = e.prepare(`SELECT ${D.join(", ")} FROM personas WHERE id = ?`).get(n), s = D.filter((e) => o[e] !== a[e]);
+function j(e, t, n, r, i) {
+	let a = k(i), o = e.prepare(`SELECT ${O.join(", ")} FROM personas WHERE id = ?`).get(n), s = O.filter((e) => o[e] !== a[e]);
 	if (s.length === 0) return;
 	let c = e.prepare("INSERT INTO cambios_persona\n       (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)\n     VALUES (?, ?, ?, ?, ?, ?, ?)"), l = (e) => e === null ? null : String(e);
 	for (let e of s) c.run(crypto.randomUUID(), n, r, t.usuarioId, e, l(o[e]), l(a[e]));
 	e.prepare(`UPDATE personas SET ${s.map((e) => `${e} = ?`).join(", ")} WHERE id = ?`).run(...s.map((e) => a[e]), n);
 }
-function j(e, t) {
+function M(e, t) {
 	return `(${e}.${t} LIKE ? OR EXISTS (
     SELECT 1 FROM cambios_persona cp
     WHERE cp.persona_id = ${e}.id AND cp.campo_cambio = '${t}' AND cp.valor_anterior LIKE ?
@@ -182,19 +182,19 @@ function j(e, t) {
 }
 //#endregion
 //#region electron/main/services/marriages.ts
-var M = {
+var N = {
 	nombre: "c1.nombres",
 	apellido_paterno: "c1.apellido_paterno",
 	apellido_materno: "c1.apellido_materno"
 };
-function N(e) {
+function P(e) {
 	if (!m(e.esposo?.nombre) || !m(e.esposa?.nombre)) throw new p("Los nombres de ambos cónyuges son requeridos.", 400);
 	return {
 		esposo: e.esposo,
 		esposa: e.esposa
 	};
 }
-function P(e, t, n) {
+function F(e, t, n) {
 	return [
 		m(e.lugarMatrimonio),
 		m(e.testigo1),
@@ -207,7 +207,7 @@ function P(e, t, n) {
 		m(n.fechaBautismo)
 	];
 }
-function F(e, t, n) {
+function I(e, t, n) {
 	return `
     ${e}.dni AS ${t}_dni, ${e}.nombres AS ${t}_nombre,
     ${e}.apellido_paterno AS ${t}_apellido_paterno,
@@ -218,15 +218,15 @@ function F(e, t, n) {
     m.conyuge_${n}_bautismo_parroquia AS ${t}_parroquia_bautismo,
     m.conyuge_${n}_bautismo_fecha AS ${t}_fecha_bautismo`;
 }
-var I = {
+var L = {
 	search(e, t) {
 		let n = [], r = [], i = (e, t) => {
-			e && (n.push(`(${j("c1", t)} OR ${j("c2", t)})`), r.push(`%${e}%`, `%${e}%`, `%${e}%`, `%${e}%`));
+			e && (n.push(`(${M("c1", t)} OR ${M("c2", t)})`), r.push(`%${e}%`, `%${e}%`, `%${e}%`, `%${e}%`));
 		};
 		i(t.nombre, "nombres"), i(t.apellidoPaterno, "apellido_paterno"), i(t.apellidoMaterno, "apellido_materno");
-		let a = n.length > 0 ? `WHERE ${n.join(" AND ")}` : "", o = "FROM matrimonios m\n      JOIN sacramentos s ON s.id = m.sacramento_id\n      JOIN personas c1 ON c1.id = m.conyuge_1_id\n      JOIN personas c2 ON c2.id = m.conyuge_2_id\n      JOIN parroquias par ON par.id = s.parroquia_id", { total: s } = e.prepare(`SELECT COUNT(*) AS total ${o} ${a}`).get(...r), { offset: c, totalPages: l } = g(t, s), u = M[t.sortBy ?? ""] ?? M.nombre;
+		let a = n.length > 0 ? `WHERE ${n.join(" AND ")}` : "", o = "FROM matrimonios m\n      JOIN sacramentos s ON s.id = m.sacramento_id\n      JOIN personas c1 ON c1.id = m.conyuge_1_id\n      JOIN personas c2 ON c2.id = m.conyuge_2_id\n      JOIN parroquias par ON par.id = s.parroquia_id", { total: s } = e.prepare(`SELECT COUNT(*) AS total ${o} ${a}`).get(...r), { offset: c, totalPages: l } = g(t, s), u = N[t.sortBy ?? ""] ?? N.nombre;
 		return {
-			rows: e.prepare(`SELECT ${C},
+			rows: e.prepare(`SELECT ${w},
                 c1.nombres AS esposo_nombre, c1.apellido_paterno AS esposo_apellido_paterno,
                 c1.apellido_materno AS esposo_apellido_materno,
                 c2.nombres AS esposa_nombre, c2.apellido_paterno AS esposa_apellido_paterno,
@@ -238,13 +238,13 @@ var I = {
 		};
 	},
 	getById(e, t) {
-		let n = e.prepare(`SELECT ${C}, ${w},
+		let n = e.prepare(`SELECT ${w}, ${T},
                 s.fecha_evento AS fecha_matrimonio, s.ministro_id AS celebrante_id,
                 s.anotaciones AS notas_marginales,
                 s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                 m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
-                ${F("c1", "esposo", 1)},
-                ${F("c2", "esposa", 2)}
+                ${I("c1", "esposo", 1)},
+                ${I("c2", "esposa", 2)}
          FROM matrimonios m
          JOIN sacramentos s ON s.id = m.sacramento_id
          JOIN personas c1 ON c1.id = m.conyuge_1_id
@@ -256,29 +256,29 @@ var I = {
 		return n;
 	},
 	create(e, t, n, r) {
-		let i = v(t, r), { esposo: a, esposa: o } = N(n);
+		let i = v(t, r), { esposo: a, esposa: o } = P(n);
 		return e.transaction(() => {
-			let t = k(e, i, a), r = k(e, i, o), s = ie(e, "matrimonio", i, n, n.fechaMatrimonio, n.notasMarginales);
-			return e.prepare("INSERT INTO matrimonios (\n           sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n           conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha,\n           conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha\n         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(s, t, r, ...P(n, a, o)), s;
+			let t = A(e, i, a), r = A(e, i, o), s = x(e, "matrimonio", i, n, n.fechaMatrimonio, n.notasMarginales);
+			return e.prepare("INSERT INTO matrimonios (\n           sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n           conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha,\n           conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha\n         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(s, t, r, ...F(n, a, o)), s;
 		})();
 	},
 	update(e, t, n, r) {
 		y(e, t, n, "matrimonio");
-		let { esposo: i, esposa: a } = N(r);
+		let { esposo: i, esposa: a } = P(r);
 		e.transaction(() => {
 			let o = e.prepare("SELECT conyuge_1_id, conyuge_2_id FROM matrimonios WHERE sacramento_id = ?").get(n);
-			A(e, t, o.conyuge_1_id, n, i), A(e, t, o.conyuge_2_id, n, a), x(e, n, r, r.fechaMatrimonio, r.notasMarginales), e.prepare("UPDATE matrimonios SET\n           lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,\n           conyuge_1_bautismo_parroquia = ?, conyuge_1_bautismo_fecha = ?,\n           conyuge_2_bautismo_parroquia = ?, conyuge_2_bautismo_fecha = ?\n         WHERE sacramento_id = ?").run(...P(r, i, a), n);
+			j(e, t, o.conyuge_1_id, n, i), j(e, t, o.conyuge_2_id, n, a), S(e, n, r, r.fechaMatrimonio, r.notasMarginales), e.prepare("UPDATE matrimonios SET\n           lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,\n           conyuge_1_bautismo_parroquia = ?, conyuge_1_bautismo_fecha = ?,\n           conyuge_2_bautismo_parroquia = ?, conyuge_2_bautismo_fecha = ?\n         WHERE sacramento_id = ?").run(...F(r, i, a), n);
 		})();
 	},
 	annul(e, t, n, r) {
-		S(e, t, n, "matrimonio", r);
+		C(e, t, n, "matrimonio", r);
 	}
-}, L = {
+}, R = {
 	nombre: "min.nombre",
 	apellido_paterno: "min.apellido_paterno",
 	apellido_materno: "min.apellido_materno"
 };
-function R(e) {
+function z(e) {
 	let t = m(e.nombre), n = m(e.apellidoPaterno), r = m(e.apellidoMaterno);
 	if (!t || !n || !r) throw new p("Nombre y apellidos son requeridos.", 400);
 	return {
@@ -288,22 +288,22 @@ function R(e) {
 		apellidoMaterno: r
 	};
 }
-function z(e, t, n) {
+function B(e, t, n) {
 	let r = e.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(n);
 	if (!r) throw new p("Ministro no encontrado.", 404);
 	if (t.rol !== "admin" && r.parroquia_id !== t.parroquiaId) throw new p("No tiene permiso para modificar ministros de otra parroquia.", 403);
 }
-function B(e, t) {
+function V(e, t) {
 	let n = e.prepare("SELECT client_id, version FROM ministros WHERE id = ?").get(t);
 	f(e, "ministro", n.client_id, n.version);
 }
-var V = {
+var H = {
 	search(e, t) {
 		let n = [], r = [], i = (e, t) => {
 			e && (n.push(`min.${t} LIKE ?`), r.push(`%${e}%`));
 		};
 		i(t.nombre, "nombre"), i(t.apellidoPaterno, "apellido_paterno"), i(t.apellidoMaterno, "apellido_materno");
-		let a = n.length > 0 ? `WHERE ${n.join(" AND ")}` : "", { total: o } = e.prepare(`SELECT COUNT(*) AS total FROM ministros min ${a}`).get(...r), { offset: s, totalPages: c } = g(t, o), l = L[t.sortBy ?? ""] ?? L.nombre;
+		let a = n.length > 0 ? `WHERE ${n.join(" AND ")}` : "", { total: o } = e.prepare(`SELECT COUNT(*) AS total FROM ministros min ${a}`).get(...r), { offset: s, totalPages: c } = g(t, o), l = R[t.sortBy ?? ""] ?? R.nombre;
 		return {
 			priests: e.prepare(`SELECT min.id, min.titulo, min.nombre, min.apellido_paterno, min.apellido_materno,
                 min.parroquia_id, par.nombre AS parroquia_nombre, min.activo
@@ -316,24 +316,27 @@ var V = {
 		};
 	},
 	create(e, t, n, r) {
-		let i = v(t, r), a = R(n), o = crypto.randomUUID();
+		let i = v(t, r), a = z(n), o = crypto.randomUUID();
 		return e.transaction(() => (f(e, "ministro", o, null), Number(e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno)\n             VALUES (?, ?, ?, ?, ?, ?)").run(o, i, a.titulo, a.nombre, a.apellidoPaterno, a.apellidoMaterno).lastInsertRowid)))();
 	},
 	update(e, t, n, r) {
-		z(e, t, n);
-		let i = R(r);
+		B(e, t, n);
+		let i = z(r);
 		e.transaction(() => {
-			B(e, n), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.titulo, i.nombre, i.apellidoPaterno, i.apellidoMaterno, n);
+			V(e, n), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.titulo, i.nombre, i.apellidoPaterno, i.apellidoMaterno, n);
 		})();
 	},
 	toggleActive(e, t, n) {
-		z(e, t, n), e.transaction(() => {
-			B(e, n), e.prepare("UPDATE ministros SET activo = NOT activo WHERE id = ?").run(n);
+		B(e, t, n), e.transaction(() => {
+			V(e, n), e.prepare("UPDATE ministros SET activo = NOT activo WHERE id = ?").run(n);
 		})();
 	}
 };
 //#endregion
 //#region electron/main/services/reference.ts
+function le(e) {
+	return e.prepare("SELECT id, nombre FROM parroquias WHERE activa = 1 ORDER BY nombre ASC").all();
+}
 function ue(e, t) {
 	let n = e.prepare("INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)\n     ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa"), r = e.prepare("UPDATE ministros SET client_id = ? WHERE client_id = ?"), i = e.prepare("INSERT INTO ministros (client_id, parroquia_id, nombre, apellido_paterno, apellido_materno, activo)\n     VALUES (@client_id, @parroquia_id, @nombre, @apellido_paterno, @apellido_materno, @activo)\n     ON CONFLICT (client_id) DO NOTHING"), a = e.prepare("INSERT INTO usuarios (id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)\n     VALUES (@id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo)\n     ON CONFLICT (id) DO UPDATE SET\n       parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,\n       apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo");
 	e.transaction(() => {
@@ -344,7 +347,7 @@ function ue(e, t) {
 }
 //#endregion
 //#region electron/main/services/sacramentIndex.ts
-var H = {
+var U = {
 	bautismo: [{
 		table: "bautismos",
 		personColumn: "persona_id"
@@ -360,29 +363,29 @@ var H = {
 		table: "matrimonios",
 		personColumn: "conyuge_2_id"
 	}]
-}, U = new Intl.Collator("es", {
+}, W = new Intl.Collator("es", {
 	sensitivity: "base",
 	numeric: !0
 }).compare;
-function W(e, t, n) {
-	if (typeof t != "string" || !Object.hasOwn(H, t)) throw new p("Tipo de sacramento no válido.", 404);
+function G(e, t, n) {
+	if (typeof t != "string" || !Object.hasOwn(U, t)) throw new p("Tipo de sacramento no válido.", 404);
 	if (!Number.isInteger(n) || n <= 0) throw new p("Debe especificar la parroquia.", 400);
 	if (e.rol !== "admin" && e.parroquiaId !== n) throw new p("No tiene permiso para imprimir el índice de otra parroquia.", 403);
 }
 function de(e, t, n, r) {
-	return W(t, n, r), e.prepare("SELECT DISTINCT libro FROM sacramentos\n       WHERE tipo = ? AND parroquia_id = ? AND estado = 'vigente'").pluck().all(n, r).sort(U);
+	return G(t, n, r), e.prepare("SELECT DISTINCT libro FROM sacramentos\n       WHERE tipo = ? AND parroquia_id = ? AND estado = 'vigente'").pluck().all(n, r).sort(W);
 }
 function fe(e, t, n, r, i) {
-	return W(t, n, r), H[n].flatMap(({ table: t, personColumn: n }) => e.prepare(`SELECT pe.nombres, pe.apellido_paterno AS apellidoPaterno, pe.apellido_materno AS apellidoMaterno,
+	return G(t, n, r), U[n].flatMap(({ table: t, personColumn: n }) => e.prepare(`SELECT pe.nombres, pe.apellido_paterno AS apellidoPaterno, pe.apellido_materno AS apellidoMaterno,
                   s.libro, s.folio, s.numero AS registro
            FROM ${t} sub
            JOIN sacramentos s ON s.id = sub.sacramento_id
            JOIN personas pe ON pe.id = sub.${n}
-           WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND (? IS NULL OR s.libro = ?)`).all(r, i, i)).sort((e, t) => U(e.apellidoPaterno, t.apellidoPaterno) || U(e.apellidoMaterno, t.apellidoMaterno) || U(e.nombres, t.nombres) || U(e.libro, t.libro) || U(e.folio, t.folio) || U(e.registro, t.registro));
+           WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND (? IS NULL OR s.libro = ?)`).all(r, i, i)).sort((e, t) => W(e.apellidoPaterno, t.apellidoPaterno) || W(e.apellidoMaterno, t.apellidoMaterno) || W(e.nombres, t.nombres) || W(e.libro, t.libro) || W(e.folio, t.folio) || W(e.registro, t.registro));
 }
 //#endregion
 //#region electron/main/services/singlePersonSacraments.ts
-var G = {
+var K = {
 	nombre: "pe.nombres",
 	apellido_paterno: "pe.apellido_paterno",
 	apellido_materno: "pe.apellido_materno"
@@ -398,7 +401,7 @@ var G = {
 		eventColumn: "fecha_confirmacion"
 	}
 };
-function K(e) {
+function q(e) {
 	let { table: t, eventInput: n, eventColumn: r } = pe[e];
 	function i(e) {
 		if (!m(e.nombre) || !m(e.apellidoPaterno) || !m(e.apellidoMaterno)) throw new p("Nombre y apellidos son requeridos.", 400);
@@ -406,15 +409,15 @@ function K(e) {
 	return {
 		search(e, n) {
 			let r = [], i = [], a = (e, t) => {
-				e && (r.push(j("pe", t)), i.push(`%${e}%`, `%${e}%`));
+				e && (r.push(M("pe", t)), i.push(`%${e}%`, `%${e}%`));
 			};
 			a(n.nombre, "nombres"), a(n.apellidoPaterno, "apellido_paterno"), a(n.apellidoMaterno, "apellido_materno");
 			let o = r.length > 0 ? `WHERE ${r.join(" AND ")}` : "", s = `FROM ${t} sub
         JOIN sacramentos s ON s.id = sub.sacramento_id
         JOIN personas pe ON pe.id = sub.persona_id
-        JOIN parroquias par ON par.id = s.parroquia_id`, { total: c } = e.prepare(`SELECT COUNT(*) AS total ${s} ${o}`).get(...i), { offset: l, totalPages: u } = g(n, c), d = G[n.sortBy ?? ""] ?? G.nombre;
+        JOIN parroquias par ON par.id = s.parroquia_id`, { total: c } = e.prepare(`SELECT COUNT(*) AS total ${s} ${o}`).get(...i), { offset: l, totalPages: u } = g(n, c), d = K[n.sortBy ?? ""] ?? K.nombre;
 			return {
-				rows: e.prepare(`SELECT ${C},
+				rows: e.prepare(`SELECT ${w},
                   pe.nombres AS nombre, pe.apellido_paterno, pe.apellido_materno
            ${s} ${o}
            ORDER BY ${d} ${_(n)}, s.id
@@ -423,7 +426,7 @@ function K(e) {
 			};
 		},
 		getById(e, n) {
-			let i = e.prepare(`SELECT ${C}, ${w},
+			let i = e.prepare(`SELECT ${w}, ${T},
                   s.fecha_evento AS ${r}, s.ministro_id AS celebrante_id, s.anotaciones,
                   s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                   pe.dni, pe.nombres AS nombre, pe.apellido_paterno, pe.apellido_materno,
@@ -442,29 +445,29 @@ function K(e) {
 		create(r, a, o, s) {
 			let c = v(a, s);
 			return i(o), r.transaction(() => {
-				let i = k(r, c, o), a = ie(r, e, c, o, o[n], o.anotaciones);
+				let i = A(r, c, o), a = x(r, e, c, o, o[n], o.anotaciones);
 				return r.prepare(`INSERT INTO ${t} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(a, i, m(o.padrino), m(o.madrina)), a;
 			})();
 		},
 		update(r, a, o, s) {
 			y(r, a, o, e), i(s), r.transaction(() => {
 				let { persona_id: e } = r.prepare(`SELECT persona_id FROM ${t} WHERE sacramento_id = ?`).get(o);
-				A(r, a, e, o, s), x(r, o, s, s[n], s.anotaciones), r.prepare(`UPDATE ${t} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(m(s.padrino), m(s.madrina), o);
+				j(r, a, e, o, s), S(r, o, s, s[n], s.anotaciones), r.prepare(`UPDATE ${t} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(m(s.padrino), m(s.madrina), o);
 			})();
 		},
 		annul(t, n, r, i) {
-			S(t, n, r, e, i);
+			C(t, n, r, e, i);
 		}
 	};
 }
 //#endregion
 //#region electron/main/services/ipc.ts
-var me = "http://localhost:8787", he = K("bautismo"), ge = K("confirmacion"), q = null;
-function J() {
-	if (!q) throw new p("Sesión no válida.", 401);
-	return q;
+var me = "http://localhost:8787", he = q("bautismo"), ge = q("confirmacion"), J = null;
+function Y() {
+	if (!J) throw new p("Sesión no válida.", 401);
+	return J;
 }
-async function Y(e, t = {}) {
+async function X(e, t = {}) {
 	let n;
 	try {
 		n = await fetch(`${me}${e}`, t);
@@ -476,12 +479,12 @@ async function Y(e, t = {}) {
 	return r;
 }
 async function _e(e) {
-	let t = await Y("/api/reference", { headers: { Authorization: `Bearer ${e}` } });
-	ue(E(), t);
+	let t = await X("/api/reference", { headers: { Authorization: `Bearer ${e}` } });
+	ue(D(), t);
 }
 async function ve(e) {
-	E();
-	let t = await Y("/api/auth/login", {
+	D();
+	let t = await X("/api/auth/login", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
@@ -489,59 +492,60 @@ async function ve(e) {
 			password: e.password
 		})
 	});
-	return await _e(t.token), q = {
+	return await _e(t.token), J = {
 		usuarioId: t.usuario.id,
 		rol: t.usuario.rol,
 		parroquiaId: t.usuario.parroquiaId,
 		token: t.token
 	}, t;
 }
-function X(e, t, n) {
+function Z(e, t, n) {
 	return {
 		[`${e}.search`]: (e) => {
-			J();
-			let { rows: r, totalPages: i } = n.search(E(), e);
+			Y();
+			let { rows: r, totalPages: i } = n.search(D(), e);
 			return {
 				[`${t}s`]: r,
 				totalPages: i
 			};
 		},
-		[`${e}.get`]: ({ id: e }) => (J(), { [t]: n.getById(E(), h(e)) }),
-		[`${e}.create`]: ({ values: e, parroquiaId: t }) => ({ id: n.create(E(), J(), e, t) }),
-		[`${e}.update`]: ({ id: e, values: t }) => (n.update(E(), J(), h(e), t), { success: !0 }),
-		[`${e}.annul`]: ({ id: e, motivo: t }) => (n.annul(E(), J(), h(e), t), { success: !0 })
+		[`${e}.get`]: ({ id: e }) => (Y(), { [t]: n.getById(D(), h(e)) }),
+		[`${e}.create`]: ({ values: e, parroquiaId: t }) => ({ id: n.create(D(), Y(), e, t) }),
+		[`${e}.update`]: ({ id: e, values: t }) => (n.update(D(), Y(), h(e), t), { success: !0 }),
+		[`${e}.annul`]: ({ id: e, motivo: t }) => (n.annul(D(), Y(), h(e), t), { success: !0 })
 	};
 }
-var Z = {
+var ye = {
 	"auth.login": ve,
-	"ministers.search": (e) => (J(), V.search(E(), e)),
-	"ministers.create": ({ values: e, parroquiaId: t }) => ({ id: V.create(E(), J(), e, t) }),
-	"ministers.update": ({ id: e, values: t }) => (V.update(E(), J(), h(e, "Ministro"), t), { success: !0 }),
-	"ministers.toggleActive": ({ id: e }) => (V.toggleActive(E(), J(), h(e, "Ministro")), { success: !0 }),
-	...X("baptisms", "baptism", he),
-	...X("confirmations", "confirmation", ge),
+	"parishes.list": () => (Y(), { parishes: le(D()) }),
+	"ministers.search": (e) => (Y(), H.search(D(), e)),
+	"ministers.create": ({ values: e, parroquiaId: t }) => ({ id: H.create(D(), Y(), e, t) }),
+	"ministers.update": ({ id: e, values: t }) => (H.update(D(), Y(), h(e, "Ministro"), t), { success: !0 }),
+	"ministers.toggleActive": ({ id: e }) => (H.toggleActive(D(), Y(), h(e, "Ministro")), { success: !0 }),
+	...Z("baptisms", "baptism", he),
+	...Z("confirmations", "confirmation", ge),
 	"marriages.search": (e) => {
-		J();
-		let { rows: t, totalPages: n } = I.search(E(), e);
+		Y();
+		let { rows: t, totalPages: n } = L.search(D(), e);
 		return {
 			marriages: t,
 			totalPages: n
 		};
 	},
-	"marriages.get": ({ id: e }) => (J(), { marriage: I.getById(E(), h(e)) }),
-	"marriages.create": ({ values: e, parroquiaId: t }) => ({ id: I.create(E(), J(), e, t) }),
-	"marriages.update": ({ id: e, values: t }) => (I.update(E(), J(), h(e), t), { success: !0 }),
-	"marriages.annul": ({ id: e, motivo: t }) => (I.annul(E(), J(), h(e), t), { success: !0 }),
-	"sacramentIndex.books": ({ tipo: e, parroquiaId: t }) => ({ libros: de(E(), J(), e, t) }),
-	"sacramentIndex.entries": ({ tipo: e, parroquiaId: t, libro: n }) => ({ entries: fe(E(), J(), e, t, n) })
+	"marriages.get": ({ id: e }) => (Y(), { marriage: L.getById(D(), h(e)) }),
+	"marriages.create": ({ values: e, parroquiaId: t }) => ({ id: L.create(D(), Y(), e, t) }),
+	"marriages.update": ({ id: e, values: t }) => (L.update(D(), Y(), h(e), t), { success: !0 }),
+	"marriages.annul": ({ id: e, motivo: t }) => (L.annul(D(), Y(), h(e), t), { success: !0 }),
+	"sacramentIndex.books": ({ tipo: e, parroquiaId: t }) => ({ libros: de(D(), Y(), e, t) }),
+	"sacramentIndex.entries": ({ tipo: e, parroquiaId: t, libro: n }) => ({ entries: fe(D(), Y(), e, t, n) })
 };
-function ye() {
-	n.handle(ce, async (e, t, n) => {
+function be() {
+	n.handle(se, async (e, t, n) => {
 		try {
-			if (!Object.hasOwn(Z, t)) throw new p("Operación no reconocida.", 404);
+			if (!Object.hasOwn(ye, t)) throw new p("Operación no reconocida.", 404);
 			return {
 				ok: !0,
-				data: await Z[t](n)
+				data: await ye[t](n)
 			};
 		} catch (e) {
 			return e instanceof p ? {
@@ -558,29 +562,29 @@ function ye() {
 }
 //#endregion
 //#region electron/main/index.ts
-var be = i.dirname(a(import.meta.url)), xe = process.env.VITE_DEV_SERVER_URL, Q = null;
+var xe = i.dirname(a(import.meta.url)), Se = process.env.VITE_DEV_SERVER_URL, Q = null;
 function $() {
 	Q = new e({
 		width: 1200,
 		height: 800,
 		webPreferences: {
-			preload: i.join(be, "index.mjs"),
+			preload: i.join(xe, "index.mjs"),
 			contextIsolation: !0,
 			nodeIntegration: !1
 		}
-	}), Q.maximize(), xe ? (Q.loadURL(xe), Q.webContents.openDevTools()) : Q.loadFile(i.join(be, "../dist/index.html")), Q.on("closed", () => {
+	}), Q.maximize(), Se ? (Q.loadURL(Se), Q.webContents.openDevTools()) : Q.loadFile(i.join(xe, "../dist/index.html")), Q.on("closed", () => {
 		Q = null;
 	});
 }
 n.handle("app:get-version", () => t.getVersion()), t.whenReady().then(() => {
-	ye();
+	be();
 	try {
-		oe();
+		ae();
 	} catch (e) {
 		console.error("No se pudo abrir la base local:", e);
 	}
 	$();
-}), t.on("will-quit", se), t.on("window-all-closed", () => {
+}), t.on("will-quit", oe), t.on("window-all-closed", () => {
 	process.platform !== "darwin" && t.quit();
 }), t.on("activate", () => {
 	e.getAllWindows().length === 0 && $();

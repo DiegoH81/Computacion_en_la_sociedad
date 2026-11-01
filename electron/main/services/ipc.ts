@@ -4,7 +4,7 @@ import { getLocalDb } from '../localDb';
 import { positiveId, ServiceError, type SearchFilters, type Session } from './common';
 import { marriages, type MarriageInput } from './marriages';
 import { ministers, type MinisterInput } from './ministers';
-import { applyReferenceData, type ReferenceData } from './reference';
+import { applyReferenceData, listParishes, type ReferenceData } from './reference';
 import { getIndexEntries, listIndexBooks } from './sacramentIndex';
 import { singlePersonSacrament, type SinglePersonInput } from './singlePersonSacraments';
 
@@ -96,6 +96,10 @@ function sacramentHandlers(prefix: string, key: string, service: Sacrament) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handlers: Record<string, (payload: any) => unknown> = {
   'auth.login': login,
+  'parishes.list': () => {
+    requireSession();
+    return { parishes: listParishes(getLocalDb()) };
+  },
   'ministers.search': (filters: SearchFilters) => {
     requireSession();
     return ministers.search(getLocalDb(), filters);
