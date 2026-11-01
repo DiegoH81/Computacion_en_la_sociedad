@@ -118,11 +118,10 @@ export async function searchUsers(params: {
   }
 }
 
-/** Parroquias para el selector del formulario (reutiliza GET /api/parishes). */
+/** Parroquias para el selector del formulario. */
 export async function loadParishes(): Promise<ParishesResult> {
   try {
-    const token = requireToken();
-    const response = await AuthService.getParishes(token);
+    const response = await AuthService.getParishes();
     return { success: true, parishes: response.parishes };
   } catch (error) {
     return toErrorResult(error, 'No se pudieron cargar las parroquias.');

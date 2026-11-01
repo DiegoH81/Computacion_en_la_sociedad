@@ -12,6 +12,14 @@ export default defineConfig({
     electron({
       main: {
         entry: 'electron/main/index.ts',
+        vite: {
+          build: {
+            rolldownOptions: {
+              // Módulo nativo: se carga desde node_modules, no se empaqueta.
+              external: ['better-sqlite3-multiple-ciphers'],
+            },
+          },
+        },
       },
       preload: {
         input: 'electron/preload/index.ts',

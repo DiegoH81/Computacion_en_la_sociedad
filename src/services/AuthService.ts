@@ -1,4 +1,4 @@
-import { apiRequest } from '../lib/apiClient';
+import { localRequest } from '../lib/localClient';
 
 export interface LoginResponse {
   token: string;
@@ -18,15 +18,10 @@ export interface Parish {
 
 export const AuthService = {
   login(username: string, password: string): Promise<LoginResponse> {
-    return apiRequest<LoginResponse>('/api/auth/login', {
-      method: 'POST',
-      body: { username, password },
-    });
+    return localRequest<LoginResponse>('auth.login', { username, password });
   },
 
-  getParishes(token: string): Promise<{ parishes: Parish[] }> {
-    return apiRequest<{ parishes: Parish[] }>('/api/parishes', {
-      token,
-    });
+  getParishes(): Promise<{ parishes: Parish[] }> {
+    return localRequest<{ parishes: Parish[] }>('parishes.list');
   },
 };

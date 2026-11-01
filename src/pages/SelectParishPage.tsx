@@ -18,7 +18,7 @@ export function SelectParishPage() {
   useEffect(() => {
     if (!token) return;
 
-    AuthService.getParishes(token)
+    AuthService.getParishes()
       .then((response) => setParishes(response.parishes))
       .catch((error) => {
         setErrorMessage(

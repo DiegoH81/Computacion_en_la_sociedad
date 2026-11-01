@@ -29,12 +29,6 @@ export interface MutationResult {
   errorMessage?: string;
 }
 
-function requireToken(): string {
-  const token = useSessionStore.getState().token;
-  if (!token) throw new ApiError('Sesión no válida.', 401);
-  return token;
-}
-
 export { formatFechaDisplay };
 
 export async function searchBaptisms(params: {
@@ -46,8 +40,6 @@ export async function searchBaptisms(params: {
   page: number;
 }): Promise<SearchResult> {
   try {
-    const token = requireToken();
-
     const sortByBackend =
       params.sortBy === 'apellidoPaterno'
         ? 'apellido_paterno'
@@ -55,7 +47,7 @@ export async function searchBaptisms(params: {
           ? 'apellido_materno'
           : 'nombre';
 
-    const response = await BaptismService.search({ ...params, sortBy: sortByBackend }, token);
+    const response = await BaptismService.search({ ...params, sortBy: sortByBackend });
 
     const baptisms: BaptismRowUI[] = response.baptisms.map((b) => ({
       id: b.id,
@@ -85,10 +77,12 @@ function uiValuesToBackend(values: BaptismFormValues): BaptismFormValuesBackend 
     numeroLibro: values.numeroLibro,
     numeroFolio: values.numeroFolio,
     numeroRegistro: values.numeroRegistro,
+    dni: values.dni || undefined,
     nombre: values.nombre,
     apellidoPaterno: values.apellidoPaterno,
     apellidoMaterno: values.apellidoMaterno,
     fechaNacimiento: values.fechaNacimiento || undefined,
+    edad: values.edad || undefined,
     lugarNacimiento: values.lugarNacimiento || undefined,
     padreNombre: values.padreNombre || undefined,
     madreNombre: values.madreNombre || undefined,
@@ -102,13 +96,12 @@ function uiValuesToBackend(values: BaptismFormValues): BaptismFormValuesBackend 
 
 export async function createBaptism(values: BaptismFormValues): Promise<MutationResult> {
   try {
-    const token = requireToken();
     const parroquiaActivaId = useSessionStore.getState().parroquiaActivaId;
     const rol = useSessionStore.getState().rol;
 
     const parroquiaId = rol === 'admin' ? (parroquiaActivaId ?? undefined) : undefined;
 
-    await BaptismService.create(uiValuesToBackend(values), parroquiaId, token);
+    await BaptismService.create(uiValuesToBackend(values), parroquiaId);
     return { success: true };
   } catch (error) {
     return {
@@ -123,8 +116,7 @@ export async function updateBaptism(
   values: BaptismFormValues,
 ): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await BaptismService.update(baptismId, uiValuesToBackend(values), token);
+    await BaptismService.update(baptismId, uiValuesToBackend(values));
     return { success: true };
   } catch (error) {
     return {
@@ -136,8 +128,7 @@ export async function updateBaptism(
 
 export async function annulBaptism(baptismId: number, motivo: string): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await BaptismService.annul(baptismId, motivo, token);
+    await BaptismService.annul(baptismId, motivo);
     return { success: true };
   } catch (error) {
     return {

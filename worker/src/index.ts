@@ -6,6 +6,7 @@ import { handleBaptismRoutes } from './services/baptismRoutes';
 import { handleConfirmationRoutes } from './services/confirmationRoutes';
 import { handleUserRoutes } from './services/userRoutes';
 import { handleSacramentIndexRoutes } from './services/sacramentIndexRoutes';
+import { getReferenceData } from './services/referenceService';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,6 +63,16 @@ export default {
         .all<{ id: number; nombre: string }>();
 
       return jsonResponse({ parishes: results });
+    }
+
+    // --- GET /api/reference (datos que la app copia a su base local) ---
+    if (url.pathname === '/api/reference' && request.method === 'GET') {
+      const auth = await authenticateRequest(request, env.JWT_SECRET, env.prelatura_db);
+      if (!auth.authenticated) {
+        return jsonResponse({ message: auth.message }, auth.status);
+      }
+
+      return jsonResponse(await getReferenceData(env.prelatura_db, auth.payload.usuarioId));
     }
 
     // --- /api/priests/* (delegado al router de sacerdotes) ---

@@ -27,12 +27,6 @@ export interface MutationResult {
   errorMessage?: string;
 }
 
-function requireToken(): string {
-  const token = useSessionStore.getState().token;
-  if (!token) throw new ApiError('Sesión no válida.', 401);
-  return token;
-}
-
 /**
  * Convierte una fecha ISO (YYYY-MM-DD, formato de almacenamiento en D1)
  * a DD/MM/AAAA (formato de presentación confirmado para Perú).
@@ -54,8 +48,6 @@ export async function searchMarriages(params: {
   page: number;
 }): Promise<SearchResult> {
   try {
-    const token = requireToken();
-
     const sortByBackend =
       params.sortBy === 'apellidoPaterno'
         ? 'apellido_paterno'
@@ -63,7 +55,7 @@ export async function searchMarriages(params: {
           ? 'apellido_materno'
           : 'nombre';
 
-    const response = await MarriageService.search({ ...params, sortBy: sortByBackend }, token);
+    const response = await MarriageService.search({ ...params, sortBy: sortByBackend });
 
     const marriages: MarriageRowUI[] = response.marriages.map((m) => ({
       id: m.id,
@@ -107,13 +99,12 @@ function uiValuesToBackend(values: MarriageFormValues): MarriageFormValuesBacken
 
 export async function createMarriage(values: MarriageFormValues): Promise<MutationResult> {
   try {
-    const token = requireToken();
     const parroquiaActivaId = useSessionStore.getState().parroquiaActivaId;
     const rol = useSessionStore.getState().rol;
 
     const parroquiaId = rol === 'admin' ? (parroquiaActivaId ?? undefined) : undefined;
 
-    await MarriageService.create(uiValuesToBackend(values), parroquiaId, token);
+    await MarriageService.create(uiValuesToBackend(values), parroquiaId);
     return { success: true };
   } catch (error) {
     return {
@@ -128,8 +119,7 @@ export async function updateMarriage(
   values: MarriageFormValues,
 ): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await MarriageService.update(marriageId, uiValuesToBackend(values), token);
+    await MarriageService.update(marriageId, uiValuesToBackend(values));
     return { success: true };
   } catch (error) {
     return {
@@ -144,8 +134,7 @@ export async function annulMarriage(
   motivo: string,
 ): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await MarriageService.annul(marriageId, motivo, token);
+    await MarriageService.annul(marriageId, motivo);
     return { success: true };
   } catch (error) {
     return {

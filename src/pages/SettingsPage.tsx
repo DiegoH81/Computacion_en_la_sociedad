@@ -67,7 +67,7 @@ export function SettingsPage() {
 
           <div className="flex flex-col gap-2">
             {canAddPriest && (
-              <SettingsButton label="Agregar ministro" onClick={() => navigate('/sacerdotes')} />
+              <SettingsButton label="Agregar ministro" onClick={() => navigate('/ministros')} />
             )}
             {rol === 'admin' && (
               <SettingsButton label="Agregar usuario" onClick={() => navigate('/usuarios')} />

@@ -137,7 +137,7 @@ export function MarriagesPage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const { marriage } = await MarriageService.getById(marriageId, token);
+      const { marriage } = await MarriageService.getById(marriageId);
       const m = marriage as Record<string, string | number | null>;
 
       setEditingInitialValues({
@@ -146,34 +146,30 @@ export function MarriagesPage() {
         numeroFolio: String(m.numero_folio ?? ''),
         numeroRegistro: String(m.numero_registro ?? ''),
         esposo: {
+          dni: String(m.esposo_dni ?? ''),
           nombre: String(m.esposo_nombre ?? ''),
           apellidoPaterno: String(m.esposo_apellido_paterno ?? ''),
           apellidoMaterno: String(m.esposo_apellido_materno ?? ''),
           lugarNacimiento: String(m.esposo_lugar_nacimiento ?? ''),
           fechaNacimiento: String(m.esposo_fecha_nacimiento ?? ''),
+          edad: String(m.esposo_edad ?? ''),
           parroquiaBautismo: String(m.esposo_parroquia_bautismo ?? ''),
           fechaBautismo: String(m.esposo_fecha_bautismo ?? ''),
           padreNombre: String(m.esposo_padre_nombre ?? ''),
-          padreApellido: String(m.esposo_padre_apellido ?? ''),
-          padreDni: String(m.esposo_padre_dni ?? ''),
           madreNombre: String(m.esposo_madre_nombre ?? ''),
-          madreApellido: String(m.esposo_madre_apellido ?? ''),
-          madreDni: String(m.esposo_madre_dni ?? ''),
         },
         esposa: {
+          dni: String(m.esposa_dni ?? ''),
           nombre: String(m.esposa_nombre ?? ''),
           apellidoPaterno: String(m.esposa_apellido_paterno ?? ''),
           apellidoMaterno: String(m.esposa_apellido_materno ?? ''),
           lugarNacimiento: String(m.esposa_lugar_nacimiento ?? ''),
           fechaNacimiento: String(m.esposa_fecha_nacimiento ?? ''),
+          edad: String(m.esposa_edad ?? ''),
           parroquiaBautismo: String(m.esposa_parroquia_bautismo ?? ''),
           fechaBautismo: String(m.esposa_fecha_bautismo ?? ''),
           padreNombre: String(m.esposa_padre_nombre ?? ''),
-          padreApellido: String(m.esposa_padre_apellido ?? ''),
-          padreDni: String(m.esposa_padre_dni ?? ''),
           madreNombre: String(m.esposa_madre_nombre ?? ''),
-          madreApellido: String(m.esposa_madre_apellido ?? ''),
-          madreDni: String(m.esposa_madre_dni ?? ''),
         },
         fechaMatrimonio: String(m.fecha_matrimonio ?? ''),
         celebranteId: m.celebrante_id ? Number(m.celebrante_id) : null,
@@ -226,7 +222,7 @@ export function MarriagesPage() {
 
   async function handlePrint(marriageId: number) {
     if (!token) return;
-    const { marriage } = await MarriageService.getById(marriageId, token);
+    const { marriage } = await MarriageService.getById(marriageId);
     const m = marriage as Record<string, string | number | null>;
 
     setPrintData({
@@ -238,7 +234,7 @@ export function MarriagesPage() {
       esposoNombreCompleto: `${m.esposo_nombre} ${m.esposo_apellido_paterno} ${m.esposo_apellido_materno}`,
       esposaNombreCompleto: `${m.esposa_nombre} ${m.esposa_apellido_paterno} ${m.esposa_apellido_materno}`,
       fechaMatrimonio: formatFechaDisplay(String(m.fecha_matrimonio ?? '')),
-      celebranteNombreCompleto: '', // requiere JOIN adicional con sacerdotes, pendiente de refinar
+      celebranteNombreCompleto: String(m.celebrante_nombre ?? ''),
       lugarMatrimonio: String(m.lugar_matrimonio ?? ''),
       testigos: [
         String(m.testigo_1 ?? ''),

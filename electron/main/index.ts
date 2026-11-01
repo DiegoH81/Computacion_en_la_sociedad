@@ -1,6 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { closeLocalDatabase, initLocalDatabase } from './localDb';
+import { registerLocalIpc } from './services/ipc';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,13 +21,15 @@ function createWindow(): void {
     },
   });
 
-  // La letra grande necesita más ancho: así las tablas muestran todas sus columnas.
   mainWindow.maximize();
 
-  if (VITE_DEV_SERVER_URL) {
+  if (VITE_DEV_SERVER_URL)
+  {
     mainWindow.loadURL(VITE_DEV_SERVER_URL);
     mainWindow.webContents.openDevTools();
-  } else {
+  }
+  else
+  {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
@@ -38,7 +42,19 @@ ipcMain.handle('app:get-version', () => {
   return app.getVersion();
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  registerLocalIpc();
+
+  // Si falla, la app abre igual y el login informa que la base local no está disponible.
+  try {
+    initLocalDatabase();
+  } catch (error) {
+    console.error('No se pudo abrir la base local:', error);
+  }
+  createWindow();
+});
+
+app.on('will-quit', closeLocalDatabase);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

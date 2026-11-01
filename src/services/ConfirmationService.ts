@@ -1,4 +1,4 @@
-import { apiRequest } from '../lib/apiClient';
+import { localRequest } from '../lib/localClient';
 
 export interface ConfirmationRow {
   id: number;
@@ -27,10 +27,12 @@ export interface ConfirmationFormValuesBackend {
   numeroLibro: string;
   numeroFolio: string;
   numeroRegistro: string;
+  dni?: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   fechaNacimiento?: string;
+  edad?: string;
   lugarNacimiento?: string;
   padreNombre?: string;
   madreNombre?: string;
@@ -41,58 +43,26 @@ export interface ConfirmationFormValuesBackend {
   anotaciones?: string;
 }
 
-const PAGE_SIZE = 20;
-
 export const ConfirmationService = {
   search(
     params: SearchConfirmationsParams,
-    token: string,
   ): Promise<{ confirmations: ConfirmationRow[]; totalPages: number }> {
-    const query = new URLSearchParams();
-    if (params.nombre) query.set('nombre', params.nombre);
-    if (params.apellidoPaterno) query.set('apellidoPaterno', params.apellidoPaterno);
-    if (params.apellidoMaterno) query.set('apellidoMaterno', params.apellidoMaterno);
-    query.set('sortBy', params.sortBy);
-    query.set('sortDirection', params.sortDirection);
-    query.set('page', String(params.page));
-    query.set('pageSize', String(PAGE_SIZE));
-
-    return apiRequest(`/api/confirmations?${query.toString()}`, { token });
+    return localRequest('confirmations.search', params);
   },
 
-  getById(id: number, token: string): Promise<{ confirmation: Record<string, unknown> }> {
-    return apiRequest(`/api/confirmations/${id}`, { token });
+  getById(id: number): Promise<{ confirmation: Record<string, unknown> }> {
+    return localRequest('confirmations.get', { id });
   },
 
-  create(
-    values: ConfirmationFormValuesBackend,
-    parroquiaId: number | undefined,
-    token: string,
-  ): Promise<{ id: number }> {
-    return apiRequest('/api/confirmations', {
-      method: 'POST',
-      body: { ...values, parroquiaId },
-      token,
-    });
+  create(values: ConfirmationFormValuesBackend, parroquiaId: number | undefined): Promise<{ id: number }> {
+    return localRequest('confirmations.create', { values, parroquiaId });
   },
 
-  update(
-    id: number,
-    values: ConfirmationFormValuesBackend,
-    token: string,
-  ): Promise<{ success: true }> {
-    return apiRequest(`/api/confirmations/${id}`, {
-      method: 'PUT',
-      body: values,
-      token,
-    });
+  update(id: number, values: ConfirmationFormValuesBackend): Promise<{ success: true }> {
+    return localRequest('confirmations.update', { id, values });
   },
 
-  annul(id: number, motivo: string, token: string): Promise<{ success: true }> {
-    return apiRequest(`/api/confirmations/${id}/annul`, {
-      method: 'PATCH',
-      body: { motivo },
-      token,
-    });
+  annul(id: number, motivo: string): Promise<{ success: true }> {
+    return localRequest('confirmations.annul', { id, motivo });
   },
 };

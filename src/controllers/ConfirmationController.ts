@@ -32,12 +32,6 @@ export interface MutationResult {
   errorMessage?: string;
 }
 
-function requireToken(): string {
-  const token = useSessionStore.getState().token;
-  if (!token) throw new ApiError('Sesión no válida.', 401);
-  return token;
-}
-
 export { formatFechaDisplay };
 
 export async function searchConfirmations(params: {
@@ -49,8 +43,6 @@ export async function searchConfirmations(params: {
   page: number;
 }): Promise<SearchResult> {
   try {
-    const token = requireToken();
-
     const sortByBackend =
       params.sortBy === 'apellidoPaterno'
         ? 'apellido_paterno'
@@ -58,10 +50,7 @@ export async function searchConfirmations(params: {
           ? 'apellido_materno'
           : 'nombre';
 
-    const response = await ConfirmationService.search(
-      { ...params, sortBy: sortByBackend },
-      token,
-    );
+    const response = await ConfirmationService.search({ ...params, sortBy: sortByBackend });
 
     const confirmations: ConfirmationRowUI[] = response.confirmations.map((c) => ({
       id: c.id,
@@ -91,10 +80,12 @@ function uiValuesToBackend(values: ConfirmationFormValues): ConfirmationFormValu
     numeroLibro: values.numeroLibro,
     numeroFolio: values.numeroFolio,
     numeroRegistro: values.numeroRegistro,
+    dni: values.persona.dni || undefined,
     nombre: values.persona.nombre,
     apellidoPaterno: values.persona.apellidoPaterno,
     apellidoMaterno: values.persona.apellidoMaterno,
     fechaNacimiento: values.persona.fechaNacimiento || undefined,
+    edad: values.persona.edad || undefined,
     lugarNacimiento: values.persona.lugarNacimiento || undefined,
     padreNombre: values.persona.padreNombre || undefined,
     madreNombre: values.persona.madreNombre || undefined,
@@ -110,13 +101,12 @@ export async function createConfirmation(
   values: ConfirmationFormValues,
 ): Promise<MutationResult> {
   try {
-    const token = requireToken();
     const parroquiaActivaId = useSessionStore.getState().parroquiaActivaId;
     const rol = useSessionStore.getState().rol;
 
     const parroquiaId = rol === 'admin' ? (parroquiaActivaId ?? undefined) : undefined;
 
-    await ConfirmationService.create(uiValuesToBackend(values), parroquiaId, token);
+    await ConfirmationService.create(uiValuesToBackend(values), parroquiaId);
     return { success: true };
   } catch (error) {
     return {
@@ -131,8 +121,7 @@ export async function updateConfirmation(
   values: ConfirmationFormValues,
 ): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await ConfirmationService.update(confirmationId, uiValuesToBackend(values), token);
+    await ConfirmationService.update(confirmationId, uiValuesToBackend(values));
     return { success: true };
   } catch (error) {
     return {
@@ -147,8 +136,7 @@ export async function annulConfirmation(
   motivo: string,
 ): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await ConfirmationService.annul(confirmationId, motivo, token);
+    await ConfirmationService.annul(confirmationId, motivo);
     return { success: true };
   } catch (error) {
     return {

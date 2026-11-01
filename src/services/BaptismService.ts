@@ -1,4 +1,4 @@
-import { apiRequest } from '../lib/apiClient';
+import { localRequest } from '../lib/localClient';
 
 export interface BaptismRow {
   id: number;
@@ -27,10 +27,12 @@ export interface BaptismFormValuesBackend {
   numeroLibro: string;
   numeroFolio: string;
   numeroRegistro: string;
+  dni?: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   fechaNacimiento?: string;
+  edad?: string;
   lugarNacimiento?: string;
   padreNombre?: string;
   madreNombre?: string;
@@ -41,58 +43,24 @@ export interface BaptismFormValuesBackend {
   anotaciones?: string;
 }
 
-const PAGE_SIZE = 20;
-
 export const BaptismService = {
-  search(
-    params: SearchBaptismsParams,
-    token: string,
-  ): Promise<{ baptisms: BaptismRow[]; totalPages: number }> {
-    const query = new URLSearchParams();
-    if (params.nombre) query.set('nombre', params.nombre);
-    if (params.apellidoPaterno) query.set('apellidoPaterno', params.apellidoPaterno);
-    if (params.apellidoMaterno) query.set('apellidoMaterno', params.apellidoMaterno);
-    query.set('sortBy', params.sortBy);
-    query.set('sortDirection', params.sortDirection);
-    query.set('page', String(params.page));
-    query.set('pageSize', String(PAGE_SIZE));
-
-    return apiRequest(`/api/baptisms?${query.toString()}`, { token });
+  search(params: SearchBaptismsParams): Promise<{ baptisms: BaptismRow[]; totalPages: number }> {
+    return localRequest('baptisms.search', params);
   },
 
-  getById(id: number, token: string): Promise<{ baptism: Record<string, unknown> }> {
-    return apiRequest(`/api/baptisms/${id}`, { token });
+  getById(id: number): Promise<{ baptism: Record<string, unknown> }> {
+    return localRequest('baptisms.get', { id });
   },
 
-  create(
-    values: BaptismFormValuesBackend,
-    parroquiaId: number | undefined,
-    token: string,
-  ): Promise<{ id: number }> {
-    return apiRequest('/api/baptisms', {
-      method: 'POST',
-      body: { ...values, parroquiaId },
-      token,
-    });
+  create(values: BaptismFormValuesBackend, parroquiaId: number | undefined): Promise<{ id: number }> {
+    return localRequest('baptisms.create', { values, parroquiaId });
   },
 
-  update(
-    id: number,
-    values: BaptismFormValuesBackend,
-    token: string,
-  ): Promise<{ success: true }> {
-    return apiRequest(`/api/baptisms/${id}`, {
-      method: 'PUT',
-      body: values,
-      token,
-    });
+  update(id: number, values: BaptismFormValuesBackend): Promise<{ success: true }> {
+    return localRequest('baptisms.update', { id, values });
   },
 
-  annul(id: number, motivo: string, token: string): Promise<{ success: true }> {
-    return apiRequest(`/api/baptisms/${id}/annul`, {
-      method: 'PATCH',
-      body: { motivo },
-      token,
-    });
+  annul(id: number, motivo: string): Promise<{ success: true }> {
+    return localRequest('baptisms.annul', { id, motivo });
   },
 };

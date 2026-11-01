@@ -6,10 +6,12 @@ export interface BaptismFormValues {
   numeroLibro: string;
   numeroFolio: string;
   numeroRegistro: string;
+  dni: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   fechaNacimiento: string;
+  edad: string;
   lugarNacimiento: string;
   padreNombre: string;
   madreNombre: string;
@@ -25,10 +27,12 @@ const EMPTY_VALUES: BaptismFormValues = {
   numeroLibro: '',
   numeroFolio: '',
   numeroRegistro: '',
+  dni: '',
   nombre: '',
   apellidoPaterno: '',
   apellidoMaterno: '',
   fechaNacimiento: '',
+  edad: '',
   lugarNacimiento: '',
   padreNombre: '',
   madreNombre: '',
@@ -148,6 +152,7 @@ export function BaptismForm({
           <section className="mb-5">
             <h3 className="mb-3 text-sm font-semibold text-slate-700">Datos personales</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="DNI" value={values.dni} onChange={(v) => update('dni', v)} />
               <Field label="Nombre" value={values.nombre} onChange={(v) => update('nombre', v)} />
               <Field
                 label="Apellido paterno"
@@ -165,6 +170,7 @@ export function BaptismForm({
                 value={values.fechaNacimiento}
                 onChange={(v) => update('fechaNacimiento', v)}
               />
+              <Field label="Edad" type="number" value={values.edad} onChange={(v) => update('edad', v)} />
               <Field
                 label="Lugar de nacimiento"
                 value={values.lugarNacimiento}
