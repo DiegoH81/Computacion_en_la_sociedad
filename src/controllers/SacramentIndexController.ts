@@ -10,15 +10,15 @@ type Result<T> = { success: true; data: T } | { success: false; errorMessage: st
 
 async function withActiveParish<T>(
   fallbackMessage: string,
-  request: (parroquiaId: number, token: string) => Promise<T>,
+  request: (parroquiaId: number) => Promise<T>,
 ): Promise<Result<T>> {
-  const { token, parroquiaActivaId } = useSessionStore.getState();
-  if (!token || !parroquiaActivaId) {
+  const { parroquiaActivaId } = useSessionStore.getState();
+  if (!parroquiaActivaId) {
     return { success: false, errorMessage: 'Sesión no válida.' };
   }
 
   try {
-    return { success: true, data: await request(parroquiaActivaId, token) };
+    return { success: true, data: await request(parroquiaActivaId) };
   } catch (error) {
     return {
       success: false,
@@ -28,8 +28,8 @@ async function withActiveParish<T>(
 }
 
 export function loadIndexBooks(tipo: SacramentType): Promise<Result<string[]>> {
-  return withActiveParish('Error al cargar los libros.', async (parroquiaId, token) => {
-    const { libros } = await SacramentIndexService.listBooks(tipo, parroquiaId, token);
+  return withActiveParish('Error al cargar los libros.', async (parroquiaId) => {
+    const { libros } = await SacramentIndexService.listBooks(tipo, parroquiaId);
     return libros;
   });
 }
@@ -38,8 +38,8 @@ export function loadIndexEntries(
   tipo: SacramentType,
   libro: string | null,
 ): Promise<Result<SacramentIndexEntry[]>> {
-  return withActiveParish('Error al cargar el índice.', async (parroquiaId, token) => {
-    const { entries } = await SacramentIndexService.getEntries(tipo, parroquiaId, libro, token);
+  return withActiveParish('Error al cargar el índice.', async (parroquiaId) => {
+    const { entries } = await SacramentIndexService.getEntries(tipo, parroquiaId, libro);
     return entries;
   });
 }

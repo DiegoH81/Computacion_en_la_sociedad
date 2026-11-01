@@ -1,7 +1,8 @@
-import { apiRequest } from '../lib/apiClient';
+import { localRequest } from '../lib/localClient';
 
 export interface Priest {
   id: number;
+  titulo: string | null;
   nombre: string;
   apellido_paterno: string;
   apellido_materno: string;
@@ -20,51 +21,26 @@ export interface SearchPriestsParams {
 }
 
 export interface PriestFormValues {
+  titulo: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
 }
 
-const PAGE_SIZE = 20;
-
 export const PriestService = {
-  search(params: SearchPriestsParams, token: string): Promise<{ priests: Priest[]; totalPages: number }> {
-    const query = new URLSearchParams();
-    if (params.nombre) query.set('nombre', params.nombre);
-    if (params.apellidoPaterno) query.set('apellidoPaterno', params.apellidoPaterno);
-    if (params.apellidoMaterno) query.set('apellidoMaterno', params.apellidoMaterno);
-    query.set('sortBy', params.sortBy);
-    query.set('sortDirection', params.sortDirection);
-    query.set('page', String(params.page));
-    query.set('pageSize', String(PAGE_SIZE));
-
-    return apiRequest(`/api/priests?${query.toString()}`, { token });
+  search(params: SearchPriestsParams): Promise<{ priests: Priest[]; totalPages: number }> {
+    return localRequest('ministers.search', params);
   },
 
-  create(
-    values: PriestFormValues,
-    parroquiaId: number | undefined,
-    token: string,
-  ): Promise<{ id: number }> {
-    return apiRequest('/api/priests', {
-      method: 'POST',
-      body: { ...values, parroquiaId },
-      token,
-    });
+  create(values: PriestFormValues, parroquiaId: number | undefined): Promise<{ id: number }> {
+    return localRequest('ministers.create', { values, parroquiaId });
   },
 
-  update(priestId: number, values: PriestFormValues, token: string): Promise<{ success: true }> {
-    return apiRequest(`/api/priests/${priestId}`, {
-      method: 'PUT',
-      body: values,
-      token,
-    });
+  update(priestId: number, values: PriestFormValues): Promise<{ success: true }> {
+    return localRequest('ministers.update', { id: priestId, values });
   },
 
-  toggleActive(priestId: number, token: string): Promise<{ success: true }> {
-    return apiRequest(`/api/priests/${priestId}/toggle-active`, {
-      method: 'PATCH',
-      token,
-    });
+  toggleActive(priestId: number): Promise<{ success: true }> {
+    return localRequest('ministers.toggleActive', { id: priestId });
   },
 };

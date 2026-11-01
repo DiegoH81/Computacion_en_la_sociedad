@@ -154,4 +154,57 @@ export const LOCAL_MIGRATIONS: readonly string[] = [
      WHERE id = NEW.id;
   END;
   `,
+  `
+  CREATE TABLE ministros_nueva (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id        TEXT    NOT NULL UNIQUE,
+    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
+    titulo           TEXT,
+    nombre           TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL,
+    activo           INTEGER NOT NULL DEFAULT 1,
+    version          INTEGER NOT NULL DEFAULT 1,
+    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  INSERT INTO ministros_nueva (id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo)
+  SELECT id, 'servidor-' || id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo
+  FROM ministros;
+
+  DROP TABLE ministros;
+  ALTER TABLE ministros_nueva RENAME TO ministros;
+
+  CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
+
+  CREATE TRIGGER trg_ministros_touch
+  AFTER UPDATE ON ministros
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE ministros
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+  `,
+  `
+  -- Registros con cambios sin subir. Se envía su estado final, así que basta una fila por registro.
+  -- version_base: última versión que conoce el servidor; NULL si el registro aún no existe allí.
+  CREATE TABLE sync_cola (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro')),
+    client_id    TEXT    NOT NULL,
+    version_base INTEGER,
+    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (entidad, client_id)
+  );
+
+  INSERT INTO sync_cola (entidad, client_id)
+  SELECT tipo, client_id FROM sacramentos ORDER BY id;
+
+  INSERT INTO sync_cola (entidad, client_id)
+  SELECT 'ministro', client_id FROM ministros ORDER BY id;
+  `,
 ];

@@ -34,7 +34,7 @@ export function PriestTable({
   }
 
   if (priests.length === 0) {
-    return <p className="p-4 text-sm text-slate-500">No se encontraron sacerdotes.</p>;
+    return <p className="p-4 text-sm text-slate-500">No se encontraron ministros.</p>;
   }
 
   return (

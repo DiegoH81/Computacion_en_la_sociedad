@@ -137,7 +137,7 @@ export function BaptismsPage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const { baptism } = await BaptismService.getById(baptismId, token);
+      const { baptism } = await BaptismService.getById(baptismId);
       const b = baptism as Record<string, string | number | null>;
 
       setEditingInitialValues({
@@ -145,10 +145,12 @@ export function BaptismsPage() {
         numeroLibro: String(b.numero_libro ?? ''),
         numeroFolio: String(b.numero_folio ?? ''),
         numeroRegistro: String(b.numero_registro ?? ''),
+        dni: String(b.dni ?? ''),
         nombre: String(b.nombre ?? ''),
         apellidoPaterno: String(b.apellido_paterno ?? ''),
         apellidoMaterno: String(b.apellido_materno ?? ''),
         fechaNacimiento: String(b.fecha_nacimiento ?? ''),
+        edad: String(b.edad ?? ''),
         lugarNacimiento: String(b.lugar_nacimiento ?? ''),
         padreNombre: String(b.padre_nombre ?? ''),
         madreNombre: String(b.madre_nombre ?? ''),
@@ -200,7 +202,7 @@ export function BaptismsPage() {
 
   async function handlePrint(baptismId: number) {
     if (!token) return;
-    const { baptism } = await BaptismService.getById(baptismId, token);
+    const { baptism } = await BaptismService.getById(baptismId);
     const b = baptism as Record<string, string | number | null>;
 
     setPrintData({
@@ -215,8 +217,6 @@ export function BaptismsPage() {
       padreNombre: String(b.padre_nombre ?? ''),
       madreNombre: String(b.madre_nombre ?? ''),
       fechaBautizo: formatFechaDisplay(String(b.fecha_bautizo ?? '')),
-      // Resuelto desde el inicio (a diferencia de Matrimonio): el Worker ya
-      // hace el JOIN con sacerdotes en getBaptismById.
       celebranteNombreCompleto: String(b.celebrante_nombre ?? ''),
       padrino: String(b.padrino ?? ''),
       madrina: String(b.madrina ?? ''),

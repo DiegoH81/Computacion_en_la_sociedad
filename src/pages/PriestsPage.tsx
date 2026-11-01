@@ -63,7 +63,7 @@ export function PriestsPage() {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al buscar sacerdotes.');
+      setErrorMessage(result.errorMessage ?? 'Error al buscar ministros.');
       return;
     }
 
@@ -100,7 +100,7 @@ export function PriestsPage() {
         setPriests(result.priests ?? []);
         setTotalPages(result.totalPages ?? 1);
       } else {
-        setErrorMessage(result.errorMessage ?? 'Error al buscar sacerdotes.');
+        setErrorMessage(result.errorMessage ?? 'Error al buscar ministros.');
       }
     });
   }
@@ -112,6 +112,7 @@ export function PriestsPage() {
   }
 
   async function handleSave(values: {
+    titulo: string;
     nombre: string;
     apellidoPaterno: string;
     apellidoMaterno: string;
@@ -145,21 +146,21 @@ export function PriestsPage() {
 
   return (
     <MainMenuLayout
-      title="Sacerdotes"
+      title="Ministros"
       parroquiaActivaNombre={parroquiaActivaNombre ?? ''}
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}
     >
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-800">Sacerdotes</h1>
+          <h1 className="text-lg font-semibold text-slate-800">Ministros</h1>
           {canAddPriest && (
             <button
               type="button"
               onClick={() => setModalState({ mode: 'create' })}
               className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
             >
-              + Agregar Sacerdote
+              + Agregar ministro
             </button>
           )}
         </div>
@@ -203,6 +204,7 @@ export function PriestsPage() {
           initialValues={
             modalState.mode === 'edit'
               ? {
+                  titulo: modalState.priest.titulo,
                   nombre: modalState.priest.nombre,
                   apellidoPaterno: modalState.priest.apellidoPaterno,
                   apellidoMaterno: modalState.priest.apellidoMaterno,

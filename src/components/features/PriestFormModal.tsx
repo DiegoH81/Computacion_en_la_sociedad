@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 interface PriestFormValues {
+  titulo: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
@@ -21,6 +22,7 @@ export function PriestFormModal({
   onCancel,
   isLoading,
 }: PriestFormModalProps) {
+  const [titulo, setTitulo] = useState(initialValues?.titulo ?? '');
   const [nombre, setNombre] = useState(initialValues?.nombre ?? '');
   const [apellidoPaterno, setApellidoPaterno] = useState(
     initialValues?.apellidoPaterno ?? '',
@@ -31,17 +33,27 @@ export function PriestFormModal({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onSave({ nombre, apellidoPaterno, apellidoMaterno });
+    onSave({ titulo, nombre, apellidoPaterno, apellidoMaterno });
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
         <h2 className="mb-4 text-lg font-semibold text-slate-800">
-          {mode === 'create' ? 'Añadir nuevo sacerdote' : 'Editar sacerdote'}
+          {mode === 'create' ? 'Añadir nuevo ministro' : 'Editar ministro'}
         </h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Título</label>
+            <input
+              type="text"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+            />
+          </div>
+
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Nombre</label>
             <input

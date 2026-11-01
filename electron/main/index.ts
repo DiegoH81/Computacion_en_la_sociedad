@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeLocalDatabase, initLocalDatabase } from './localDb';
+import { registerLocalIpc } from './services/ipc';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -42,7 +43,9 @@ ipcMain.handle('app:get-version', () => {
 });
 
 app.whenReady().then(() => {
-  // Las pantallas todavía usan el Worker: un fallo aquí no debe impedir abrir la app.
+  registerLocalIpc();
+
+  // Si falla, la app abre igual y el login informa que la base local no está disponible.
   try {
     initLocalDatabase();
   } catch (error) {

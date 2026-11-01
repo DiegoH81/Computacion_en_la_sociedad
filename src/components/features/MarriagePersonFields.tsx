@@ -1,17 +1,15 @@
 interface PersonMarriageData {
+  dni: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   lugarNacimiento: string;
   fechaNacimiento: string;
+  edad: string;
   parroquiaBautismo: string;
   fechaBautismo: string;
   padreNombre: string;
-  padreApellido: string;
-  padreDni: string;
   madreNombre: string;
-  madreApellido: string;
-  madreDni: string;
 }
 
 interface MarriagePersonFieldsProps {
@@ -54,6 +52,7 @@ export function MarriagePersonFields({ label, values, onChange }: MarriagePerson
       <h3 className="mb-3 text-sm font-semibold text-slate-700">Datos personales — {label}</h3>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Field label="DNI" value={values.dni} onChange={(v) => update('dni', v)} />
         <Field label={`Nombre ${label.toLowerCase()}`} value={values.nombre} onChange={(v) => update('nombre', v)} />
         <Field label="Apellido paterno" value={values.apellidoPaterno} onChange={(v) => update('apellidoPaterno', v)} />
         <Field label="Apellido materno" value={values.apellidoMaterno} onChange={(v) => update('apellidoMaterno', v)} />
@@ -61,19 +60,16 @@ export function MarriagePersonFields({ label, values, onChange }: MarriagePerson
         <Field label="Lugar de nacimiento" value={values.lugarNacimiento} onChange={(v) => update('lugarNacimiento', v)} />
         <Field label="Fecha de nacimiento" type="date" value={values.fechaNacimiento} onChange={(v) => update('fechaNacimiento', v)} />
 
+        <Field label="Edad" type="number" value={values.edad} onChange={(v) => update('edad', v)} />
+
         <Field label="Parroquia de bautismo" value={values.parroquiaBautismo} onChange={(v) => update('parroquiaBautismo', v)} />
         <Field label="Fecha de bautismo" type="date" value={values.fechaBautismo} onChange={(v) => update('fechaBautismo', v)} />
       </div>
 
       <h4 className="mb-2 mt-4 text-sm font-semibold text-slate-700">Familiares</h4>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label="Nombre padre" value={values.padreNombre} onChange={(v) => update('padreNombre', v)} />
-        <Field label="Apellido padre" value={values.padreApellido} onChange={(v) => update('padreApellido', v)} />
-        <Field label="DNI padre" value={values.padreDni} onChange={(v) => update('padreDni', v)} />
-
-        <Field label="Nombre madre" value={values.madreNombre} onChange={(v) => update('madreNombre', v)} />
-        <Field label="Apellido madre" value={values.madreApellido} onChange={(v) => update('madreApellido', v)} />
-        <Field label="DNI madre" value={values.madreDni} onChange={(v) => update('madreDni', v)} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Padre" value={values.padreNombre} onChange={(v) => update('padreNombre', v)} />
+        <Field label="Madre" value={values.madreNombre} onChange={(v) => update('madreNombre', v)} />
       </div>
     </div>
   );

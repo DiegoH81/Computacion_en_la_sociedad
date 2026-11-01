@@ -1,4 +1,4 @@
-import { apiRequest } from '../lib/apiClient';
+import { localRequest } from '../lib/localClient';
 
 export interface MarriageRow {
   id: number;
@@ -27,19 +27,17 @@ export interface SearchMarriagesParams {
 }
 
 export interface PersonFormValues {
+  dni?: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   lugarNacimiento?: string;
   fechaNacimiento?: string;
+  edad?: string;
   parroquiaBautismo?: string;
   fechaBautismo?: string;
   padreNombre?: string;
-  padreApellido?: string;
-  padreDni?: string;
   madreNombre?: string;
-  madreApellido?: string;
-  madreDni?: string;
 }
 
 export interface MarriageFormValuesBackend {
@@ -59,58 +57,24 @@ export interface MarriageFormValuesBackend {
   notasMarginales?: string;
 }
 
-const PAGE_SIZE = 20;
-
 export const MarriageService = {
-  search(
-    params: SearchMarriagesParams,
-    token: string,
-  ): Promise<{ marriages: MarriageRow[]; totalPages: number }> {
-    const query = new URLSearchParams();
-    if (params.nombre) query.set('nombre', params.nombre);
-    if (params.apellidoPaterno) query.set('apellidoPaterno', params.apellidoPaterno);
-    if (params.apellidoMaterno) query.set('apellidoMaterno', params.apellidoMaterno);
-    query.set('sortBy', params.sortBy);
-    query.set('sortDirection', params.sortDirection);
-    query.set('page', String(params.page));
-    query.set('pageSize', String(PAGE_SIZE));
-
-    return apiRequest(`/api/marriages?${query.toString()}`, { token });
+  search(params: SearchMarriagesParams): Promise<{ marriages: MarriageRow[]; totalPages: number }> {
+    return localRequest('marriages.search', params);
   },
 
-  getById(id: number, token: string): Promise<{ marriage: Record<string, unknown> }> {
-    return apiRequest(`/api/marriages/${id}`, { token });
+  getById(id: number): Promise<{ marriage: Record<string, unknown> }> {
+    return localRequest('marriages.get', { id });
   },
 
-  create(
-    values: MarriageFormValuesBackend,
-    parroquiaId: number | undefined,
-    token: string,
-  ): Promise<{ id: number }> {
-    return apiRequest('/api/marriages', {
-      method: 'POST',
-      body: { ...values, parroquiaId },
-      token,
-    });
+  create(values: MarriageFormValuesBackend, parroquiaId: number | undefined): Promise<{ id: number }> {
+    return localRequest('marriages.create', { values, parroquiaId });
   },
 
-  update(
-    id: number,
-    values: MarriageFormValuesBackend,
-    token: string,
-  ): Promise<{ success: true }> {
-    return apiRequest(`/api/marriages/${id}`, {
-      method: 'PUT',
-      body: values,
-      token,
-    });
+  update(id: number, values: MarriageFormValuesBackend): Promise<{ success: true }> {
+    return localRequest('marriages.update', { id, values });
   },
 
-  annul(id: number, motivo: string, token: string): Promise<{ success: true }> {
-    return apiRequest(`/api/marriages/${id}/annul`, {
-      method: 'PATCH',
-      body: { motivo },
-      token,
-    });
+  annul(id: number, motivo: string): Promise<{ success: true }> {
+    return localRequest('marriages.annul', { id, motivo });
   },
 };

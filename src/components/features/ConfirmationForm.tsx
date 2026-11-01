@@ -16,10 +16,12 @@ export interface ConfirmationFormValues {
 }
 
 const EMPTY_PERSON: SacramentPersonData = {
+  dni: '',
   nombre: '',
   apellidoPaterno: '',
   apellidoMaterno: '',
   fechaNacimiento: '',
+  edad: '',
   lugarNacimiento: '',
   padreNombre: '',
   madreNombre: '',

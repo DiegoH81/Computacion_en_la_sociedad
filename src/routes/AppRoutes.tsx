@@ -57,7 +57,7 @@ export function AppRoutes() {
       />
 
       <Route
-        path="/sacerdotes"
+        path="/ministros"
         element={
           <ProtectedRoute>
             <PriestsPage />

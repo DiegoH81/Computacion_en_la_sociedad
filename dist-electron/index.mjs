@@ -1,1 +1,1 @@
-let e=require("electron");e.contextBridge.exposeInMainWorld(`electronAPI`,{getAppVersion:()=>e.ipcRenderer.invoke(`app:get-version`)});
+let e=require("electron");var t=`local:request`;e.contextBridge.exposeInMainWorld(`electronAPI`,{getAppVersion:()=>e.ipcRenderer.invoke(`app:get-version`),localRequest:(n,r)=>e.ipcRenderer.invoke(t,n,r)});

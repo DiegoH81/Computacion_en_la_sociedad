@@ -25,7 +25,7 @@ CREATE TABLE sacerdotes (
   parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
   activo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+, client_id TEXT);
 
 CREATE TABLE "matrimonios_legacy" (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,13 +264,17 @@ INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (3, 'Par
 INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (1, 'admin', '100000:ONr8hN0xK3ji61Hi4jmtVQ==:ODk7gds76M2Wqs/FpbZ7Shvj4JpVdYiABTVmNnpVPSc=', 'admin', NULL, 1, '2026-11-01 01:20:10', 'Administrador', 'De', 'Prueba');
 INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (2, 'parroco1', '100000:FG9geNY/YFbv7KyJsADGoQ==:L6CaX3WNHwLSu5PTOr82shmb32hpm5B3Qdaewe/0Q5s=', 'usuario_parroquia', 1, 1, '2026-11-01 01:20:10', 'Usuario', 'Parroquia', 'Uno');
 INSERT INTO "sacerdotes" ("id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id", "activo", "created_at") VALUES (1, 'Braulio', 'Guido', 'Alvaro', 1, 1, '2026-11-01 01:20:12');
+UPDATE "sacerdotes" SET "client_id" = '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a01' WHERE "id" = 1;
 INSERT INTO "sacerdotes" ("id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id", "activo", "created_at") VALUES (2, 'Manuel', 'Torres', 'Rios', 2, 1, '2026-11-01 01:20:12');
+UPDATE "sacerdotes" SET "client_id" = '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a02' WHERE "id" = 2;
 INSERT INTO "matrimonios_legacy" ("id", "parroquia_id", "fecha_sacramento", "numero_libro", "numero_folio", "numero_registro", "esposo_nombre", "esposo_apellido_paterno", "esposo_apellido_materno", "esposo_lugar_nacimiento", "esposo_fecha_nacimiento", "esposo_parroquia_bautismo", "esposo_fecha_bautismo", "esposo_padre_nombre", "esposo_padre_apellido", "esposo_padre_dni", "esposo_madre_nombre", "esposo_madre_apellido", "esposo_madre_dni", "esposa_nombre", "esposa_apellido_paterno", "esposa_apellido_materno", "esposa_lugar_nacimiento", "esposa_fecha_nacimiento", "esposa_parroquia_bautismo", "esposa_fecha_bautismo", "esposa_padre_nombre", "esposa_padre_apellido", "esposa_padre_dni", "esposa_madre_nombre", "esposa_madre_apellido", "esposa_madre_dni", "fecha_matrimonio", "celebrante_id", "lugar_matrimonio", "testigo_1", "testigo_2", "testigo_3", "testigo_4", "notas_marginales", "estado", "anulado_por_usuario_id", "anulado_en", "motivo_anulacion", "created_at", "updated_at", "client_id", "version") VALUES (1, 1, '2024-05-10', '2', '1', '713', 'Braulio', 'Guido', 'Alvaro', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Maria', 'Torres', 'Rios', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, 'vigente', NULL, NULL, NULL, '2026-11-01T01:20:14.000Z', '2026-11-01T01:20:14.000Z', 'a0fdc912-86f2-4c03-9344-0460ffc79b8b', 1);
 INSERT INTO "bautismos_legacy" ("id", "parroquia_id", "fecha_sacramento", "numero_libro", "numero_folio", "numero_registro", "nombre", "apellido_paterno", "apellido_materno", "fecha_nacimiento", "lugar_nacimiento", "padre_nombre", "madre_nombre", "fecha_bautizo", "celebrante_id", "padrino", "madrina", "anotaciones", "estado", "anulado_por_usuario_id", "anulado_en", "motivo_anulacion", "created_at", "updated_at", "client_id", "version") VALUES (1, 1, '2010-06-15', '2', '1', '713', 'Braulio', 'Guido', 'Alvaro', NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, 'vigente', NULL, NULL, NULL, '2026-11-01T01:20:16.000Z', '2026-11-01T01:20:16.000Z', 'deeab7ef-1079-4a88-bfa6-b7c2813dd21d', 1);
 INSERT INTO "confirmaciones_legacy" ("id", "parroquia_id", "fecha_sacramento", "numero_libro", "numero_folio", "numero_registro", "nombre", "apellido_paterno", "apellido_materno", "fecha_nacimiento", "lugar_nacimiento", "padre_nombre", "madre_nombre", "fecha_confirmacion", "celebrante_id", "padrino", "madrina", "anotaciones", "estado", "anulado_por_usuario_id", "anulado_en", "motivo_anulacion", "created_at", "updated_at", "client_id", "version") VALUES (1, 1, '2018-06-15', '2', '1', '713', 'Braulio', 'Guido', 'Alvaro', NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, 'vigente', NULL, NULL, NULL, '2026-11-01T01:20:19.000Z', '2026-11-01T01:20:19.000Z', '13f48c84-186b-4d0a-a5ca-ffba5828eba3', 1);
 
 
 -- ============ ÍNDICES ============
+
+CREATE UNIQUE INDEX idx_sacerdotes_client_id ON sacerdotes (client_id) WHERE client_id IS NOT NULL;
 
 CREATE INDEX idx_sacerdotes_busqueda
   ON sacerdotes (nombre, apellido_paterno, apellido_materno);

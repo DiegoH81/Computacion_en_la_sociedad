@@ -108,6 +108,18 @@ describe('migraciones', () => {
     expect(conn.prepare(`SELECT count(*) FROM sqlite_master WHERE name = 'b'`).pluck().get()).toBe(0);
   });
 
+  it('rechaza una migración que deja claves foráneas rotas y sigue aplicándolas después', () => {
+    const base = 'CREATE TABLE padre (id INTEGER PRIMARY KEY); CREATE TABLE hijo (padre_id INTEGER REFERENCES padre(id)); INSERT INTO padre VALUES (1); INSERT INTO hijo VALUES (1);';
+    open(KEY, [base]).close();
+    db = null;
+
+    expect(() => open(KEY, [base, 'DELETE FROM padre'])).toThrow(/claves foráneas/);
+
+    const conn = open(KEY, [base]);
+    expect(conn.prepare('SELECT count(*) FROM padre').pluck().get()).toBe(1);
+    expect(conn.pragma('foreign_keys', { simple: true })).toBe(1);
+  });
+
   it('no abre una base creada por una versión más nueva de la app', () => {
     open(KEY, ['CREATE TABLE a (id INTEGER)', 'CREATE TABLE b (id INTEGER)']).close();
     db = null;

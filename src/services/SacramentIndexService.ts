@@ -1,4 +1,4 @@
-import { apiRequest } from '../lib/apiClient';
+import { localRequest } from '../lib/localClient';
 
 export type SacramentType = 'bautismo' | 'confirmacion' | 'matrimonio';
 
@@ -12,8 +12,8 @@ export interface SacramentIndexEntry {
 }
 
 export const SacramentIndexService = {
-  listBooks(tipo: SacramentType, parroquiaId: number, token: string): Promise<{ libros: string[] }> {
-    return apiRequest(`/api/sacrament-index/${tipo}/libros?parroquiaId=${parroquiaId}`, { token });
+  listBooks(tipo: SacramentType, parroquiaId: number): Promise<{ libros: string[] }> {
+    return localRequest('sacramentIndex.books', { tipo, parroquiaId });
   },
 
   /** Sin libro devuelve las entradas de todos los libros. */
@@ -21,10 +21,7 @@ export const SacramentIndexService = {
     tipo: SacramentType,
     parroquiaId: number,
     libro: string | null,
-    token: string,
   ): Promise<{ entries: SacramentIndexEntry[] }> {
-    const query = new URLSearchParams({ parroquiaId: String(parroquiaId) });
-    if (libro !== null) query.set('libro', libro);
-    return apiRequest(`/api/sacrament-index/${tipo}?${query.toString()}`, { token });
+    return localRequest('sacramentIndex.entries', { tipo, parroquiaId, libro });
   },
 };

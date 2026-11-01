@@ -112,10 +112,10 @@ export async function createPriest(
 
   const result = await db
     .prepare(
-      `INSERT INTO sacerdotes (nombre, apellido_paterno, apellido_materno, parroquia_id, activo)
-       VALUES (?, ?, ?, ?, 1)`,
+      `INSERT INTO sacerdotes (nombre, apellido_paterno, apellido_materno, parroquia_id, activo, client_id)
+       VALUES (?, ?, ?, ?, 1, ?)`,
     )
-    .bind(input.nombre, input.apellidoPaterno, input.apellidoMaterno, targetParroquiaId)
+    .bind(input.nombre, input.apellidoPaterno, input.apellidoMaterno, targetParroquiaId, crypto.randomUUID())
     .run();
 
   return { success: true, id: result.meta.last_row_id as number };

@@ -3,35 +3,31 @@ import { MarriagePersonFields } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
 
 interface PersonMarriageData {
+  dni: string;
   nombre: string;
   apellidoPaterno: string;
   apellidoMaterno: string;
   lugarNacimiento: string;
   fechaNacimiento: string;
+  edad: string;
   parroquiaBautismo: string;
   fechaBautismo: string;
   padreNombre: string;
-  padreApellido: string;
-  padreDni: string;
   madreNombre: string;
-  madreApellido: string;
-  madreDni: string;
 }
 
 const EMPTY_PERSON: PersonMarriageData = {
+  dni: '',
   nombre: '',
   apellidoPaterno: '',
   apellidoMaterno: '',
   lugarNacimiento: '',
   fechaNacimiento: '',
+  edad: '',
   parroquiaBautismo: '',
   fechaBautismo: '',
   padreNombre: '',
-  padreApellido: '',
-  padreDni: '',
   madreNombre: '',
-  madreApellido: '',
-  madreDni: '',
 };
 
 export interface MarriageFormValues {

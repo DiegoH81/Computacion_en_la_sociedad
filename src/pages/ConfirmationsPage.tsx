@@ -151,7 +151,7 @@ export function ConfirmationsPage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const { confirmation } = await ConfirmationService.getById(confirmationId, token);
+      const { confirmation } = await ConfirmationService.getById(confirmationId);
       const c = confirmation as Record<string, string | number | null>;
 
       setEditingInitialValues({
@@ -160,10 +160,12 @@ export function ConfirmationsPage() {
         numeroFolio: String(c.numero_folio ?? ''),
         numeroRegistro: String(c.numero_registro ?? ''),
         persona: {
+          dni: String(c.dni ?? ''),
           nombre: String(c.nombre ?? ''),
           apellidoPaterno: String(c.apellido_paterno ?? ''),
           apellidoMaterno: String(c.apellido_materno ?? ''),
           fechaNacimiento: String(c.fecha_nacimiento ?? ''),
+          edad: String(c.edad ?? ''),
           lugarNacimiento: String(c.lugar_nacimiento ?? ''),
           padreNombre: String(c.padre_nombre ?? ''),
           madreNombre: String(c.madre_nombre ?? ''),
@@ -218,7 +220,7 @@ export function ConfirmationsPage() {
 
   async function handlePrint(confirmationId: number) {
     if (!token) return;
-    const { confirmation } = await ConfirmationService.getById(confirmationId, token);
+    const { confirmation } = await ConfirmationService.getById(confirmationId);
     const c = confirmation as Record<string, string | number | null>;
 
     setPrintData({

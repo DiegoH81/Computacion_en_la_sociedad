@@ -13,12 +13,17 @@ function migrate(db: LocalDatabase, migrations: readonly string[]): void {
     );
   }
 
+  db.pragma('foreign_keys = OFF');
   migrations.slice(current).forEach((sql, index) => {
     db.transaction(() => {
       db.exec(sql);
+      if ((db.pragma('foreign_key_check') as unknown[]).length > 0) {
+        throw new Error('La migración dejó claves foráneas rotas.');
+      }
       db.pragma(`user_version = ${current + index + 1}`);
     })();
   });
+  db.pragma('foreign_keys = ON');
 }
 
 export function openLocalDatabase(
