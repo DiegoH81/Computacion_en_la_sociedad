@@ -12,6 +12,7 @@ export default defineConfig({
       miniflare: {
         bindings: {
           TEST_MIGRATIONS: migrations,
+          DEVICE_KEY_SECRET: 'secreto-de-prueba',
         },
       },
     }),

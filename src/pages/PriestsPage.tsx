@@ -74,7 +74,7 @@ export function PriestsPage() {
   useEffect(() => {
     loadPriests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, sortBy, sortDirection]);
+  }, [currentPage, sortBy, sortDirection, parroquiaActivaId]);
 
   function canManage(priestParroquiaId: number): boolean {
     if (rol === 'admin') return true;

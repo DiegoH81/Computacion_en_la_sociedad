@@ -16,7 +16,17 @@ import {
   type SearchFilters,
   type Session,
 } from './common';
-import { insertPerson, nameMatch, updatePersonWithHistory, type PersonInput } from './people';
+import {
+  applyCorrections,
+  correctionList,
+  insertPerson,
+  listCorrections,
+  nameMatch,
+  recordCorrections,
+  updatePerson,
+  type CorrectionInput,
+  type PersonInput,
+} from './people';
 
 export interface SinglePersonInput extends SacramentHeader, PersonInput {
   fechaBautizo?: string;
@@ -24,6 +34,7 @@ export interface SinglePersonInput extends SacramentHeader, PersonInput {
   padrino?: string;
   madrina?: string;
   anotaciones?: string;
+  correcciones?: CorrectionInput[];
 }
 
 const SORT_COLUMNS: Record<string, string> = {
@@ -86,7 +97,8 @@ export function singlePersonSacrament(tipo: keyof typeof CONFIG) {
       const row = db
         .prepare(
           `SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
-                  s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones,
+                  s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones, s.created_at, s.updated_at,
+                  par.ubicacion AS parroquia_ubicacion,
                   s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                   pe.dni, pe.nombres AS nombre, pe.apellido_paterno, pe.apellido_materno,
                   pe.fecha_nacimiento, pe.edad, pe.lugar_nacimiento,
@@ -102,15 +114,16 @@ export function singlePersonSacrament(tipo: keyof typeof CONFIG) {
         .get(id);
 
       if (!row) throw new ServiceError('Partida no encontrada.', 404);
-      return row;
+      return { ...(row as Record<string, unknown>), correcciones: listCorrections(db, id) };
     },
 
     create(db: LocalDatabase, session: Session, input: SinglePersonInput, requestedParishId: unknown): number {
       const parroquiaId = targetParish(session, requestedParishId);
       requireNames(input);
+      const { person, records } = applyCorrections(input, correctionList(input.correcciones));
 
       return db.transaction(() => {
-        const personaId = insertPerson(db, parroquiaId, input);
+        const personaId = insertPerson(db, parroquiaId, person);
         const sacramentId = insertSacrament(db, tipo, parroquiaId, input, input[eventInput], input.anotaciones);
         db.prepare(`INSERT INTO ${table} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(
           sacramentId,
@@ -118,6 +131,7 @@ export function singlePersonSacrament(tipo: keyof typeof CONFIG) {
           text(input.padrino),
           text(input.madrina),
         );
+        recordCorrections(db, session, personaId, sacramentId, records);
         return sacramentId;
       })();
     },
@@ -125,13 +139,15 @@ export function singlePersonSacrament(tipo: keyof typeof CONFIG) {
     update(db: LocalDatabase, session: Session, id: number, input: SinglePersonInput): void {
       assertCanManage(db, session, id, tipo);
       requireNames(input);
+      const { person, records } = applyCorrections(input, correctionList(input.correcciones));
 
       db.transaction(() => {
         const { persona_id: personaId } = db
           .prepare(`SELECT persona_id FROM ${table} WHERE sacramento_id = ?`)
           .get(id) as { persona_id: number };
 
-        updatePersonWithHistory(db, session, personaId, id, input);
+        updatePerson(db, personaId, person);
+        recordCorrections(db, session, personaId, id, records);
         updateSacrament(db, id, input, input[eventInput], input.anotaciones);
         db.prepare(`UPDATE ${table} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(
           text(input.padrino),

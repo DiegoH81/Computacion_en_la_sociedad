@@ -184,7 +184,7 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const { token: newUserToken } = (await loginResponse.json()) as { token: string };
 
       // 4. Con ese token puede usar el sistema.
-      const before = await api('/api/priests', { token: newUserToken });
+      const before = await api('/api/sync/pull', { token: newUserToken });
       expect(before.status).toBe(200);
 
       // 5. El admin la deshabilita.
@@ -195,7 +195,7 @@ describe('rutas /api/users (Worker real + D1)', () => {
       expect(toggled.status).toBe(200);
 
       // 6. El token que ya tenía deja de funcionar al instante, y no puede volver a entrar.
-      const after = await api('/api/priests', { token: newUserToken });
+      const after = await api('/api/sync/pull', { token: newUserToken });
       expect(after.status).toBe(401);
 
       const relogin = await api('/api/auth/login', {

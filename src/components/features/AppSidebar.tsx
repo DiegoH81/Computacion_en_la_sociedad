@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { LogoutButton } from './LogoutButton';
 import {
   BaptismIcon,
   ConfirmationIcon,
   CrestIcon,
   MarriageIcon,
   ParishIcon,
+  StatisticsIcon,
 } from '../ui/MenuIcons';
 
 const ICON_STYLES = 'h-10 w-10 shrink-0';
@@ -35,6 +37,11 @@ const OPTIONS: { label: string; path: string; icon: ReactNode }[] = [
     label: 'Partida de matrimonio',
     path: '/matrimonios',
     icon: <MarriageIcon className={ICON_STYLES} />,
+  },
+  {
+    label: 'Estadísticas',
+    path: '/estadisticas',
+    icon: <StatisticsIcon className={ICON_STYLES} />,
   },
 ];
 
@@ -77,13 +84,13 @@ export function AppSidebar() {
         <nav
           aria-label="Menú lateral"
           inert={!isOpen}
-          className="flex h-full flex-col items-center overflow-y-auto px-4 py-8"
+          className="flex h-full flex-col items-center px-4 py-8"
         >
           <div className="mb-6 flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-white p-3 text-icon-button">
             <CrestIcon className="h-full w-full" />
           </div>
 
-          <ul className="w-full divide-y divide-white/70">
+          <ul className="min-h-0 w-full flex-1 divide-y divide-white/70 overflow-y-auto">
             {OPTIONS.map(({ label, path, icon }) => {
               const isCurrent = pathname === path;
 
@@ -104,6 +111,11 @@ export function AppSidebar() {
               );
             })}
           </ul>
+
+          <LogoutButton
+            className="mt-2 flex w-full shrink-0 items-center gap-4 rounded-lg border-t border-white/70 p-3 text-left text-lg leading-tight font-semibold hover:bg-icon-button"
+            iconClassName="h-10 w-10 shrink-0"
+          />
         </nav>
 
         <button

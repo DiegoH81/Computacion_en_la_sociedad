@@ -1,12 +1,7 @@
 import { login } from './services/authService';
 import { authenticateRequest } from './services/authMiddleware';
-import { handlePriestRoutes } from './services/priestRoutes';
-import { handleMarriageRoutes } from './services/marriageRoutes';
-import { handleBaptismRoutes } from './services/baptismRoutes';
-import { handleConfirmationRoutes } from './services/confirmationRoutes';
 import { handleUserRoutes } from './services/userRoutes';
-import { handleSacramentIndexRoutes } from './services/sacramentIndexRoutes';
-import { getReferenceData } from './services/referenceService';
+import { handleSyncRoutes } from './services/syncRoutes';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,50 +60,14 @@ export default {
       return jsonResponse({ parishes: results });
     }
 
-    // --- GET /api/reference (datos que la app copia a su base local) ---
-    if (url.pathname === '/api/reference' && request.method === 'GET') {
-      const auth = await authenticateRequest(request, env.JWT_SECRET, env.prelatura_db);
-      if (!auth.authenticated) {
-        return jsonResponse({ message: auth.message }, auth.status);
-      }
-
-      return jsonResponse(await getReferenceData(env.prelatura_db, auth.payload.usuarioId));
+    const syncResponse = await handleSyncRoutes(request, env, url);
+    if (syncResponse) {
+      return syncResponse;
     }
 
-    // --- /api/priests/* (delegado al router de sacerdotes) ---
-    const priestResponse = await handlePriestRoutes(request, env, url);
-    if (priestResponse) {
-      return priestResponse;
-    }
-
-    // --- /api/marriages/* (delegado al router de matrimonios) ---
-    const marriageResponse = await handleMarriageRoutes(request, env, url);
-    if (marriageResponse) {
-      return marriageResponse;
-    }
-
-    // --- /api/baptisms/* (delegado al router de bautismos) ---
-    const baptismResponse = await handleBaptismRoutes(request, env, url);
-    if (baptismResponse) {
-      return baptismResponse;
-    }
-
-    // --- /api/confirmations/* (delegado al router de confirmaciones) ---
-    const confirmationResponse = await handleConfirmationRoutes(request, env, url);
-    if (confirmationResponse) {
-      return confirmationResponse;
-    }
-
-    // --- /api/users/* (delegado al router de usuarios, solo admin) ---
     const userResponse = await handleUserRoutes(request, env, url);
     if (userResponse) {
       return userResponse;
-    }
-
-    // --- /api/sacrament-index/* (índices alfabéticos para imprimir) ---
-    const indexResponse = await handleSacramentIndexRoutes(request, env, url);
-    if (indexResponse) {
-      return indexResponse;
     }
 
     return jsonResponse({ message: 'Not Found' }, 404);

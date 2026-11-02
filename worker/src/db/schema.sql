@@ -1,4 +1,5 @@
---admin/admin123 y parroco1/parroco123
+-- Solo para desarrollo: admin/admin123 y parroco1/parroco123.
+-- En producción no se usa este archivo (ver worker/DEPLOY.md).
 -- ============ TABLAS ============
 
 CREATE TABLE parroquias (
@@ -17,147 +18,20 @@ CREATE TABLE usuarios (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 , nombre TEXT NOT NULL DEFAULT '', apellido_paterno TEXT NOT NULL DEFAULT '', apellido_materno TEXT NOT NULL DEFAULT '');
 
-CREATE TABLE sacerdotes (
+CREATE TABLE ministros (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL,
+  titulo TEXT,
   nombre TEXT NOT NULL,
   apellido_paterno TEXT NOT NULL,
   apellido_materno TEXT NOT NULL,
   parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
   activo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-, client_id TEXT);
-
-CREATE TABLE "matrimonios_legacy" (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-  -- Datos de registro
-  parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
-  fecha_sacramento TEXT NOT NULL,
-  numero_libro TEXT NOT NULL,
-  numero_folio TEXT NOT NULL,
-  numero_registro TEXT NOT NULL,
-
-  -- Datos del esposo
-  esposo_nombre TEXT NOT NULL,
-  esposo_apellido_paterno TEXT NOT NULL,
-  esposo_apellido_materno TEXT NOT NULL,
-  esposo_lugar_nacimiento TEXT,
-  esposo_fecha_nacimiento TEXT,
-  esposo_parroquia_bautismo TEXT,
-  esposo_fecha_bautismo TEXT,
-  esposo_padre_nombre TEXT,
-  esposo_padre_apellido TEXT,
-  esposo_padre_dni TEXT,
-  esposo_madre_nombre TEXT,
-  esposo_madre_apellido TEXT,
-  esposo_madre_dni TEXT,
-
-  -- Datos de la esposa
-  esposa_nombre TEXT NOT NULL,
-  esposa_apellido_paterno TEXT NOT NULL,
-  esposa_apellido_materno TEXT NOT NULL,
-  esposa_lugar_nacimiento TEXT,
-  esposa_fecha_nacimiento TEXT,
-  esposa_parroquia_bautismo TEXT,
-  esposa_fecha_bautismo TEXT,
-  esposa_padre_nombre TEXT,
-  esposa_padre_apellido TEXT,
-  esposa_padre_dni TEXT,
-  esposa_madre_nombre TEXT,
-  esposa_madre_apellido TEXT,
-  esposa_madre_dni TEXT,
-
-  -- Datos de la celebración
-  fecha_matrimonio TEXT,
-  celebrante_id INTEGER REFERENCES sacerdotes(id), -- NULLABLE, confirmado
-  lugar_matrimonio TEXT,
-  testigo_1 TEXT,
-  testigo_2 TEXT,
-  testigo_3 TEXT,
-  testigo_4 TEXT,
-  notas_marginales TEXT,
-
-  -- Auditoría de anulación (§0)
-  estado TEXT NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
-  anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
-  anulado_en TEXT,
-  motivo_anulacion TEXT,
-
+  version INTEGER NOT NULL DEFAULT 1,
+  ultimo_cola_id TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-, client_id TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1);
-
-CREATE TABLE "bautismos_legacy" (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-  -- Datos de registro
-  parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
-  fecha_sacramento TEXT NOT NULL,
-  numero_libro TEXT NOT NULL,
-  numero_folio TEXT NOT NULL,
-  numero_registro TEXT NOT NULL,
-
-  -- Datos personales del bautizado
-  nombre TEXT NOT NULL,
-  apellido_paterno TEXT NOT NULL,
-  apellido_materno TEXT NOT NULL,
-  fecha_nacimiento TEXT,
-  lugar_nacimiento TEXT,
-  padre_nombre TEXT,
-  madre_nombre TEXT,
-
-  -- Datos del bautismo
-  fecha_bautizo TEXT,
-  celebrante_id INTEGER REFERENCES sacerdotes(id), -- NULLABLE, igual que en matrimonios
-  padrino TEXT,
-  madrina TEXT,
-  anotaciones TEXT,
-
-  -- Auditoría de anulación (§0)
-  estado TEXT NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
-  anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
-  anulado_en TEXT,
-  motivo_anulacion TEXT,
-
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-, client_id TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1);
-
-CREATE TABLE "confirmaciones_legacy" (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-  -- Datos de registro
-  parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
-  fecha_sacramento TEXT NOT NULL,
-  numero_libro TEXT NOT NULL,
-  numero_folio TEXT NOT NULL,
-  numero_registro TEXT NOT NULL,
-
-  -- Datos personales del confirmado
-  nombre TEXT NOT NULL,
-  apellido_paterno TEXT NOT NULL,
-  apellido_materno TEXT NOT NULL,
-  fecha_nacimiento TEXT,
-  lugar_nacimiento TEXT,
-  padre_nombre TEXT,
-  madre_nombre TEXT,
-
-  -- Datos de la confirmación
-  fecha_confirmacion TEXT,
-  celebrante_id INTEGER REFERENCES sacerdotes(id),
-  padrino TEXT,
-  madrina TEXT,
-  anotaciones TEXT,
-
-  -- Auditoría de anulación (§0)
-  estado TEXT NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
-  anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
-  anulado_en TEXT,
-  motivo_anulacion TEXT,
-
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-, client_id TEXT NOT NULL DEFAULT '', version INTEGER NOT NULL DEFAULT 1);
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
 
 CREATE TABLE personas (
   id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,11 +42,10 @@ CREATE TABLE personas (
   apellido_paterno  TEXT    NOT NULL,
   apellido_materno  TEXT    NOT NULL DEFAULT '',
   fecha_nacimiento  TEXT,
+  edad              INTEGER CHECK (edad IS NULL OR edad >= 0),
   lugar_nacimiento  TEXT,
   padre             TEXT,
-  padre_dni         TEXT,
   madre             TEXT,
-  madre_dni         TEXT,
   version           INTEGER NOT NULL DEFAULT 1,
   created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -183,7 +56,7 @@ CREATE TABLE sacramentos (
   client_id               TEXT    NOT NULL UNIQUE,
   tipo                    TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),
   parroquia_id            INTEGER NOT NULL REFERENCES parroquias(id),
-  ministro_id             INTEGER REFERENCES sacerdotes(id),
+  ministro_id             INTEGER REFERENCES ministros(id),
   libro                   TEXT    NOT NULL,
   folio                   TEXT    NOT NULL,
   numero                  TEXT    NOT NULL,
@@ -195,6 +68,7 @@ CREATE TABLE sacramentos (
   anulado_en              TEXT,
   motivo_anulacion        TEXT,
   version                 INTEGER NOT NULL DEFAULT 1,
+  ultimo_cola_id          TEXT,
   created_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   -- Necesario para que cada subtipo pueda enlazar (id, tipo) y la base impida,
@@ -246,6 +120,7 @@ CREATE TABLE confirmaciones (
 
 CREATE TABLE cambios_persona (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id      TEXT    NOT NULL UNIQUE,
   persona_id     INTEGER NOT NULL REFERENCES personas(id),
   sacramento_id  INTEGER REFERENCES sacramentos(id),
   usuario_id     INTEGER NOT NULL REFERENCES usuarios(id),
@@ -253,6 +128,19 @@ CREATE TABLE cambios_persona (
   valor_anterior TEXT,
   valor_nuevo    TEXT,
   fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE TABLE sync_feed (
+  seq           INTEGER PRIMARY KEY AUTOINCREMENT,
+  sacramento_id INTEGER NOT NULL UNIQUE REFERENCES sacramentos(id)
+);
+
+CREATE TABLE dispositivos (
+  id             TEXT PRIMARY KEY,
+  parroquia_id   INTEGER REFERENCES parroquias(id),
+  clave_cifrada  TEXT NOT NULL,
+  creado_en      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
 
@@ -263,51 +151,21 @@ INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (2, 'Par
 INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (3, 'Parroquia 3', 1, NULL);
 INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (1, 'admin', '100000:ONr8hN0xK3ji61Hi4jmtVQ==:ODk7gds76M2Wqs/FpbZ7Shvj4JpVdYiABTVmNnpVPSc=', 'admin', NULL, 1, '2026-11-01 01:20:10', 'Administrador', 'De', 'Prueba');
 INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (2, 'parroco1', '100000:FG9geNY/YFbv7KyJsADGoQ==:L6CaX3WNHwLSu5PTOr82shmb32hpm5B3Qdaewe/0Q5s=', 'usuario_parroquia', 1, 1, '2026-11-01 01:20:10', 'Usuario', 'Parroquia', 'Uno');
-INSERT INTO "sacerdotes" ("id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id", "activo", "created_at") VALUES (1, 'Braulio', 'Guido', 'Alvaro', 1, 1, '2026-11-01 01:20:12');
-UPDATE "sacerdotes" SET "client_id" = '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a01' WHERE "id" = 1;
-INSERT INTO "sacerdotes" ("id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id", "activo", "created_at") VALUES (2, 'Manuel', 'Torres', 'Rios', 2, 1, '2026-11-01 01:20:12');
-UPDATE "sacerdotes" SET "client_id" = '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a02' WHERE "id" = 2;
-INSERT INTO "matrimonios_legacy" ("id", "parroquia_id", "fecha_sacramento", "numero_libro", "numero_folio", "numero_registro", "esposo_nombre", "esposo_apellido_paterno", "esposo_apellido_materno", "esposo_lugar_nacimiento", "esposo_fecha_nacimiento", "esposo_parroquia_bautismo", "esposo_fecha_bautismo", "esposo_padre_nombre", "esposo_padre_apellido", "esposo_padre_dni", "esposo_madre_nombre", "esposo_madre_apellido", "esposo_madre_dni", "esposa_nombre", "esposa_apellido_paterno", "esposa_apellido_materno", "esposa_lugar_nacimiento", "esposa_fecha_nacimiento", "esposa_parroquia_bautismo", "esposa_fecha_bautismo", "esposa_padre_nombre", "esposa_padre_apellido", "esposa_padre_dni", "esposa_madre_nombre", "esposa_madre_apellido", "esposa_madre_dni", "fecha_matrimonio", "celebrante_id", "lugar_matrimonio", "testigo_1", "testigo_2", "testigo_3", "testigo_4", "notas_marginales", "estado", "anulado_por_usuario_id", "anulado_en", "motivo_anulacion", "created_at", "updated_at", "client_id", "version") VALUES (1, 1, '2024-05-10', '2', '1', '713', 'Braulio', 'Guido', 'Alvaro', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Maria', 'Torres', 'Rios', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, NULL, NULL, NULL, 'vigente', NULL, NULL, NULL, '2026-11-01T01:20:14.000Z', '2026-11-01T01:20:14.000Z', 'a0fdc912-86f2-4c03-9344-0460ffc79b8b', 1);
-INSERT INTO "bautismos_legacy" ("id", "parroquia_id", "fecha_sacramento", "numero_libro", "numero_folio", "numero_registro", "nombre", "apellido_paterno", "apellido_materno", "fecha_nacimiento", "lugar_nacimiento", "padre_nombre", "madre_nombre", "fecha_bautizo", "celebrante_id", "padrino", "madrina", "anotaciones", "estado", "anulado_por_usuario_id", "anulado_en", "motivo_anulacion", "created_at", "updated_at", "client_id", "version") VALUES (1, 1, '2010-06-15', '2', '1', '713', 'Braulio', 'Guido', 'Alvaro', NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, 'vigente', NULL, NULL, NULL, '2026-11-01T01:20:16.000Z', '2026-11-01T01:20:16.000Z', 'deeab7ef-1079-4a88-bfa6-b7c2813dd21d', 1);
-INSERT INTO "confirmaciones_legacy" ("id", "parroquia_id", "fecha_sacramento", "numero_libro", "numero_folio", "numero_registro", "nombre", "apellido_paterno", "apellido_materno", "fecha_nacimiento", "lugar_nacimiento", "padre_nombre", "madre_nombre", "fecha_confirmacion", "celebrante_id", "padrino", "madrina", "anotaciones", "estado", "anulado_por_usuario_id", "anulado_en", "motivo_anulacion", "created_at", "updated_at", "client_id", "version") VALUES (1, 1, '2018-06-15', '2', '1', '713', 'Braulio', 'Guido', 'Alvaro', NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, NULL, 'vigente', NULL, NULL, NULL, '2026-11-01T01:20:19.000Z', '2026-11-01T01:20:19.000Z', '13f48c84-186b-4d0a-a5ca-ffba5828eba3', 1);
+INSERT INTO "ministros" ("id", "client_id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id") VALUES (1, '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a01', 'Braulio', 'Guido', 'Alvaro', 1);
+INSERT INTO "ministros" ("id", "client_id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id") VALUES (2, '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a02', 'Manuel', 'Torres', 'Rios', 2);
 
 
 -- ============ ÍNDICES ============
 
-CREATE UNIQUE INDEX idx_sacerdotes_client_id ON sacerdotes (client_id) WHERE client_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_ministros_client_id ON ministros (client_id);
 
-CREATE INDEX idx_sacerdotes_busqueda
-  ON sacerdotes (nombre, apellido_paterno, apellido_materno);
-
-CREATE INDEX idx_matrimonios_esposo_nombre
-  ON "matrimonios_legacy" (esposo_nombre, esposo_apellido_paterno, esposo_apellido_materno);
-
-CREATE INDEX idx_matrimonios_esposa_nombre
-  ON "matrimonios_legacy" (esposa_nombre, esposa_apellido_paterno, esposa_apellido_materno);
-
-CREATE INDEX idx_bautismos_busqueda
-  ON "bautismos_legacy" (nombre, apellido_paterno, apellido_materno);
-
-CREATE INDEX idx_confirmaciones_busqueda
-  ON "confirmaciones_legacy" (nombre, apellido_paterno, apellido_materno);
+CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
 
 CREATE INDEX idx_usuarios_busqueda ON usuarios (nombre, apellido_paterno, apellido_materno);
 
 CREATE UNIQUE INDEX idx_parroquias_nombre_unico ON parroquias (nombre COLLATE NOCASE);
 
-CREATE UNIQUE INDEX idx_matrimonios_client_id ON "matrimonios_legacy" (client_id);
-
-CREATE INDEX idx_matrimonios_sync ON "matrimonios_legacy" (parroquia_id, updated_at, id);
-
-CREATE UNIQUE INDEX idx_bautismos_client_id ON "bautismos_legacy" (client_id);
-
-CREATE INDEX idx_bautismos_sync ON "bautismos_legacy" (parroquia_id, updated_at, id);
-
-CREATE UNIQUE INDEX idx_confirmaciones_client_id ON "confirmaciones_legacy" (client_id);
-
-CREATE INDEX idx_confirmaciones_sync ON "confirmaciones_legacy" (parroquia_id, updated_at, id);
-
-CREATE UNIQUE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;
+CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;
 
 CREATE INDEX idx_personas_busqueda ON personas (nombres, apellido_paterno, apellido_materno);
 
@@ -327,37 +185,17 @@ CREATE INDEX idx_confirmaciones_persona ON confirmaciones (persona_id);
 
 CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);
 
+CREATE INDEX idx_cambios_sacramento ON cambios_persona (sacramento_id);
+
 
 -- ============ TRIGGERS ============
 
-CREATE TRIGGER trg_matrimonios_touch
-AFTER UPDATE ON "matrimonios_legacy"
+CREATE TRIGGER trg_ministros_touch
+AFTER UPDATE ON ministros
 FOR EACH ROW
 WHEN NEW.version = OLD.version
 BEGIN
-  UPDATE "matrimonios_legacy"
-     SET version = OLD.version + 1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-   WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER trg_bautismos_touch
-AFTER UPDATE ON "bautismos_legacy"
-FOR EACH ROW
-WHEN NEW.version = OLD.version
-BEGIN
-  UPDATE "bautismos_legacy"
-     SET version = OLD.version + 1,
-         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-   WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER trg_confirmaciones_touch
-AFTER UPDATE ON "confirmaciones_legacy"
-FOR EACH ROW
-WHEN NEW.version = OLD.version
-BEGIN
-  UPDATE "confirmaciones_legacy"
+  UPDATE ministros
      SET version = OLD.version + 1,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
    WHERE id = NEW.id;
@@ -383,4 +221,19 @@ BEGIN
      SET version = OLD.version + 1,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
    WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER trg_sacramentos_feed_insert
+AFTER INSERT ON sacramentos
+FOR EACH ROW
+BEGIN
+  INSERT INTO sync_feed (sacramento_id) VALUES (NEW.id);
+END;
+
+CREATE TRIGGER trg_sacramentos_feed_update
+AFTER UPDATE ON sacramentos
+FOR EACH ROW
+BEGIN
+  DELETE FROM sync_feed WHERE sacramento_id = NEW.id;
+  INSERT INTO sync_feed (sacramento_id) VALUES (NEW.id);
 END;

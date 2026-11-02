@@ -13,6 +13,19 @@ export interface PersonInput {
   madreNombre?: string;
 }
 
+/** Un dato que una nota marginal cambia. `persona` solo aplica a partidas de dos personas. */
+export interface CorrectionInput {
+  persona?: string;
+  campo?: string;
+  valorNuevo?: string;
+}
+
+export interface PendingCorrection {
+  campo: string;
+  anterior: string;
+  nuevo: string;
+}
+
 const PERSON_COLUMNS = [
   'dni',
   'nombres',
@@ -27,6 +40,12 @@ const PERSON_COLUMNS = [
 
 type PersonColumn = (typeof PERSON_COLUMNS)[number];
 type PersonRow = Record<PersonColumn, string | number | null>;
+
+const CORRECTABLE_FIELDS = {
+  nombres: { input: 'nombre', label: 'Nombres' },
+  apellido_paterno: { input: 'apellidoPaterno', label: 'Apellido paterno' },
+  apellido_materno: { input: 'apellidoMaterno', label: 'Apellido materno' },
+} as const;
 
 function parseAge(value: PersonInput['edad']): number | null {
   if (value === undefined || value === null || value === '') return null;
@@ -64,13 +83,8 @@ export function insertPerson(db: LocalDatabase, parroquiaId: number, input: Pers
   );
 }
 
-export function updatePersonWithHistory(
-  db: LocalDatabase,
-  session: Session,
-  personaId: number,
-  sacramentoId: number,
-  input: PersonInput,
-): void {
+/** Actualiza los datos de la persona. Solo una nota marginal deja constancia en cambios_persona. */
+export function updatePerson(db: LocalDatabase, personaId: number, input: PersonInput): void {
   const next = toRow(input);
   const current = db
     .prepare(`SELECT ${PERSON_COLUMNS.join(', ')} FROM personas WHERE id = ?`)
@@ -79,29 +93,78 @@ export function updatePersonWithHistory(
   const changed = PERSON_COLUMNS.filter((column) => current[column] !== next[column]);
   if (changed.length === 0) return;
 
-  const history = db.prepare(
-    `INSERT INTO cambios_persona
-       (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  );
-  const asText = (value: string | number | null) => (value === null ? null : String(value));
-
-  for (const column of changed) {
-    history.run(
-      crypto.randomUUID(),
-      personaId,
-      sacramentoId,
-      session.usuarioId,
-      column,
-      asText(current[column]),
-      asText(next[column]),
-    );
-  }
-
   db.prepare(`UPDATE personas SET ${changed.map((column) => `${column} = ?`).join(', ')} WHERE id = ?`).run(
     ...changed.map((column) => next[column]),
     personaId,
   );
+}
+
+/**
+ * Aplica sobre los datos del formulario lo que indica la nota marginal: el valor anterior es el
+ * que está en el formulario al guardar. Devuelve la persona corregida y lo que hay que registrar.
+ */
+export function applyCorrections(
+  person: PersonInput,
+  corrections: CorrectionInput[],
+): { person: PersonInput; records: PendingCorrection[] } {
+  const corrected: PersonInput = { ...person };
+  const records: PendingCorrection[] = [];
+
+  for (const correction of corrections) {
+    const campo = correction.campo as keyof typeof CORRECTABLE_FIELDS;
+    const field = Object.hasOwn(CORRECTABLE_FIELDS, campo) ? CORRECTABLE_FIELDS[campo] : undefined;
+    if (!field) throw new ServiceError('La nota marginal indica un campo que no se puede corregir.', 400);
+    if (records.some((record) => record.campo === campo)) {
+      throw new ServiceError(`La nota marginal repite el campo ${field.label}.`, 400);
+    }
+
+    const anterior = text(person[field.input]);
+    const nuevo = text(correction.valorNuevo);
+    if (!anterior) throw new ServiceError(`Complete ${field.label} antes de corregirlo en la nota marginal.`, 400);
+    if (!nuevo) throw new ServiceError(`Indique el valor nuevo de ${field.label} en la nota marginal.`, 400);
+    if (nuevo === anterior) throw new ServiceError(`El valor nuevo de ${field.label} es igual al anterior.`, 400);
+
+    corrected[field.input] = nuevo;
+    records.push({ campo, anterior, nuevo });
+  }
+
+  return { person: corrected, records };
+}
+
+export function recordCorrections(
+  db: LocalDatabase,
+  session: Session,
+  personaId: number,
+  sacramentoId: number,
+  records: PendingCorrection[],
+): void {
+  const insert = db.prepare(
+    `INSERT INTO cambios_persona
+       (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const { campo, anterior, nuevo } of records) {
+    insert.run(crypto.randomUUID(), personaId, sacramentoId, session.usuarioId, campo, anterior, nuevo);
+  }
+}
+
+export function listCorrections(db: LocalDatabase, sacramentoId: number) {
+  return db
+    .prepare(
+      `SELECT persona_id, campo_cambio AS campo, valor_anterior, valor_nuevo, fecha_cambio
+       FROM cambios_persona WHERE sacramento_id = ? ORDER BY id`,
+    )
+    .all(sacramentoId) as {
+    persona_id: number;
+    campo: string;
+    valor_anterior: string | null;
+    valor_nuevo: string | null;
+    fecha_cambio: string;
+  }[];
+}
+
+export function correctionList(value: unknown): CorrectionInput[] {
+  return Array.isArray(value) ? (value as CorrectionInput[]) : [];
 }
 
 export function nameMatch(alias: string, column: 'nombres' | 'apellido_paterno' | 'apellido_materno'): string {

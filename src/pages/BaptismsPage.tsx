@@ -3,21 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { SacramentSearchPanel, type SortField } from '../components/features/SacramentSearchPanel';
 import { BaptismForm, type BaptismFormValues } from '../components/features/BaptismForm';
+import type { SacramentRecordInfo } from '../components/features/SacramentRegisterPanel';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
-import { BaptismPrintView } from '../components/features/BaptismPrintView';
+import { SinglePersonPrintView, type SinglePersonPrintData } from '../components/features/SinglePersonPrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
+import type { RecordedCorrection } from '../lib/personCorrections';
 import { useSessionStore } from '../store/sessionStore';
 import {
   searchBaptisms,
   createBaptism,
   updateBaptism,
   annulBaptism,
-  formatFechaDisplay,
   type BaptismRowUI,
 } from '../controllers/BaptismController';
 import { searchPriests } from '../controllers/PriestController';
 import { BaptismService } from '../services/BaptismService';
+import { birthValue, celebrantName, fullName, printBase, printText } from '../lib/printFields';
+import { ParishService } from '../services/ParishService';
+import { formatLongDate } from '../lib/dates';
 
 interface PriestOption {
   id: number;
@@ -46,10 +50,10 @@ export function BaptismsPage() {
     { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; baptismId: number }
   >({ mode: 'closed' });
   const [editingInitialValues, setEditingInitialValues] = useState<BaptismFormValues | undefined>();
+  const [editingRecord, setEditingRecord] = useState<SacramentRecordInfo | undefined>();
+  const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
-  const [printData, setPrintData] = useState<Parameters<typeof BaptismPrintView>[0]['data'] | null>(
-    null,
-  );
+  const [printData, setPrintData] = useState<SinglePersonPrintData | null>(null);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<PriestOption[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
@@ -119,6 +123,7 @@ export function BaptismsPage() {
       sortBy: 'nombre',
       sortDirection: 'asc',
       page: 1,
+      parroquiaId: editingRecord?.parroquiaId,
     });
     setIsSearchingPriests(false);
 
@@ -159,7 +164,25 @@ export function BaptismsPage() {
         padrino: String(b.padrino ?? ''),
         madrina: String(b.madrina ?? ''),
         anotaciones: String(b.anotaciones ?? ''),
+        correcciones: [],
       });
+      setEditingRecord({
+        sacramentoId: baptismId,
+        parroquiaId: Number(b.parroquia_id),
+        parroquiaNombre: String(b.parroquia_nombre ?? ''),
+        creadoEn: String(b.created_at ?? ''),
+        modificadoEn: String(b.updated_at ?? ''),
+        correcciones: (baptism.correcciones ?? []) as RecordedCorrection[],
+      });
+      if (b.celebrante_id) {
+        setPriestOptions([
+          {
+            id: Number(b.celebrante_id),
+            nombreCompleto: String(b.celebrante_nombre ?? ''),
+            parroquiaNombre: String(b.parroquia_nombre ?? ''),
+          },
+        ]);
+      }
 
       setFormState({ mode: 'edit', baptismId });
     } catch {
@@ -169,8 +192,16 @@ export function BaptismsPage() {
     }
   }
 
+  function closeForm() {
+    setFormState({ mode: 'closed' });
+    setEditingInitialValues(undefined);
+    setEditingRecord(undefined);
+    setFormError(null);
+  }
+
   async function handleSaveForm(values: BaptismFormValues) {
     setIsLoading(true);
+    setFormError(null);
 
     const result =
       formState.mode === 'edit'
@@ -180,12 +211,11 @@ export function BaptismsPage() {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al guardar.');
+      setFormError(result.errorMessage ?? 'Error al guardar.');
       return;
     }
 
-    setFormState({ mode: 'closed' });
-    setEditingInitialValues(undefined);
+    closeForm();
     loadBaptisms();
   }
 
@@ -202,25 +232,24 @@ export function BaptismsPage() {
 
   async function handlePrint(baptismId: number) {
     if (!token) return;
-    const { baptism } = await BaptismService.getById(baptismId);
-    const b = baptism as Record<string, string | number | null>;
+    const { baptism: b } = await BaptismService.getById(baptismId);
+    const { logo } = await ParishService.getLogo(Number(b.parroquia_id));
 
     setPrintData({
-      parroquiaNombre: String(b.parroquia_nombre ?? ''),
-      numeroLibro: String(b.numero_libro ?? ''),
-      numeroFolio: String(b.numero_folio ?? ''),
-      numeroRegistro: String(b.numero_registro ?? ''),
-      fechaSacramento: formatFechaDisplay(String(b.fecha_sacramento ?? '')),
-      nombreCompleto: `${b.nombre} ${b.apellido_paterno} ${b.apellido_materno}`,
-      fechaNacimiento: formatFechaDisplay(String(b.fecha_nacimiento ?? '')),
-      lugarNacimiento: String(b.lugar_nacimiento ?? ''),
-      padreNombre: String(b.padre_nombre ?? ''),
-      madreNombre: String(b.madre_nombre ?? ''),
-      fechaBautizo: formatFechaDisplay(String(b.fecha_bautizo ?? '')),
-      celebranteNombreCompleto: String(b.celebrante_nombre ?? ''),
-      padrino: String(b.padrino ?? ''),
-      madrina: String(b.madrina ?? ''),
-      anotaciones: String(b.anotaciones ?? ''),
+      ...printBase(b, logo),
+      fields: [
+        { label: 'Nombres', value: printText(b.nombre) },
+        { label: 'Apellidos', value: fullName(b.apellido_paterno, b.apellido_materno) },
+        { label: 'Padre', value: printText(b.padre_nombre) },
+        { label: 'Madre', value: printText(b.madre_nombre) },
+        { label: 'Lugar de nacimiento', value: printText(b.lugar_nacimiento) },
+        { label: 'Fecha de nacimiento', value: birthValue(b.fecha_nacimiento, b.edad) },
+        { label: 'Fecha de Bautismo', value: formatLongDate(printText(b.fecha_bautizo)) },
+        { label: 'Celebrante', value: celebrantName(b) },
+        { label: 'Padrino', value: printText(b.padrino) },
+        { label: 'Madrina', value: printText(b.madrina) },
+      ],
+      anotaciones: printText(b.anotaciones),
     });
   }
 
@@ -254,10 +283,7 @@ export function BaptismsPage() {
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
-        onAdd={() => {
-          setEditingInitialValues(undefined);
-          setFormState({ mode: 'create' });
-        }}
+        onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
         onAnnul={(id) => setAnnulmentTargetId(id)}
@@ -268,11 +294,11 @@ export function BaptismsPage() {
         <BaptismForm
           mode={formState.mode}
           initialValues={editingInitialValues}
+          parroquiaNombre={editingRecord?.parroquiaNombre ?? parroquiaActivaNombre ?? ''}
+          recordInfo={editingRecord}
+          errorMessage={formError}
           onSave={handleSaveForm}
-          onCancel={() => {
-            setFormState({ mode: 'closed' });
-            setEditingInitialValues(undefined);
-          }}
+          onCancel={closeForm}
           isLoading={isLoading}
           priestOptions={priestOptions}
           onSearchPriest={handleSearchPriest}
@@ -290,11 +316,11 @@ export function BaptismsPage() {
 
       {printData && (
         <A4PrintPreview
-          title="Imprimir certificado"
+          title="Imprimir constancia"
           onClose={() => setPrintData(null)}
           pages={[
             <A4Page key="certificado">
-              <BaptismPrintView data={printData} />
+              <SinglePersonPrintView sacramento="Bautismo" libroDe="bautismos" data={printData} />
             </A4Page>,
           ]}
         />

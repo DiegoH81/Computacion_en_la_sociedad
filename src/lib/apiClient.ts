@@ -1,4 +1,4 @@
-const WORKER_BASE_URL = 'http://localhost:8787';
+const WORKER_BASE_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
 export class ApiError extends Error {
   status: number;

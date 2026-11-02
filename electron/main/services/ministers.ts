@@ -49,7 +49,7 @@ function enqueueMinisterChange(db: LocalDatabase, id: number): void {
 export const ministers = {
   search(db: LocalDatabase, filters: SearchFilters) {
     const conditions: string[] = [];
-    const params: string[] = [];
+    const params: (string | number)[] = [];
     const add = (value: string | undefined, column: string) => {
       if (!value) return;
       conditions.push(`min.${column} LIKE ?`);
@@ -58,6 +58,10 @@ export const ministers = {
     add(filters.nombre, 'nombre');
     add(filters.apellidoPaterno, 'apellido_paterno');
     add(filters.apellidoMaterno, 'apellido_materno');
+    if (Number.isInteger(filters.parroquiaId)) {
+      conditions.push('min.parroquia_id = ?');
+      params.push(filters.parroquiaId as number);
+    }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const { total } = db.prepare(`SELECT COUNT(*) AS total FROM ministros min ${where}`).get(...params) as {

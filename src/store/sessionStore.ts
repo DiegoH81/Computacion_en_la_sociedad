@@ -24,6 +24,8 @@ interface SessionState {
 
   setParroquiaActiva: (id: number, nombre: string) => void;
 
+  setToken: (token: string) => void;
+
   clearSession: () => void;
 }
 
@@ -51,6 +53,8 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setParroquiaActiva: (id, nombre) =>
     set({ parroquiaActivaId: id, parroquiaActivaNombre: nombre }),
+
+  setToken: (token) => set({ token }),
 
   clearSession: () =>
     set({

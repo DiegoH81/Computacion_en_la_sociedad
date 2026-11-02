@@ -3,12 +3,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeLocalDatabase, initLocalDatabase } from './localDb';
 import { registerLocalIpc } from './services/ipc';
+import { stopPeriodicSync, syncBeforeQuit } from './services/session';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
+const QUIT_SYNC_LIMIT_MS = 5_000;
+
 let mainWindow: BrowserWindow | null = null;
+let quitSyncDone = false;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -52,6 +56,17 @@ app.whenReady().then(() => {
     console.error('No se pudo abrir la base local:', error);
   }
   createWindow();
+});
+
+// Último intento de subir lo pendiente. Lo que no alcance sigue en la cola para la próxima vez.
+app.on('before-quit', (event) => {
+  if (quitSyncDone) return;
+  event.preventDefault();
+  quitSyncDone = true;
+  stopPeriodicSync();
+  syncBeforeQuit(QUIT_SYNC_LIMIT_MS)
+    .catch((error) => console.error('No se pudo sincronizar al cerrar:', error))
+    .finally(() => app.quit());
 });
 
 app.on('will-quit', closeLocalDatabase);

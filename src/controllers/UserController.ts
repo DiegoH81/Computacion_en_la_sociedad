@@ -9,6 +9,7 @@ import type { UserFormValues } from '../components/features/UserFormModal';
 import type { UserRow } from '../components/features/UserTable';
 import { ApiError } from '../lib/apiClient';
 import { useSessionStore } from '../store/sessionStore';
+import { OFFLINE_TOKEN } from '../../electron/shared';
 
 const PASSWORD_MIN_LENGTH = 8;
 
@@ -33,6 +34,7 @@ export interface ParishesResult {
 function requireToken(): string {
   const token = useSessionStore.getState().token;
   if (!token) throw new ApiError('Sesión no válida.', 401);
+  if (token === OFFLINE_TOKEN) throw new ApiError('La gestión de usuarios necesita conexión a internet.', 0);
   return token;
 }
 

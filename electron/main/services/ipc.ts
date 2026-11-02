@@ -1,70 +1,21 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { LOCAL_REQUEST_CHANNEL, type LocalResponse } from '../../shared';
 import { getLocalDb } from '../localDb';
-import { positiveId, ServiceError, type SearchFilters, type Session } from './common';
+import { positiveId, ServiceError, type SacramentType, type SearchFilters } from './common';
+import { findDuplicates, type DuplicatePersonInput } from './duplicates';
 import { marriages, type MarriageInput } from './marriages';
 import { ministers, type MinisterInput } from './ministers';
-import { applyReferenceData, listParishes, type ReferenceData } from './reference';
+import { readParishLogo, saveParishLogo } from './parishLogo';
+import { listParishes } from './reference';
 import { getIndexEntries, listIndexBooks } from './sacramentIndex';
+import { dismissSyncNotice, getSyncStatus, login, logout, requireSession, resolveSyncConflict, syncNow } from './session';
 import { singlePersonSacrament, type SinglePersonInput } from './singlePersonSacraments';
-
-const WORKER_BASE_URL = 'http://localhost:8787';
+import { getStatistics } from './statistics';
+import type { ConflictChoice } from './syncEngine';
+import type { SyncEntity } from './syncQueue';
 
 const baptisms = singlePersonSacrament('bautismo');
 const confirmations = singlePersonSacrament('confirmacion');
-
-let session: Session | null = null;
-
-function requireSession(): Session {
-  if (!session)
-    throw new ServiceError('Sesión no válida.', 401);
-  return session;
-}
-
-async function workerRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${WORKER_BASE_URL}${path}`, init);
-  } catch {
-    throw new ServiceError('No se pudo conectar con el servidor. Verifique su conexión.', 0);
-  }
-
-  const data = (await response.json().catch(() => null)) as { message?: unknown } | null;
-  if (!response.ok) {
-    throw new ServiceError(data?.message ? String(data.message) : 'Ocurrió un error inesperado.', response.status);
-  }
-  return data as T;
-}
-
-async function refreshReference(token: string): Promise<void> {
-  const data = await workerRequest<ReferenceData>('/api/reference', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  applyReferenceData(getLocalDb(), data);
-}
-
-interface LoginResponse {
-  token: string;
-  usuario: { id: number; rol: Session['rol']; parroquiaId: number | null };
-}
-
-async function login(payload: { username: string; password: string }): Promise<LoginResponse> {
-  getLocalDb();
-  const response = await workerRequest<LoginResponse>('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: payload.username, password: payload.password }),
-  });
-
-  await refreshReference(response.token);
-  session = {
-    usuarioId: response.usuario.id,
-    rol: response.usuario.rol,
-    parroquiaId: response.usuario.parroquiaId,
-    token: response.token,
-  };
-  return response;
-}
 
 type Sacrament = typeof baptisms;
 
@@ -96,9 +47,43 @@ function sacramentHandlers(prefix: string, key: string, service: Sacrament) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handlers: Record<string, (payload: any) => unknown> = {
   'auth.login': login,
+  'auth.logout': () => {
+    logout();
+    return { success: true };
+  },
+  'sync.status': () => getSyncStatus(),
+  'sync.run': async () => {
+    requireSession();
+    await syncNow();
+    return getSyncStatus();
+  },
+  'sync.resolve': async ({ entidad, clientId, choice }: { entidad: SyncEntity; clientId: string; choice: ConflictChoice }) => {
+    await resolveSyncConflict(entidad, clientId, choice);
+    return getSyncStatus();
+  },
+  'sync.dismissNotice': () => {
+    dismissSyncNotice();
+    return { success: true };
+  },
   'parishes.list': () => {
     requireSession();
     return { parishes: listParishes(getLocalDb()) };
+  },
+  'sacraments.findDuplicates': ({ tipo, excludeId, personas }: { tipo: SacramentType; excludeId?: number; personas: DuplicatePersonInput[] }) => {
+    requireSession();
+    return findDuplicates(getLocalDb(), tipo, excludeId, personas);
+  },
+  'statistics.get': ({ parroquiaId, anio }: { parroquiaId: unknown; anio: unknown }) => {
+    requireSession();
+    return getStatistics(getLocalDb(), positiveId(parroquiaId), anio);
+  },
+  'parishes.logo': ({ id }: { id: unknown }) => {
+    requireSession();
+    return { logo: readParishLogo(app.getPath('userData'), positiveId(id)) };
+  },
+  'parishes.saveLogo': ({ id, logo }: { id: unknown; logo: unknown }) => {
+    saveParishLogo(app.getPath('userData'), requireSession(), positiveId(id), logo);
+    return { success: true };
   },
   'ministers.search': (filters: SearchFilters) => {
     requireSession();

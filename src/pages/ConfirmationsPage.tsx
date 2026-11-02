@@ -10,20 +10,24 @@ import {
   ConfirmationForm,
   type ConfirmationFormValues,
 } from '../components/features/ConfirmationForm';
+import type { SacramentRecordInfo } from '../components/features/SacramentRegisterPanel';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
-import { SacramentPrintView } from '../components/features/SacramentPrintView';
+import { SinglePersonPrintView, type SinglePersonPrintData } from '../components/features/SinglePersonPrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
+import type { RecordedCorrection } from '../lib/personCorrections';
 import { useSessionStore } from '../store/sessionStore';
 import {
   searchConfirmations,
   createConfirmation,
   updateConfirmation,
   annulConfirmation,
-  formatFechaDisplay,
 } from '../controllers/ConfirmationController';
 import { searchPriests } from '../controllers/PriestController';
 import { ConfirmationService } from '../services/ConfirmationService';
+import { celebrantName, fullName, printBase, printText } from '../lib/printFields';
+import { ParishService } from '../services/ParishService';
+import { formatLongDate } from '../lib/dates';
 
 interface ConfirmationRow extends SacramentRowBase {
   nombreCompleto: string;
@@ -60,10 +64,10 @@ export function ConfirmationsPage() {
   const [editingInitialValues, setEditingInitialValues] = useState<
     ConfirmationFormValues | undefined
   >();
+  const [editingRecord, setEditingRecord] = useState<SacramentRecordInfo | undefined>();
+  const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
-  const [printData, setPrintData] = useState<Parameters<typeof SacramentPrintView>[0] | null>(
-    null,
-  );
+  const [printData, setPrintData] = useState<SinglePersonPrintData | null>(null);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<PriestOption[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
@@ -133,6 +137,7 @@ export function ConfirmationsPage() {
       sortBy: 'nombre',
       sortDirection: 'asc',
       page: 1,
+      parroquiaId: editingRecord?.parroquiaId,
     });
     setIsSearchingPriests(false);
 
@@ -177,7 +182,25 @@ export function ConfirmationsPage() {
           madrina: String(c.madrina ?? ''),
           anotaciones: String(c.anotaciones ?? ''),
         },
+        correcciones: [],
       });
+      setEditingRecord({
+        sacramentoId: confirmationId,
+        parroquiaId: Number(c.parroquia_id),
+        parroquiaNombre: String(c.parroquia_nombre ?? ''),
+        creadoEn: String(c.created_at ?? ''),
+        modificadoEn: String(c.updated_at ?? ''),
+        correcciones: (confirmation.correcciones ?? []) as RecordedCorrection[],
+      });
+      if (c.celebrante_id) {
+        setPriestOptions([
+          {
+            id: Number(c.celebrante_id),
+            nombreCompleto: String(c.celebrante_nombre ?? ''),
+            parroquiaNombre: String(c.parroquia_nombre ?? ''),
+          },
+        ]);
+      }
 
       setFormState({ mode: 'edit', confirmationId });
     } catch {
@@ -187,8 +210,16 @@ export function ConfirmationsPage() {
     }
   }
 
+  function closeForm() {
+    setFormState({ mode: 'closed' });
+    setEditingInitialValues(undefined);
+    setEditingRecord(undefined);
+    setFormError(null);
+  }
+
   async function handleSaveForm(values: ConfirmationFormValues) {
     setIsLoading(true);
+    setFormError(null);
 
     const result =
       formState.mode === 'edit'
@@ -198,12 +229,11 @@ export function ConfirmationsPage() {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al guardar.');
+      setFormError(result.errorMessage ?? 'Error al guardar.');
       return;
     }
 
-    setFormState({ mode: 'closed' });
-    setEditingInitialValues(undefined);
+    closeForm();
     loadConfirmations();
   }
 
@@ -220,35 +250,22 @@ export function ConfirmationsPage() {
 
   async function handlePrint(confirmationId: number) {
     if (!token) return;
-    const { confirmation } = await ConfirmationService.getById(confirmationId);
-    const c = confirmation as Record<string, string | number | null>;
+    const { confirmation: c } = await ConfirmationService.getById(confirmationId);
+    const { logo } = await ParishService.getLogo(Number(c.parroquia_id));
 
     setPrintData({
-      certificateTitle: 'CERTIFICADO DE PARTIDA DE CONFIRMACIÓN',
-      parroquiaNombre: String(c.parroquia_nombre ?? ''),
-      numeroLibro: String(c.numero_libro ?? ''),
-      numeroFolio: String(c.numero_folio ?? ''),
-      numeroRegistro: String(c.numero_registro ?? ''),
-      fechaSacramento: formatFechaDisplay(String(c.fecha_sacramento ?? '')),
-      sections: [
-        {
-          title: 'DATOS DEL CONFIRMADO',
-          lines: [
-            `Nombres: ${c.nombre} ${c.apellido_paterno} ${c.apellido_materno}`,
-            `Fecha de nacimiento: ${formatFechaDisplay(String(c.fecha_nacimiento ?? ''))} | Lugar: ${c.lugar_nacimiento ?? ''}`,
-            `Padre: ${c.padre_nombre ?? ''}`,
-            `Madre: ${c.madre_nombre ?? ''}`,
-          ],
-        },
-        {
-          title: 'DATOS DE LA CELEBRACIÓN',
-          lines: [
-            `Fecha de confirmación: ${formatFechaDisplay(String(c.fecha_confirmacion ?? ''))} | Celebrante: ${c.celebrante_nombre ?? ''}`,
-            `Padrino: ${c.padrino ?? ''}`,
-            `Madrina: ${c.madrina ?? ''}`,
-          ],
-        },
+      ...printBase(c, logo),
+      fields: [
+        { label: 'Nombres', value: printText(c.nombre) },
+        { label: 'Apellidos', value: fullName(c.apellido_paterno, c.apellido_materno) },
+        { label: 'Padre', value: printText(c.padre_nombre) },
+        { label: 'Madre', value: printText(c.madre_nombre) },
+        { label: 'Fecha de Confirmación', value: formatLongDate(printText(c.fecha_confirmacion)) },
+        { label: 'Celebrante', value: celebrantName(c) },
+        { label: 'Padrino', value: printText(c.padrino) },
+        { label: 'Madrina', value: printText(c.madrina) },
       ],
+      anotaciones: printText(c.anotaciones),
     });
   }
 
@@ -282,10 +299,7 @@ export function ConfirmationsPage() {
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
-        onAdd={() => {
-          setEditingInitialValues(undefined);
-          setFormState({ mode: 'create' });
-        }}
+        onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
         onAnnul={(id) => setAnnulmentTargetId(id)}
@@ -296,11 +310,11 @@ export function ConfirmationsPage() {
         <ConfirmationForm
           mode={formState.mode}
           initialValues={editingInitialValues}
+          parroquiaNombre={editingRecord?.parroquiaNombre ?? parroquiaActivaNombre ?? ''}
+          recordInfo={editingRecord}
+          errorMessage={formError}
           onSave={handleSaveForm}
-          onCancel={() => {
-            setFormState({ mode: 'closed' });
-            setEditingInitialValues(undefined);
-          }}
+          onCancel={closeForm}
           isLoading={isLoading}
           priestOptions={priestOptions}
           onSearchPriest={handleSearchPriest}
@@ -318,11 +332,11 @@ export function ConfirmationsPage() {
 
       {printData && (
         <A4PrintPreview
-          title="Imprimir certificado"
+          title="Imprimir constancia"
           onClose={() => setPrintData(null)}
           pages={[
             <A4Page key="certificado">
-              <SacramentPrintView {...printData} />
+              <SinglePersonPrintView sacramento="Confirmación" libroDe="confirmaciones" data={printData} />
             </A4Page>,
           ]}
         />

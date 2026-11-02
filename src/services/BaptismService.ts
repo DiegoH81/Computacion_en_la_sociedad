@@ -1,3 +1,4 @@
+import type { PersonCorrection } from '../lib/personCorrections';
 import { localRequest } from '../lib/localClient';
 
 export interface BaptismRow {
@@ -41,6 +42,7 @@ export interface BaptismFormValuesBackend {
   padrino?: string;
   madrina?: string;
   anotaciones?: string;
+  correcciones?: PersonCorrection[];
 }
 
 export const BaptismService = {

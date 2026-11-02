@@ -8,7 +8,8 @@
     "start": "wrangler dev",
     "test": "vitest",
     "cf-typegen": "wrangler types",
-    "db:setup": "wrangler d1 execute prelatura-db --local --file=src/db/schema.sql"
+    "db:setup": "wrangler d1 execute prelatura-db --local --file=src/db/schema.sql",
+    "db:migrate:remote": "wrangler d1 migrations apply prelatura-db --remote"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",

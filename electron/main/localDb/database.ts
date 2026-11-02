@@ -5,10 +5,12 @@ export type LocalDatabase = Database.Database;
 
 const HEX_KEY = /^[0-9a-f]{64}$/i;
 
+export class NewerDatabaseError extends Error {}
+
 function migrate(db: LocalDatabase, migrations: readonly string[]): void {
   const current = db.pragma('user_version', { simple: true }) as number;
   if (current > migrations.length) {
-    throw new Error(
+    throw new NewerDatabaseError(
       `La base local está en la versión ${current} y esta app solo conoce hasta la ${migrations.length}.`,
     );
   }

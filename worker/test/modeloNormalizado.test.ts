@@ -31,8 +31,8 @@ async function setup(): Promise<void> {
 
   await db()
     .prepare(
-      `INSERT INTO sacerdotes (id, nombre, apellido_paterno, apellido_materno, parroquia_id, activo)
-       VALUES (1, 'Braulio', 'Guido', 'Alvaro', 1, 1)`,
+      `INSERT INTO ministros (id, client_id, nombre, apellido_paterno, apellido_materno, parroquia_id, activo)
+       VALUES (1, 'ministro-1', 'Braulio', 'Guido', 'Alvaro', 1, 1)`,
     )
     .run();
 }
@@ -68,38 +68,27 @@ async function count(table: string): Promise<number> {
 // Estos tests van PRIMERO y no llaman a resetDatabase: leen el estado que dejaron
 // las migraciones (datos semilla en las tablas renombradas, tablas nuevas vacías).
 // ---------------------------------------------------------------------------
-describe('migración 0009: tablas del modelo antiguo y tablas nuevas', () => {
-  const LEGACY = ['matrimonios_legacy', 'bautismos_legacy', 'confirmaciones_legacy'];
-  const NUEVAS = ['personas', 'sacramentos', 'matrimonios', 'bautismos', 'confirmaciones', 'cambios_persona'];
-
-  it.each(LEGACY)('%s conserva sus datos de prueba tras el renombrado', async (table) => {
-    expect(await count(table)).toBeGreaterThan(0);
-  });
+describe('migraciones: estado final del modelo', () => {
+  const NUEVAS = ['personas', 'sacramentos', 'matrimonios', 'bautismos', 'confirmaciones', 'cambios_persona', 'sync_feed', 'dispositivos'];
+  const ELIMINADAS = ['matrimonios_legacy', 'bautismos_legacy', 'confirmaciones_legacy', 'sacerdotes'];
 
   it.each(NUEVAS)('%s empieza vacía', async (table) => {
     expect(await count(table)).toBe(0);
   });
 
-  it('los triggers de versión de las tablas renombradas siguen funcionando', async () => {
-    const before = await db()
-      .prepare('SELECT id, version FROM bautismos_legacy LIMIT 1')
-      .first<{ id: number; version: number }>();
-
-    await db().prepare("UPDATE bautismos_legacy SET numero_libro = 'Z' WHERE id = ?").bind(before?.id).run();
-
-    const after = await db()
-      .prepare('SELECT version FROM bautismos_legacy WHERE id = ?')
-      .bind(before?.id)
-      .first<{ version: number }>();
-    expect(after?.version).toBe((before?.version ?? 0) + 1);
+  it.each(ELIMINADAS)('%s ya no existe', async (table) => {
+    const found = await db().prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").bind(table).first();
+    expect(found).toBeNull();
   });
 
-  it('el renombrado conservó el índice único de client_id sobre la tabla legacy', async () => {
-    const index = await db()
-      .prepare("SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = 'idx_bautismos_client_id'")
-      .first<{ tbl_name: string }>();
+  it('ministros conserva los datos y tiene client_id, version y updated_at', async () => {
+    const row = await db()
+      .prepare('SELECT client_id, version, updated_at FROM ministros LIMIT 1')
+      .first<{ client_id: string; version: number; updated_at: string }>();
 
-    expect(index?.tbl_name).toBe('bautismos_legacy');
+    expect(row?.client_id).toBeTruthy();
+    expect(row?.version).toBe(1);
+    expect(row?.updated_at).toMatch(ISO_UTC_MS);
   });
 });
 
@@ -114,10 +103,11 @@ describe('personas', () => {
     expect(await count('personas')).toBe(2);
   });
 
-  it('rechaza un DNI repetido', async () => {
+  it('permite repetir un DNI: cada partida tiene su propia persona', async () => {
+    await insertPersona('12345678');
     await insertPersona('12345678');
 
-    await expect(insertPersona('12345678')).rejects.toThrow(/UNIQUE constraint failed: personas\.dni/);
+    expect(await count('personas')).toBe(2);
   });
 
   it("rechaza un DNI vacío: debe guardarse NULL, no ''", async () => {
@@ -389,8 +379,8 @@ describe('cambios_persona', () => {
 
     await db()
       .prepare(
-        `INSERT INTO cambios_persona (persona_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
-         VALUES (?, 1, 'apellido_paterno', 'Quispi', 'Quispe')`,
+        `INSERT INTO cambios_persona (client_id, persona_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
+         VALUES ('cambio-1', ?, 1, 'apellido_paterno', 'Quispi', 'Quispe')`,
       )
       .bind(persona)
       .run();
@@ -406,11 +396,34 @@ describe('cambios_persona', () => {
     const persona = await insertPersona();
     const insert = (personaId: number, usuarioId: number) =>
       db()
-        .prepare("INSERT INTO cambios_persona (persona_id, usuario_id, campo_cambio) VALUES (?, ?, 'nombres')")
-        .bind(personaId, usuarioId)
+        .prepare("INSERT INTO cambios_persona (client_id, persona_id, usuario_id, campo_cambio) VALUES (?, ?, ?, 'nombres')")
+        .bind(nextClientId(), personaId, usuarioId)
         .run();
 
     await expect(insert(persona, 999)).rejects.toThrow(FK_ERROR);
     await expect(insert(999, 1)).rejects.toThrow(FK_ERROR);
+  });
+});
+
+describe('ministros tras las migraciones', () => {
+  beforeEach(setup);
+
+  it('rechaza un ministro sin client_id', async () => {
+    await expect(
+      db()
+        .prepare("INSERT INTO ministros (nombre, apellido_paterno, apellido_materno, parroquia_id) VALUES ('A', 'B', 'C', 1)")
+        .run(),
+    ).rejects.toThrow(/NOT NULL constraint failed: ministros.client_id/);
+  });
+
+  it('pone la fecha de actualización aunque no se indique', async () => {
+    const fila = await db().prepare('SELECT updated_at FROM ministros WHERE id = 1').first<{ updated_at: string }>();
+    expect(fila?.updated_at).toMatch(ISO_UTC_MS);
+  });
+
+  it('sube la versión al editar', async () => {
+    await db().prepare("UPDATE ministros SET titulo = 'Pbro.' WHERE id = 1").run();
+    const fila = await db().prepare('SELECT version FROM ministros WHERE id = 1').first<{ version: number }>();
+    expect(fila?.version).toBe(2);
   });
 });

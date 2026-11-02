@@ -4,6 +4,7 @@ import {
 } from '../services/ConfirmationService';
 import type { ConfirmationFormValues } from '../components/features/ConfirmationForm';
 import { ApiError } from '../lib/apiClient';
+import { draftsToBackend } from '../lib/personCorrections';
 import { useSessionStore } from '../store/sessionStore';
 import { formatFechaDisplay } from './MarriageController';
 
@@ -94,6 +95,7 @@ function uiValuesToBackend(values: ConfirmationFormValues): ConfirmationFormValu
     padrino: values.celebracion.padrino || undefined,
     madrina: values.celebracion.madrina || undefined,
     anotaciones: values.celebracion.anotaciones || undefined,
+    correcciones: draftsToBackend(values.correcciones),
   };
 }
 

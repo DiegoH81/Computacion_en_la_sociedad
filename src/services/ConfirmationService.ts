@@ -1,3 +1,4 @@
+import type { PersonCorrection } from '../lib/personCorrections';
 import { localRequest } from '../lib/localClient';
 
 export interface ConfirmationRow {
@@ -41,6 +42,7 @@ export interface ConfirmationFormValuesBackend {
   padrino?: string;
   madrina?: string;
   anotaciones?: string;
+  correcciones?: PersonCorrection[];
 }
 
 export const ConfirmationService = {

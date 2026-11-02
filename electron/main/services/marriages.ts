@@ -16,7 +16,17 @@ import {
   type SearchFilters,
   type Session,
 } from './common';
-import { insertPerson, nameMatch, updatePersonWithHistory, type PersonInput } from './people';
+import {
+  applyCorrections,
+  correctionList,
+  insertPerson,
+  listCorrections,
+  nameMatch,
+  recordCorrections,
+  updatePerson,
+  type CorrectionInput,
+  type PersonInput,
+} from './people';
 
 export interface SpouseInput extends PersonInput {
   parroquiaBautismo?: string;
@@ -33,6 +43,7 @@ export interface MarriageInput extends SacramentHeader {
   testigo3?: string;
   testigo4?: string;
   notasMarginales?: string;
+  correcciones?: CorrectionInput[];
 }
 
 const SORT_COLUMNS: Record<string, string> = {
@@ -46,6 +57,19 @@ function requireSpouses(input: MarriageInput): { esposo: SpouseInput; esposa: Sp
     throw new ServiceError('Los nombres de ambos cónyuges son requeridos.', 400);
   }
   return { esposo: input.esposo as SpouseInput, esposa: input.esposa as SpouseInput };
+}
+
+/** Reparte la nota marginal entre los dos cónyuges y aplica a cada uno lo suyo. */
+function correctSpouses(input: MarriageInput, esposo: SpouseInput, esposa: SpouseInput) {
+  const corrections = correctionList(input.correcciones);
+  if (corrections.some(({ persona }) => persona !== 'esposo' && persona !== 'esposa')) {
+    throw new ServiceError('La nota marginal debe indicar a qué cónyuge corrige.', 400);
+  }
+  const forSpouse = (persona: string) => corrections.filter((correction) => correction.persona === persona);
+  return {
+    esposo: applyCorrections(esposo, forSpouse('esposo')),
+    esposa: applyCorrections(esposa, forSpouse('esposa')),
+  };
 }
 
 function detailValues(input: MarriageInput, esposo: SpouseInput, esposa: SpouseInput) {
@@ -119,9 +143,10 @@ export const marriages = {
       .prepare(
         `SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
                 s.fecha_evento AS fecha_matrimonio, s.ministro_id AS celebrante_id,
-                s.anotaciones AS notas_marginales,
+                s.anotaciones AS notas_marginales, s.created_at, s.updated_at,
+                par.ubicacion AS parroquia_ubicacion,
                 s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
-                m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
+                m.conyuge_1_id, m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
                 ${spouseSelect('c1', 'esposo', 1)},
                 ${spouseSelect('c2', 'esposa', 2)}
          FROM matrimonios m
@@ -132,19 +157,26 @@ export const marriages = {
          LEFT JOIN ministros min ON min.id = s.ministro_id
          WHERE s.id = ?`,
       )
-      .get(id);
+      .get(id) as ({ conyuge_1_id: number } & Record<string, unknown>) | undefined;
 
     if (!row) throw new ServiceError('Partida no encontrada.', 404);
-    return row;
+    return {
+      ...row,
+      correcciones: listCorrections(db, id).map((correction) => ({
+        ...correction,
+        persona: correction.persona_id === row.conyuge_1_id ? 'esposo' : 'esposa',
+      })),
+    };
   },
 
   create(db: LocalDatabase, session: Session, input: MarriageInput, requestedParishId: unknown): number {
     const parroquiaId = targetParish(session, requestedParishId);
     const { esposo, esposa } = requireSpouses(input);
+    const corrected = correctSpouses(input, esposo, esposa);
 
     return db.transaction(() => {
-      const conyuge1 = insertPerson(db, parroquiaId, esposo);
-      const conyuge2 = insertPerson(db, parroquiaId, esposa);
+      const conyuge1 = insertPerson(db, parroquiaId, corrected.esposo.person);
+      const conyuge2 = insertPerson(db, parroquiaId, corrected.esposa.person);
       const sacramentId = insertSacrament(db, 'matrimonio', parroquiaId, input, input.fechaMatrimonio, input.notasMarginales);
 
       db.prepare(
@@ -154,6 +186,8 @@ export const marriages = {
            conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(sacramentId, conyuge1, conyuge2, ...detailValues(input, esposo, esposa));
+      recordCorrections(db, session, conyuge1, sacramentId, corrected.esposo.records);
+      recordCorrections(db, session, conyuge2, sacramentId, corrected.esposa.records);
 
       return sacramentId;
     })();
@@ -162,14 +196,17 @@ export const marriages = {
   update(db: LocalDatabase, session: Session, id: number, input: MarriageInput): void {
     assertCanManage(db, session, id, 'matrimonio');
     const { esposo, esposa } = requireSpouses(input);
+    const corrected = correctSpouses(input, esposo, esposa);
 
     db.transaction(() => {
       const current = db
         .prepare('SELECT conyuge_1_id, conyuge_2_id FROM matrimonios WHERE sacramento_id = ?')
         .get(id) as { conyuge_1_id: number; conyuge_2_id: number };
 
-      updatePersonWithHistory(db, session, current.conyuge_1_id, id, esposo);
-      updatePersonWithHistory(db, session, current.conyuge_2_id, id, esposa);
+      updatePerson(db, current.conyuge_1_id, corrected.esposo.person);
+      updatePerson(db, current.conyuge_2_id, corrected.esposa.person);
+      recordCorrections(db, session, current.conyuge_1_id, id, corrected.esposo.records);
+      recordCorrections(db, session, current.conyuge_2_id, id, corrected.esposa.records);
       updateSacrament(db, id, input, input.fechaMatrimonio, input.notasMarginales);
 
       db.prepare(
