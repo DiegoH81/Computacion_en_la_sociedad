@@ -1,6 +1,7 @@
 import { MarriageService, type MarriageFormValuesBackend } from '../services/MarriageService';
 import type { MarriageFormValues } from '../components/features/MarriageForm';
 import { ApiError } from '../lib/apiClient';
+import { draftsToBackend } from '../lib/personCorrections';
 import { useSessionStore } from '../store/sessionStore';
 
 export interface MarriageRowUI {
@@ -94,6 +95,7 @@ function uiValuesToBackend(values: MarriageFormValues): MarriageFormValuesBacken
     testigo3: values.testigo3 || undefined,
     testigo4: values.testigo4 || undefined,
     notasMarginales: values.notasMarginales || undefined,
+    correcciones: draftsToBackend(values.correcciones),
   };
 }
 

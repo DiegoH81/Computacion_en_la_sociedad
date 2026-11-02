@@ -196,11 +196,19 @@ describe('UserFormModal', () => {
       expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
     });
 
-    it('Cancelar avisa al padre', () => {
+    it('Cancelar pide confirmación y solo entonces avisa al padre', () => {
       const { onCancel } = renderCreate();
 
       fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(onCancel).not.toHaveBeenCalled();
 
+      fireEvent.click(screen.getByRole('button', { name: 'Seguir editando' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(onCancel).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Sí, cancelar' }));
       expect(onCancel).toHaveBeenCalledTimes(1);
     });
 

@@ -1,9 +1,11 @@
-import { ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { LOCAL_REQUEST_CHANNEL, type LocalResponse } from '../../shared';
 import { getLocalDb } from '../localDb';
-import { positiveId, ServiceError, type SearchFilters } from './common';
+import { positiveId, ServiceError, type SacramentType, type SearchFilters } from './common';
+import { findDuplicates, type DuplicatePersonInput } from './duplicates';
 import { marriages, type MarriageInput } from './marriages';
 import { ministers, type MinisterInput } from './ministers';
+import { readParishLogo, saveParishLogo } from './parishLogo';
 import { listParishes } from './reference';
 import { getIndexEntries, listIndexBooks } from './sacramentIndex';
 import { dismissSyncNotice, getSyncStatus, login, requireSession, resolveSyncConflict, syncNow } from './session';
@@ -61,6 +63,18 @@ const handlers: Record<string, (payload: any) => unknown> = {
   'parishes.list': () => {
     requireSession();
     return { parishes: listParishes(getLocalDb()) };
+  },
+  'sacraments.findDuplicates': ({ tipo, excludeId, personas }: { tipo: SacramentType; excludeId?: number; personas: DuplicatePersonInput[] }) => {
+    requireSession();
+    return findDuplicates(getLocalDb(), tipo, excludeId, personas);
+  },
+  'parishes.logo': ({ id }: { id: unknown }) => {
+    requireSession();
+    return { logo: readParishLogo(app.getPath('userData'), positiveId(id)) };
+  },
+  'parishes.saveLogo': ({ id, logo }: { id: unknown; logo: unknown }) => {
+    saveParishLogo(app.getPath('userData'), requireSession(), positiveId(id), logo);
+    return { success: true };
   },
   'ministers.search': (filters: SearchFilters) => {
     requireSession();

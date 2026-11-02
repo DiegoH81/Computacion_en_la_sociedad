@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { ConfirmCancelDialog } from '../ui/ConfirmCancelDialog';
 
 interface PriestFormValues {
   titulo: string;
@@ -13,6 +14,7 @@ interface PriestFormModalProps {
   onSave: (values: PriestFormValues) => void;
   onCancel: () => void;
   isLoading: boolean;
+  errorMessage?: string | null;
 }
 
 export function PriestFormModal({
@@ -21,6 +23,7 @@ export function PriestFormModal({
   onSave,
   onCancel,
   isLoading,
+  errorMessage,
 }: PriestFormModalProps) {
   const [titulo, setTitulo] = useState(initialValues?.titulo ?? '');
   const [nombre, setNombre] = useState(initialValues?.nombre ?? '');
@@ -30,6 +33,8 @@ export function PriestFormModal({
   const [apellidoMaterno, setApellidoMaterno] = useState(
     initialValues?.apellidoMaterno ?? '',
   );
+
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,10 +96,16 @@ export function PriestFormModal({
             />
           </div>
 
+          {errorMessage && (
+            <p role="alert" className="text-sm font-medium text-solid-red">
+              {errorMessage}
+            </p>
+          )}
+
           <div className="mt-2 flex justify-end gap-2">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={() => setIsConfirmingCancel(true)}
               disabled={isLoading}
               className="rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300"
             >
@@ -110,6 +121,10 @@ export function PriestFormModal({
           </div>
         </form>
       </div>
+
+      {isConfirmingCancel && (
+        <ConfirmCancelDialog onConfirm={onCancel} onDismiss={() => setIsConfirmingCancel(false)} />
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ export interface SearchPriestsParams {
   sortBy: 'nombre' | 'apellido_paterno' | 'apellido_materno';
   sortDirection: 'asc' | 'desc';
   page: number;
+  parroquiaId?: number;
 }
 
 export interface PriestFormValues {

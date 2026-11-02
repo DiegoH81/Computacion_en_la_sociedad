@@ -1,3 +1,4 @@
+import type { RecordedCorrection } from '../../lib/personCorrections';
 import { Field } from '../ui/Field';
 import { FormPanel } from '../ui/FormPanel';
 
@@ -9,9 +10,12 @@ export interface SacramentRegisterData {
 }
 
 export interface SacramentRecordInfo {
+  sacramentoId: number;
+  parroquiaId: number;
   parroquiaNombre: string;
   creadoEn: string;
   modificadoEn: string;
+  correcciones: RecordedCorrection[];
 }
 
 interface SacramentRegisterPanelProps {

@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { singlePersonOptions, type CorrectionDraft } from '../../lib/personCorrections';
 import { FormDialog } from '../ui/FormDialog';
+import { DuplicateWarning } from './DuplicateWarning';
+import { MarginalNotesSection } from './MarginalNotesSection';
 import { SacramentCelebrationFields, type SacramentCelebrationData } from './SacramentCelebrationFields';
 import { SacramentPersonPanel, type SacramentPersonPanelData } from './SacramentPersonPanel';
 import { SacramentRegisterPanel, type SacramentRecordInfo } from './SacramentRegisterPanel';
+import { useDuplicateCheck } from './useDuplicateCheck';
+import { useMarginalNotes } from './useMarginalNotes';
 
 export interface ConfirmationFormValues {
   fechaSacramento: string;
@@ -11,6 +16,7 @@ export interface ConfirmationFormValues {
   numeroRegistro: string;
   persona: SacramentPersonPanelData;
   celebracion: SacramentCelebrationData;
+  correcciones: CorrectionDraft[];
 }
 
 const EMPTY_PERSON: SacramentPersonPanelData = {
@@ -40,6 +46,7 @@ const EMPTY_VALUES: ConfirmationFormValues = {
   numeroRegistro: '',
   persona: EMPTY_PERSON,
   celebracion: EMPTY_CELEBRACION,
+  correcciones: [],
 };
 
 interface PriestOption {
@@ -76,6 +83,16 @@ export function ConfirmationForm({
   isSearchingPriests,
 }: ConfirmationFormProps) {
   const [values, setValues] = useState<ConfirmationFormValues>(initialValues ?? EMPTY_VALUES);
+  const notes = useMarginalNotes(Boolean(initialValues?.celebracion.anotaciones || recordInfo?.correcciones.length));
+  const duplicates = useDuplicateCheck('confirmacion', recordInfo?.sacramentoId, [{
+    dni: values.persona.dni,
+    nombre: values.persona.nombre,
+    apellidoPaterno: values.persona.apellidoPaterno,
+    apellidoMaterno: values.persona.apellidoMaterno,
+    fechaNacimiento: values.persona.fechaNacimiento,
+    padreNombre: values.persona.padreNombre,
+    madreNombre: values.persona.madreNombre,
+  }]);
 
   return (
     <FormDialog
@@ -84,6 +101,7 @@ export function ConfirmationForm({
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
+      notice={<DuplicateWarning sacramento="confirmación" matches={duplicates.matches} total={duplicates.total} />}
     >
       <SacramentRegisterPanel
         values={values}
@@ -101,12 +119,29 @@ export function ConfirmationForm({
           priestOptions={priestOptions}
           onSearchPriest={onSearchPriest}
           isSearchingPriests={isSearchingPriests}
+          priestParishId={recordInfo?.parroquiaId}
+          notesOpen={notes.isOpen}
+          onToggleNotes={notes.toggle}
         />
         <SacramentPersonPanel
           values={values.persona}
           onChange={(changes) => setValues((prev) => ({ ...prev, persona: { ...prev.persona, ...changes } }))}
         />
       </div>
+
+      {notes.isOpen && (
+        <MarginalNotesSection
+          sectionRef={notes.sectionRef}
+          notes={values.celebracion.anotaciones}
+          onNotesChange={(anotaciones) =>
+            setValues((prev) => ({ ...prev, celebracion: { ...prev.celebracion, anotaciones } }))
+          }
+          options={singlePersonOptions(values.persona)}
+          corrections={values.correcciones}
+          onCorrectionsChange={(correcciones) => setValues((prev) => ({ ...prev, correcciones }))}
+          recorded={recordInfo?.correcciones}
+        />
+      )}
     </FormDialog>
   );
 }

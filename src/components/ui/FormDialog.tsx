@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { ConfirmCancelDialog } from './ConfirmCancelDialog';
 
 interface FormDialogProps {
   title: string;
@@ -6,13 +7,17 @@ interface FormDialogProps {
   onCancel: () => void;
   isLoading: boolean;
   errorMessage?: string | null;
+  /** Aviso que debe seguir a la vista mientras se recorre el formulario. */
+  notice?: ReactNode;
   children: ReactNode;
 }
 
 const HEADER_BUTTON = 'rounded-md px-4 py-1 text-xs font-bold uppercase text-white hover:opacity-90 disabled:opacity-50';
 
 /** Ventana de los formularios de partidas: difumina el fondo y deja las acciones siempre a la vista. */
-export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, children }: FormDialogProps) {
+export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, notice, children }: FormDialogProps) {
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm">
       <div
@@ -27,7 +32,7 @@ export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, c
             <button type="button" onClick={onSave} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-green`}>
               {isLoading ? 'Guardando...' : 'Guardar cambios'}
             </button>
-            <button type="button" onClick={onCancel} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-red`}>
+            <button type="button" onClick={() => setIsConfirmingCancel(true)} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-red`}>
               Cancelar
             </button>
           </div>
@@ -39,8 +44,14 @@ export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, c
           </p>
         )}
 
+        {notice}
+
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-2">{children}</div>
       </div>
+
+      {isConfirmingCancel && (
+        <ConfirmCancelDialog onConfirm={onCancel} onDismiss={() => setIsConfirmingCancel(false)} />
+      )}
     </div>
   );
 }

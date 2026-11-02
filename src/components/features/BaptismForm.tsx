@@ -1,8 +1,13 @@
 import { useState } from 'react';
+import { singlePersonOptions, type CorrectionDraft } from '../../lib/personCorrections';
 import { FormDialog } from '../ui/FormDialog';
+import { DuplicateWarning } from './DuplicateWarning';
+import { MarginalNotesSection } from './MarginalNotesSection';
 import { SacramentCelebrationFields } from './SacramentCelebrationFields';
 import { SacramentPersonPanel } from './SacramentPersonPanel';
 import { SacramentRegisterPanel, type SacramentRecordInfo } from './SacramentRegisterPanel';
+import { useDuplicateCheck } from './useDuplicateCheck';
+import { useMarginalNotes } from './useMarginalNotes';
 
 export interface BaptismFormValues {
   fechaSacramento: string;
@@ -23,6 +28,7 @@ export interface BaptismFormValues {
   padrino: string;
   madrina: string;
   anotaciones: string;
+  correcciones: CorrectionDraft[];
 }
 
 const EMPTY_VALUES: BaptismFormValues = {
@@ -44,6 +50,7 @@ const EMPTY_VALUES: BaptismFormValues = {
   padrino: '',
   madrina: '',
   anotaciones: '',
+  correcciones: [],
 };
 
 interface PriestOption {
@@ -80,6 +87,17 @@ export function BaptismForm({
   isSearchingPriests,
 }: BaptismFormProps) {
   const [values, setValues] = useState<BaptismFormValues>(initialValues ?? EMPTY_VALUES);
+  const notes = useMarginalNotes(Boolean(initialValues?.anotaciones || recordInfo?.correcciones.length));
+
+  const duplicates = useDuplicateCheck('bautismo', recordInfo?.sacramentoId, [{
+    dni: values.dni,
+    nombre: values.nombre,
+    apellidoPaterno: values.apellidoPaterno,
+    apellidoMaterno: values.apellidoMaterno,
+    fechaNacimiento: values.fechaNacimiento,
+    padreNombre: values.padreNombre,
+    madreNombre: values.madreNombre,
+  }]);
 
   function update(changes: Partial<BaptismFormValues>) {
     setValues((prev) => ({ ...prev, ...changes }));
@@ -92,6 +110,7 @@ export function BaptismForm({
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
+      notice={<DuplicateWarning sacramento="bautismo" matches={duplicates.matches} total={duplicates.total} />}
     >
       <SacramentRegisterPanel values={values} onChange={update} parroquiaNombre={parroquiaNombre} recordInfo={recordInfo} />
 
@@ -106,10 +125,25 @@ export function BaptismForm({
           priestOptions={priestOptions}
           onSearchPriest={onSearchPriest}
           isSearchingPriests={isSearchingPriests}
+          priestParishId={recordInfo?.parroquiaId}
+          notesOpen={notes.isOpen}
+          onToggleNotes={notes.toggle}
         />
 
         <SacramentPersonPanel values={values} onChange={update} />
       </div>
+
+      {notes.isOpen && (
+        <MarginalNotesSection
+          sectionRef={notes.sectionRef}
+          notes={values.anotaciones}
+          onNotesChange={(anotaciones) => update({ anotaciones })}
+          options={singlePersonOptions(values)}
+          corrections={values.correcciones}
+          onCorrectionsChange={(correcciones) => update({ correcciones })}
+          recorded={recordInfo?.correcciones}
+        />
+      )}
     </FormDialog>
   );
 }

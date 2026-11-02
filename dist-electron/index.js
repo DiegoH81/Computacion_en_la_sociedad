@@ -76,6 +76,12 @@ function assertCanManage$1(db, session, sacramentId, tipo) {
 	if (!sacrament) throw new ServiceError("Partida no encontrada.", 404);
 	if (session.rol !== "admin" && sacrament.parroquia_id !== session.parroquiaId) throw new ServiceError("No tiene permiso para modificar partidas de otra parroquia.", 403);
 }
+/** Un celebrante inexistente lo sigue rechazando la clave foránea al guardar. */
+function assertMinisterOfParish(db, ministroId, parroquiaId) {
+	if (ministroId === null) return;
+	const minister = db.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(ministroId);
+	if (minister && minister.parroquia_id !== parroquiaId) throw new ServiceError("El celebrante debe ser de la parroquia de la partida.", 400);
+}
 function headerColumns(header, fechaEvento, anotaciones) {
 	const fechaEmision = text(header.fechaSacramento);
 	const libro = text(header.numeroLibro);
@@ -94,6 +100,7 @@ function headerColumns(header, fechaEvento, anotaciones) {
 }
 function insertSacrament(db, tipo, parroquiaId, header, fechaEvento, anotaciones) {
 	const columns = headerColumns(header, fechaEvento, anotaciones);
+	assertMinisterOfParish(db, columns.ministroId, parroquiaId);
 	const clientId = crypto.randomUUID();
 	enqueueChange(db, tipo, clientId, null);
 	return Number(db.prepare(`INSERT INTO sacramentos
@@ -106,6 +113,8 @@ function enqueueSacramentChange(db, sacramentId) {
 }
 function updateSacrament(db, sacramentId, header, fechaEvento, anotaciones) {
 	const columns = headerColumns(header, fechaEvento, anotaciones);
+	const current = db.prepare("SELECT ministro_id, parroquia_id FROM sacramentos WHERE id = ?").get(sacramentId);
+	if (columns.ministroId !== current.ministro_id) assertMinisterOfParish(db, columns.ministroId, current.parroquia_id);
 	enqueueSacramentChange(db, sacramentId);
 	db.prepare(`UPDATE sacramentos
      SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?
@@ -127,7 +136,8 @@ var HEADER_SELECT = `
   s.fecha_emision AS fecha_sacramento, s.libro AS numero_libro, s.folio AS numero_folio,
   s.numero AS numero_registro, s.estado`;
 var MINISTER_NAME_SELECT = `
-  min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS celebrante_nombre`;
+  min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS celebrante_nombre,
+  min.titulo AS celebrante_titulo`;
 //#endregion
 //#region electron/main/services/syncRecords.ts
 var TIPOS = {
@@ -942,6 +952,193 @@ var LOCAL_REQUEST_CHANNEL = "local:request";
 /** Marca una sesión iniciada sin internet: aún no hay token del servidor. */
 var OFFLINE_TOKEN = "sin-conexion";
 //#endregion
+//#region electron/main/services/duplicates.ts
+var MAX_PER_PERSON = 50;
+var MIN_PERCENT = 75;
+var SIMILAR = .75;
+var WEIGHTS = {
+	dni: 40,
+	nombres: 25,
+	apellido_paterno: 20,
+	apellido_materno: 15,
+	fecha_nacimiento: 20,
+	padre: 10,
+	madre: 10
+};
+var LABELS = {
+	dni: "DNI",
+	nombres: "Nombres",
+	apellido_paterno: "Apellido paterno",
+	apellido_materno: "Apellido materno",
+	fecha_nacimiento: "Fecha de nacimiento",
+	padre: "Padre",
+	madre: "Madre"
+};
+var SOURCES = {
+	bautismo: ["SELECT sacramento_id, persona_id FROM bautismos"],
+	confirmacion: ["SELECT sacramento_id, persona_id FROM confirmaciones"],
+	matrimonio: ["SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios", "SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios"]
+};
+function normalize(value) {
+	return (value ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+function editDistance(a, b) {
+	let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+	for (let i = 1; i <= a.length; i++) {
+		const current = [i];
+		for (let j = 1; j <= b.length; j++) current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+		previous = current;
+	}
+	return previous[b.length];
+}
+/** De 0 a 1. Acepta errores de digitación ("Diego" y "Diago") y nombres incompletos ("Juan" y "Juan Carlos"). */
+function similarity(a, b) {
+	if (!a || !b) return 0;
+	if (a === b) return 1;
+	const tokensA = a.split(" ");
+	const tokensB = b.split(" ");
+	const [shorter, longer] = tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
+	if (shorter.every((token) => longer.includes(token))) return .85;
+	const longest = Math.max(a.length, b.length);
+	if (Math.abs(a.length - b.length) / longest > .25) return 0;
+	const ratio = 1 - editDistance(a, b) / longest;
+	return ratio >= SIMILAR ? ratio : 0;
+}
+function score(input, candidate, previousNames) {
+	const dniComparable = Boolean(input.dni && candidate.dni);
+	const sameDni = dniComparable && input.dni === normalize(candidate.dni);
+	const fieldSimilarity = (field, current) => {
+		const options = [normalize(current), ...previousNames.get(`${candidate.persona_id}:${field}`) ?? []];
+		return Math.max(...options.map((option) => similarity(input[field], option)));
+	};
+	const nameScore = fieldSimilarity("nombres", candidate.nombres);
+	const fatherNameScore = fieldSimilarity("apellido_paterno", candidate.apellido_paterno);
+	if (!sameDni && (nameScore === 0 || fatherNameScore === 0)) return null;
+	const similarities = {
+		dni: {
+			comparable: dniComparable,
+			value: sameDni ? 1 : 0
+		},
+		nombres: {
+			comparable: Boolean(input.nombres),
+			value: nameScore
+		},
+		apellido_paterno: {
+			comparable: Boolean(input.apellido_paterno),
+			value: fatherNameScore
+		},
+		apellido_materno: {
+			comparable: Boolean(input.apellido_materno && candidate.apellido_materno),
+			value: fieldSimilarity("apellido_materno", candidate.apellido_materno)
+		},
+		fecha_nacimiento: {
+			comparable: Boolean(input.fecha_nacimiento && candidate.fecha_nacimiento),
+			value: input.fecha_nacimiento === normalize(candidate.fecha_nacimiento) ? 1 : 0
+		},
+		padre: {
+			comparable: Boolean(input.padre && candidate.padre),
+			value: similarity(input.padre, normalize(candidate.padre))
+		},
+		madre: {
+			comparable: Boolean(input.madre && candidate.madre),
+			value: similarity(input.madre, normalize(candidate.madre))
+		}
+	};
+	let obtained = 0;
+	let possible = 0;
+	const coincide = [];
+	for (const field of Object.keys(WEIGHTS)) {
+		const { comparable, value } = similarities[field];
+		if (!comparable) continue;
+		possible += WEIGHTS[field];
+		obtained += WEIGHTS[field] * value;
+		if (value >= SIMILAR) coincide.push(LABELS[field]);
+	}
+	const porcentaje = Math.round(obtained / possible * 100);
+	const namesMatch = nameScore >= SIMILAR && fatherNameScore >= SIMILAR;
+	const hasIndependentData = [
+		"fecha_nacimiento",
+		"padre",
+		"madre"
+	].some((field) => similarities[field].comparable && similarities[field].value >= SIMILAR);
+	if (sameDni && (nameScore > 0 || fatherNameScore > 0) || namesMatch && hasIndependentData && !(dniComparable && !sameDni)) return {
+		nivel: "alta",
+		porcentaje,
+		coincide
+	};
+	return sameDni || porcentaje >= MIN_PERCENT ? {
+		nivel: "posible",
+		porcentaje,
+		coincide
+	} : null;
+}
+function toValues(person) {
+	return {
+		dni: normalize(person.dni),
+		nombres: normalize(person.nombre),
+		apellido_paterno: normalize(person.apellidoPaterno),
+		apellido_materno: normalize(person.apellidoMaterno),
+		fecha_nacimiento: normalize(person.fechaNacimiento),
+		padre: normalize(person.padreNombre),
+		madre: normalize(person.madreNombre)
+	};
+}
+/** Busca a las personas del formulario en las partidas vigentes del mismo sacramento, en todas las parroquias. */
+function findDuplicates(db, tipo, excludeSacramentId, persons) {
+	const sources = SOURCES[tipo];
+	if (!sources) throw new ServiceError("Tipo de sacramento inválido.", 400);
+	const searchable = persons.map((person) => ({
+		para: person.para ?? "",
+		values: toValues(person)
+	})).filter(({ values }) => values.dni || values.nombres && values.apellido_paterno);
+	if (searchable.length === 0) return {
+		matches: [],
+		total: 0
+	};
+	const candidates = db.prepare(`SELECT s.id, sub.persona_id, s.libro, s.folio, s.numero, par.nombre AS parroquia,
+              pe.dni, pe.nombres, pe.apellido_paterno, pe.apellido_materno, pe.fecha_nacimiento, pe.padre, pe.madre
+       FROM (${sources.join(" UNION ALL ")}) sub
+       JOIN sacramentos s ON s.id = sub.sacramento_id
+       JOIN personas pe ON pe.id = sub.persona_id
+       JOIN parroquias par ON par.id = s.parroquia_id
+       WHERE s.estado = 'vigente' AND s.id <> ?`).all(Number.isInteger(excludeSacramentId) ? excludeSacramentId : 0);
+	const previousNames = /* @__PURE__ */ new Map();
+	const corrections = db.prepare(`SELECT persona_id, campo_cambio, valor_anterior FROM cambios_persona
+       WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_anterior IS NOT NULL`).all();
+	for (const { persona_id, campo_cambio, valor_anterior } of corrections) {
+		const key = `${persona_id}:${campo_cambio}`;
+		previousNames.set(key, [...previousNames.get(key) ?? [], normalize(valor_anterior)]);
+	}
+	const byRelevance = (a, b) => Number(b.nivel === "alta") - Number(a.nivel === "alta") || b.porcentaje - a.porcentaje;
+	let total = 0;
+	return {
+		matches: searchable.flatMap(({ para, values }) => {
+			const matches = [];
+			for (const candidate of candidates) {
+				const result = score(values, candidate, previousNames);
+				if (!result) continue;
+				matches.push({
+					sacramentoId: candidate.id,
+					para,
+					...result,
+					nombreCompleto: [
+						candidate.nombres,
+						candidate.apellido_paterno,
+						candidate.apellido_materno
+					].filter(Boolean).join(" "),
+					parroquia: candidate.parroquia,
+					libro: candidate.libro,
+					folio: candidate.folio,
+					numero: candidate.numero
+				});
+			}
+			total += matches.length;
+			return matches.sort(byRelevance).slice(0, MAX_PER_PERSON);
+		}).sort(byRelevance),
+		total
+	};
+}
+//#endregion
 //#region electron/main/services/people.ts
 var PERSON_COLUMNS = [
 	"dni",
@@ -954,6 +1151,20 @@ var PERSON_COLUMNS = [
 	"padre",
 	"madre"
 ];
+var CORRECTABLE_FIELDS = {
+	nombres: {
+		input: "nombre",
+		label: "Nombres"
+	},
+	apellido_paterno: {
+		input: "apellidoPaterno",
+		label: "Apellido paterno"
+	},
+	apellido_materno: {
+		input: "apellidoMaterno",
+		label: "Apellido materno"
+	}
+};
 function parseAge(value) {
 	if (value === void 0 || value === null || value === "") return null;
 	const age = Number(value);
@@ -978,17 +1189,55 @@ function insertPerson(db, parroquiaId, input) {
 	return Number(db.prepare(`INSERT INTO personas (client_id, parroquia_id, ${PERSON_COLUMNS.join(", ")})
          VALUES (?, ?, ${PERSON_COLUMNS.map(() => "?").join(", ")})`).run(crypto.randomUUID(), parroquiaId, ...PERSON_COLUMNS.map((column) => row[column])).lastInsertRowid);
 }
-function updatePersonWithHistory(db, session, personaId, sacramentoId, input) {
+/** Actualiza los datos de la persona. Solo una nota marginal deja constancia en cambios_persona. */
+function updatePerson(db, personaId, input) {
 	const next = toRow(input);
 	const current = db.prepare(`SELECT ${PERSON_COLUMNS.join(", ")} FROM personas WHERE id = ?`).get(personaId);
 	const changed = PERSON_COLUMNS.filter((column) => current[column] !== next[column]);
 	if (changed.length === 0) return;
-	const history = db.prepare(`INSERT INTO cambios_persona
+	db.prepare(`UPDATE personas SET ${changed.map((column) => `${column} = ?`).join(", ")} WHERE id = ?`).run(...changed.map((column) => next[column]), personaId);
+}
+/**
+* Aplica sobre los datos del formulario lo que indica la nota marginal: el valor anterior es el
+* que está en el formulario al guardar. Devuelve la persona corregida y lo que hay que registrar.
+*/
+function applyCorrections(person, corrections) {
+	const corrected = { ...person };
+	const records = [];
+	for (const correction of corrections) {
+		const campo = correction.campo;
+		const field = Object.hasOwn(CORRECTABLE_FIELDS, campo) ? CORRECTABLE_FIELDS[campo] : void 0;
+		if (!field) throw new ServiceError("La nota marginal indica un campo que no se puede corregir.", 400);
+		if (records.some((record) => record.campo === campo)) throw new ServiceError(`La nota marginal repite el campo ${field.label}.`, 400);
+		const anterior = text(person[field.input]);
+		const nuevo = text(correction.valorNuevo);
+		if (!anterior) throw new ServiceError(`Complete ${field.label} antes de corregirlo en la nota marginal.`, 400);
+		if (!nuevo) throw new ServiceError(`Indique el valor nuevo de ${field.label} en la nota marginal.`, 400);
+		if (nuevo === anterior) throw new ServiceError(`El valor nuevo de ${field.label} es igual al anterior.`, 400);
+		corrected[field.input] = nuevo;
+		records.push({
+			campo,
+			anterior,
+			nuevo
+		});
+	}
+	return {
+		person: corrected,
+		records
+	};
+}
+function recordCorrections(db, session, personaId, sacramentoId, records) {
+	const insert = db.prepare(`INSERT INTO cambios_persona
        (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
      VALUES (?, ?, ?, ?, ?, ?, ?)`);
-	const asText = (value) => value === null ? null : String(value);
-	for (const column of changed) history.run(crypto.randomUUID(), personaId, sacramentoId, session.usuarioId, column, asText(current[column]), asText(next[column]));
-	db.prepare(`UPDATE personas SET ${changed.map((column) => `${column} = ?`).join(", ")} WHERE id = ?`).run(...changed.map((column) => next[column]), personaId);
+	for (const { campo, anterior, nuevo } of records) insert.run(crypto.randomUUID(), personaId, sacramentoId, session.usuarioId, campo, anterior, nuevo);
+}
+function listCorrections(db, sacramentoId) {
+	return db.prepare(`SELECT persona_id, campo_cambio AS campo, valor_anterior, valor_nuevo, fecha_cambio
+       FROM cambios_persona WHERE sacramento_id = ? ORDER BY id`).all(sacramentoId);
+}
+function correctionList(value) {
+	return Array.isArray(value) ? value : [];
 }
 function nameMatch(alias, column) {
 	return `(${alias}.${column} LIKE ? OR EXISTS (
@@ -1008,6 +1257,16 @@ function requireSpouses(input) {
 	return {
 		esposo: input.esposo,
 		esposa: input.esposa
+	};
+}
+/** Reparte la nota marginal entre los dos cónyuges y aplica a cada uno lo suyo. */
+function correctSpouses(input, esposo, esposa) {
+	const corrections = correctionList(input.correcciones);
+	if (corrections.some(({ persona }) => persona !== "esposo" && persona !== "esposa")) throw new ServiceError("La nota marginal debe indicar a qué cónyuge corrige.", 400);
+	const forSpouse = (persona) => corrections.filter((correction) => correction.persona === persona);
+	return {
+		esposo: applyCorrections(esposo, forSpouse("esposo")),
+		esposa: applyCorrections(esposa, forSpouse("esposa"))
 	};
 }
 function detailValues(input, esposo, esposa) {
@@ -1071,8 +1330,9 @@ var marriages = {
 		const row = db.prepare(`SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
                 s.fecha_evento AS fecha_matrimonio, s.ministro_id AS celebrante_id,
                 s.anotaciones AS notas_marginales, s.created_at, s.updated_at,
+                par.ubicacion AS parroquia_ubicacion,
                 s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
-                m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
+                m.conyuge_1_id, m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
                 ${spouseSelect("c1", "esposo", 1)},
                 ${spouseSelect("c2", "esposa", 2)}
          FROM matrimonios m
@@ -1083,30 +1343,42 @@ var marriages = {
          LEFT JOIN ministros min ON min.id = s.ministro_id
          WHERE s.id = ?`).get(id);
 		if (!row) throw new ServiceError("Partida no encontrada.", 404);
-		return row;
+		return {
+			...row,
+			correcciones: listCorrections(db, id).map((correction) => ({
+				...correction,
+				persona: correction.persona_id === row.conyuge_1_id ? "esposo" : "esposa"
+			}))
+		};
 	},
 	create(db, session, input, requestedParishId) {
 		const parroquiaId = targetParish(session, requestedParishId);
 		const { esposo, esposa } = requireSpouses(input);
+		const corrected = correctSpouses(input, esposo, esposa);
 		return db.transaction(() => {
-			const conyuge1 = insertPerson(db, parroquiaId, esposo);
-			const conyuge2 = insertPerson(db, parroquiaId, esposa);
+			const conyuge1 = insertPerson(db, parroquiaId, corrected.esposo.person);
+			const conyuge2 = insertPerson(db, parroquiaId, corrected.esposa.person);
 			const sacramentId = insertSacrament(db, "matrimonio", parroquiaId, input, input.fechaMatrimonio, input.notasMarginales);
 			db.prepare(`INSERT INTO matrimonios (
            sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,
            conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha,
            conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(sacramentId, conyuge1, conyuge2, ...detailValues(input, esposo, esposa));
+			recordCorrections(db, session, conyuge1, sacramentId, corrected.esposo.records);
+			recordCorrections(db, session, conyuge2, sacramentId, corrected.esposa.records);
 			return sacramentId;
 		})();
 	},
 	update(db, session, id, input) {
 		assertCanManage$1(db, session, id, "matrimonio");
 		const { esposo, esposa } = requireSpouses(input);
+		const corrected = correctSpouses(input, esposo, esposa);
 		db.transaction(() => {
 			const current = db.prepare("SELECT conyuge_1_id, conyuge_2_id FROM matrimonios WHERE sacramento_id = ?").get(id);
-			updatePersonWithHistory(db, session, current.conyuge_1_id, id, esposo);
-			updatePersonWithHistory(db, session, current.conyuge_2_id, id, esposa);
+			updatePerson(db, current.conyuge_1_id, corrected.esposo.person);
+			updatePerson(db, current.conyuge_2_id, corrected.esposa.person);
+			recordCorrections(db, session, current.conyuge_1_id, id, corrected.esposo.records);
+			recordCorrections(db, session, current.conyuge_2_id, id, corrected.esposa.records);
 			updateSacrament(db, id, input, input.fechaMatrimonio, input.notasMarginales);
 			db.prepare(`UPDATE matrimonios SET
            lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,
@@ -1159,6 +1431,10 @@ var ministers = {
 		add(filters.nombre, "nombre");
 		add(filters.apellidoPaterno, "apellido_paterno");
 		add(filters.apellidoMaterno, "apellido_materno");
+		if (Number.isInteger(filters.parroquiaId)) {
+			conditions.push("min.parroquia_id = ?");
+			params.push(filters.parroquiaId);
+		}
 		const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 		const { total } = db.prepare(`SELECT COUNT(*) AS total FROM ministros min ${where}`).get(...params);
 		const { offset, totalPages } = pagination(filters, total);
@@ -1200,6 +1476,35 @@ var ministers = {
 		})();
 	}
 };
+//#endregion
+//#region electron/main/services/parishLogo.ts
+var MAX_LOGO_LENGTH = 4e5;
+var LOGO_FORMAT = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+var logoFile = (userDataDir, parroquiaId) => path.join(userDataDir, "logos", `parroquia-${parroquiaId}.txt`);
+/**
+* El logo se guarda solo en esta PC, fuera de la base local: así no se sincroniza
+* y sigue disponible si la base se reconstruye desde el servidor.
+*/
+function readParishLogo(userDataDir, parroquiaId) {
+	try {
+		return readFileSync(logoFile(userDataDir, parroquiaId), "utf8");
+	} catch {
+		return null;
+	}
+}
+function saveParishLogo(userDataDir, session, parroquiaId, logo) {
+	if (session.rol !== "admin" && session.parroquiaId !== parroquiaId) throw new ServiceError("Solo puede cambiar el logo de su propia parroquia.", 403);
+	const file = logoFile(userDataDir, parroquiaId);
+	if (logo === null) {
+		rmSync(file, { force: true });
+		return;
+	}
+	if (typeof logo !== "string" || logo.length > MAX_LOGO_LENGTH || !LOGO_FORMAT.test(logo)) throw new ServiceError("El logo debe ser una imagen PNG, JPG o WEBP de hasta 300 KB.", 400);
+	mkdirSync(path.dirname(file), { recursive: true });
+	const temporary = `${file}.tmp`;
+	writeFileSync(temporary, logo, "utf8");
+	renameSync(temporary, file);
+}
 //#endregion
 //#region electron/main/services/sacramentIndex.ts
 var PEOPLE = {
@@ -1571,6 +1876,7 @@ function singlePersonSacrament(tipo) {
 		getById(db, id) {
 			const row = db.prepare(`SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
                   s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones, s.created_at, s.updated_at,
+                  par.ubicacion AS parroquia_ubicacion,
                   s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                   pe.dni, pe.nombres AS nombre, pe.apellido_paterno, pe.apellido_materno,
                   pe.fecha_nacimiento, pe.edad, pe.lugar_nacimiento,
@@ -1583,24 +1889,31 @@ function singlePersonSacrament(tipo) {
            LEFT JOIN ministros min ON min.id = s.ministro_id
            WHERE s.id = ?`).get(id);
 			if (!row) throw new ServiceError("Partida no encontrada.", 404);
-			return row;
+			return {
+				...row,
+				correcciones: listCorrections(db, id)
+			};
 		},
 		create(db, session, input, requestedParishId) {
 			const parroquiaId = targetParish(session, requestedParishId);
 			requireNames(input);
+			const { person, records } = applyCorrections(input, correctionList(input.correcciones));
 			return db.transaction(() => {
-				const personaId = insertPerson(db, parroquiaId, input);
+				const personaId = insertPerson(db, parroquiaId, person);
 				const sacramentId = insertSacrament(db, tipo, parroquiaId, input, input[eventInput], input.anotaciones);
 				db.prepare(`INSERT INTO ${table} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(sacramentId, personaId, text(input.padrino), text(input.madrina));
+				recordCorrections(db, session, personaId, sacramentId, records);
 				return sacramentId;
 			})();
 		},
 		update(db, session, id, input) {
 			assertCanManage$1(db, session, id, tipo);
 			requireNames(input);
+			const { person, records } = applyCorrections(input, correctionList(input.correcciones));
 			db.transaction(() => {
 				const { persona_id: personaId } = db.prepare(`SELECT persona_id FROM ${table} WHERE sacramento_id = ?`).get(id);
-				updatePersonWithHistory(db, session, personaId, id, input);
+				updatePerson(db, personaId, person);
+				recordCorrections(db, session, personaId, id, records);
 				updateSacrament(db, id, input, input[eventInput], input.anotaciones);
 				db.prepare(`UPDATE ${table} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(text(input.padrino), text(input.madrina), id);
 			})();
@@ -1658,6 +1971,18 @@ var handlers = {
 	"parishes.list": () => {
 		requireSession();
 		return { parishes: listParishes(getLocalDb()) };
+	},
+	"sacraments.findDuplicates": ({ tipo, excludeId, personas }) => {
+		requireSession();
+		return findDuplicates(getLocalDb(), tipo, excludeId, personas);
+	},
+	"parishes.logo": ({ id }) => {
+		requireSession();
+		return { logo: readParishLogo(app.getPath("userData"), positiveId(id)) };
+	},
+	"parishes.saveLogo": ({ id, logo }) => {
+		saveParishLogo(app.getPath("userData"), requireSession(), positiveId(id), logo);
+		return { success: true };
 	},
 	"ministers.search": (filters) => {
 		requireSession();

@@ -2,7 +2,7 @@ import { DateSelect } from '../ui/DateSelect';
 import { Field } from '../ui/Field';
 import { FormPanel } from '../ui/FormPanel';
 import { StackedFormField } from '../ui/StackedFormField';
-import { MarginalNotesField } from './MarginalNotesField';
+import { MarginalNotesButton } from './MarginalNotesButton';
 import { PriestSelector } from './PriestSelector';
 
 export interface SacramentCelebrationData {
@@ -27,6 +27,9 @@ interface SacramentCelebrationFieldsProps {
   priestOptions: PriestOption[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
+  priestParishId?: number;
+  notesOpen: boolean;
+  onToggleNotes: () => void;
 }
 
 export function SacramentCelebrationFields({
@@ -37,6 +40,9 @@ export function SacramentCelebrationFields({
   priestOptions,
   onSearchPriest,
   isSearchingPriests,
+  priestParishId,
+  notesOpen,
+  onToggleNotes,
 }: SacramentCelebrationFieldsProps) {
   function update<K extends keyof SacramentCelebrationData>(key: K, value: SacramentCelebrationData[K]) {
     onChange({ ...values, [key]: value });
@@ -54,12 +60,13 @@ export function SacramentCelebrationFields({
           onSearch={onSearchPriest}
           options={priestOptions}
           isLoading={isSearchingPriests}
+          parroquiaId={priestParishId}
         />
       </StackedFormField>
       <Field variant="panel" label="Padrino" value={values.padrino} onChange={(v) => update('padrino', v)} />
       <Field variant="panel" label="Madrina" value={values.madrina} onChange={(v) => update('madrina', v)} />
       <div className="mt-auto pt-3">
-        <MarginalNotesField value={values.anotaciones} onChange={(v) => update('anotaciones', v)} />
+        <MarginalNotesButton isOpen={notesOpen} onToggle={onToggleNotes} />
       </div>
     </FormPanel>
   );

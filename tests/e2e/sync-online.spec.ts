@@ -122,6 +122,17 @@ async function renameBaptism(window: Page, registro: string, nombre: string): Pr
   await expect(window.getByRole('button', { name: 'Guardar cambios' })).toBeHidden();
 }
 
+/** Corrige el nombre con una nota marginal, que es lo que deja constancia del valor anterior. */
+async function correctName(window: Page, registro: string, nombre: string): Promise<void> {
+  await window.getByRole('checkbox', { name: `Seleccionar partida ${registro}` }).click();
+  await window.getByRole('button', { name: 'Editar' }).click();
+  await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
+  await window.getByRole('button', { name: 'Añadir campo a modificar' }).click();
+  await window.getByRole('textbox', { name: 'Campo nuevo' }).fill(nombre);
+  await window.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(window.getByRole('button', { name: 'Guardar cambios' })).toBeHidden();
+}
+
 async function searchBaptism(window: Page, nombre: string): Promise<void> {
   await window.locator('form').getByRole('textbox').first().fill(nombre);
   await window.getByRole('button', { name: 'Buscar', exact: true }).click();
@@ -170,7 +181,7 @@ test('lo creado en una PC llega a otra, y una corrección vuelve a la primera', 
   await searchBaptism(pcB.window, 'Alfonsina');
   await expect(pcB.window.getByRole('cell', { name: 'Alfonsina' })).toHaveCount(1);
 
-  await renameBaptism(pcB.window, '9001', 'Alfonsa');
+  await correctName(pcB.window, '9001', 'Alfonsa');
   await openSyncPage(pcB.window);
   await syncNow(pcB.window);
   await expect(pending(pcB.window)).toHaveText('0');

@@ -29,6 +29,7 @@ export interface SearchFilters {
   sortBy?: string;
   sortDirection?: string;
   page?: number;
+  parroquiaId?: number;
 }
 
 export function text(value: unknown): string | null {
@@ -95,6 +96,17 @@ export interface SacramentHeader {
   celebranteId?: number | null;
 }
 
+/** Un celebrante inexistente lo sigue rechazando la clave foránea al guardar. */
+function assertMinisterOfParish(db: LocalDatabase, ministroId: number | null, parroquiaId: number): void {
+  if (ministroId === null) return;
+  const minister = db.prepare('SELECT parroquia_id FROM ministros WHERE id = ?').get(ministroId) as
+    | { parroquia_id: number }
+    | undefined;
+  if (minister && minister.parroquia_id !== parroquiaId) {
+    throw new ServiceError('El celebrante debe ser de la parroquia de la partida.', 400);
+  }
+}
+
 function headerColumns(header: SacramentHeader, fechaEvento: unknown, anotaciones: unknown) {
   const fechaEmision = text(header.fechaSacramento);
   const libro = text(header.numeroLibro);
@@ -125,6 +137,7 @@ export function insertSacrament(
   anotaciones: unknown,
 ): number {
   const columns = headerColumns(header, fechaEvento, anotaciones);
+  assertMinisterOfParish(db, columns.ministroId, parroquiaId);
   const clientId = crypto.randomUUID();
   enqueueChange(db, tipo, clientId, null);
   return Number(
@@ -164,6 +177,14 @@ export function updateSacrament(
   anotaciones: unknown,
 ): void {
   const columns = headerColumns(header, fechaEvento, anotaciones);
+  const current = db.prepare('SELECT ministro_id, parroquia_id FROM sacramentos WHERE id = ?').get(sacramentId) as {
+    ministro_id: number | null;
+    parroquia_id: number;
+  };
+  // Solo se valida al cambiarlo: una partida ya registrada conserva su celebrante.
+  if (columns.ministroId !== current.ministro_id) {
+    assertMinisterOfParish(db, columns.ministroId, current.parroquia_id);
+  }
   enqueueSacramentChange(db, sacramentId);
   db.prepare(
     `UPDATE sacramentos
@@ -211,4 +232,5 @@ export const HEADER_SELECT = `
   s.numero AS numero_registro, s.estado`;
 
 export const MINISTER_NAME_SELECT = `
-  min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS celebrante_nombre`;
+  min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS celebrante_nombre,
+  min.titulo AS celebrante_titulo`;

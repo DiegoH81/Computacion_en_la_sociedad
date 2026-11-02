@@ -5,25 +5,42 @@ import { SacramentSearchPanel, type SortField } from '../components/features/Sac
 import { MarriageForm, type MarriageFormValues } from '../components/features/MarriageForm';
 import type { SacramentRecordInfo } from '../components/features/SacramentRegisterPanel';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
-import { MarriagePrintView } from '../components/features/MarriagePrintView';
+import { MarriagePrintView, type MarriagePrintData, type MarriagePrintSpouse } from '../components/features/MarriagePrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
+import type { RecordedCorrection } from '../lib/personCorrections';
 import { useSessionStore } from '../store/sessionStore';
 import {
   searchMarriages,
   createMarriage,
   updateMarriage,
   annulMarriage,
-  formatFechaDisplay,
   type MarriageRowUI,
 } from '../controllers/MarriageController';
 import { searchPriests } from '../controllers/PriestController';
 import { MarriageService } from '../services/MarriageService';
+import { birthValue, celebrantName, fullName, printBase, printText, type PrintRow } from '../lib/printFields';
+import { ParishService } from '../services/ParishService';
+import { formatLongDate } from '../lib/dates';
 
 interface PriestOption {
   id: number;
   nombreCompleto: string;
   parroquiaNombre: string;
+}
+
+function printSpouse(m: PrintRow, prefix: 'esposo' | 'esposa'): MarriagePrintSpouse {
+  return {
+    apellidos: fullName(m[`${prefix}_apellido_paterno`], m[`${prefix}_apellido_materno`]),
+    nombres: printText(m[`${prefix}_nombre`]),
+    lugarNacimiento: printText(m[`${prefix}_lugar_nacimiento`]),
+    fechaNacimiento: birthValue(m[`${prefix}_fecha_nacimiento`], m[`${prefix}_edad`]),
+    dni: printText(m[`${prefix}_dni`]),
+    parroquiaBautismo: printText(m[`${prefix}_parroquia_bautismo`]),
+    fechaBautismo: formatLongDate(printText(m[`${prefix}_fecha_bautismo`])),
+    padre: printText(m[`${prefix}_padre_nombre`]),
+    madre: printText(m[`${prefix}_madre_nombre`]),
+  };
 }
 
 export function MarriagesPage() {
@@ -50,9 +67,7 @@ export function MarriagesPage() {
   const [editingRecord, setEditingRecord] = useState<SacramentRecordInfo | undefined>();
   const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
-  const [printData, setPrintData] = useState<Parameters<typeof MarriagePrintView>[0]['data'] | null>(
-    null,
-  );
+  const [printData, setPrintData] = useState<MarriagePrintData | null>(null);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<PriestOption[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
@@ -122,6 +137,7 @@ export function MarriagesPage() {
       sortBy: 'nombre',
       sortDirection: 'asc',
       page: 1,
+      parroquiaId: editingRecord?.parroquiaId,
     });
     setIsSearchingPriests(false);
 
@@ -182,11 +198,15 @@ export function MarriagesPage() {
         testigo3: String(m.testigo_3 ?? ''),
         testigo4: String(m.testigo_4 ?? ''),
         notasMarginales: String(m.notas_marginales ?? ''),
+        correcciones: [],
       });
       setEditingRecord({
+        sacramentoId: marriageId,
+        parroquiaId: Number(m.parroquia_id),
         parroquiaNombre: String(m.parroquia_nombre ?? ''),
         creadoEn: String(m.created_at ?? ''),
         modificadoEn: String(m.updated_at ?? ''),
+        correcciones: (marriage.correcciones ?? []) as RecordedCorrection[],
       });
 
       if (m.celebrante_id) {
@@ -247,27 +267,18 @@ export function MarriagesPage() {
 
   async function handlePrint(marriageId: number) {
     if (!token) return;
-    const { marriage } = await MarriageService.getById(marriageId);
-    const m = marriage as Record<string, string | number | null>;
+    const { marriage: m } = await MarriageService.getById(marriageId);
+    const { logo } = await ParishService.getLogo(Number(m.parroquia_id));
 
     setPrintData({
-      parroquiaNombre: String(m.parroquia_nombre ?? ''),
-      numeroLibro: String(m.numero_libro ?? ''),
-      numeroFolio: String(m.numero_folio ?? ''),
-      numeroRegistro: String(m.numero_registro ?? ''),
-      fechaSacramento: formatFechaDisplay(String(m.fecha_sacramento ?? '')),
-      esposoNombreCompleto: `${m.esposo_nombre} ${m.esposo_apellido_paterno} ${m.esposo_apellido_materno}`,
-      esposaNombreCompleto: `${m.esposa_nombre} ${m.esposa_apellido_paterno} ${m.esposa_apellido_materno}`,
-      fechaMatrimonio: formatFechaDisplay(String(m.fecha_matrimonio ?? '')),
-      celebranteNombreCompleto: String(m.celebrante_nombre ?? ''),
-      lugarMatrimonio: String(m.lugar_matrimonio ?? ''),
-      testigos: [
-        String(m.testigo_1 ?? ''),
-        String(m.testigo_2 ?? ''),
-        String(m.testigo_3 ?? ''),
-        String(m.testigo_4 ?? ''),
-      ],
-      notasMarginales: String(m.notas_marginales ?? ''),
+      ...printBase(m, logo),
+      esposo: printSpouse(m, 'esposo'),
+      esposa: printSpouse(m, 'esposa'),
+      fechaMatrimonio: formatLongDate(printText(m.fecha_matrimonio)),
+      celebrante: celebrantName(m),
+      lugarMatrimonio: printText(m.lugar_matrimonio),
+      testigos: [m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4].map(printText),
+      notasMarginales: printText(m.notas_marginales),
     });
   }
 
@@ -333,7 +344,7 @@ export function MarriagesPage() {
 
       {printData && (
         <A4PrintPreview
-          title="Imprimir certificado"
+          title="Imprimir constancia"
           onClose={() => setPrintData(null)}
           pages={[
             <A4Page key="certificado">

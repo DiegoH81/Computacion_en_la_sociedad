@@ -1,6 +1,7 @@
 import { BaptismService, type BaptismFormValuesBackend } from '../services/BaptismService';
 import type { BaptismFormValues } from '../components/features/BaptismForm';
 import { ApiError } from '../lib/apiClient';
+import { draftsToBackend } from '../lib/personCorrections';
 import { useSessionStore } from '../store/sessionStore';
 import { formatFechaDisplay } from './MarriageController';
 
@@ -91,6 +92,7 @@ function uiValuesToBackend(values: BaptismFormValues): BaptismFormValuesBackend 
     padrino: values.padrino || undefined,
     madrina: values.madrina || undefined,
     anotaciones: values.anotaciones || undefined,
+    correcciones: draftsToBackend(values.correcciones),
   };
 }
 

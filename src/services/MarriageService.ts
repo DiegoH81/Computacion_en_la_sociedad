@@ -1,3 +1,4 @@
+import type { PersonCorrection } from '../lib/personCorrections';
 import { localRequest } from '../lib/localClient';
 
 export interface MarriageRow {
@@ -55,6 +56,7 @@ export interface MarriageFormValuesBackend {
   testigo3?: string;
   testigo4?: string;
   notasMarginales?: string;
+  correcciones?: PersonCorrection[];
 }
 
 export const MarriageService = {

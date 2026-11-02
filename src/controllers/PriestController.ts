@@ -45,6 +45,8 @@ export async function searchPriests(params: {
   sortBy: 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
   sortDirection: 'asc' | 'desc';
   page: number;
+  /** Por defecto, la parroquia activa: solo se ven los ministros de una parroquia a la vez. */
+  parroquiaId?: number;
 }): Promise<SearchResult> {
   try {
     // Traduce el nombre de campo de UI (camelCase) al que espera el backend (snake_case).
@@ -55,7 +57,8 @@ export async function searchPriests(params: {
           ? 'apellido_materno'
           : 'nombre';
 
-    const response = await PriestService.search({ ...params, sortBy: sortByBackend });
+    const parroquiaId = params.parroquiaId ?? useSessionStore.getState().parroquiaActivaId ?? undefined;
+    const response = await PriestService.search({ ...params, sortBy: sortByBackend, parroquiaId });
 
     return { success: true, priests: response.priests.map(toPriestRowUI), totalPages: response.totalPages };
   } catch (error) {
@@ -66,15 +69,18 @@ export async function searchPriests(params: {
   }
 }
 
-export async function createPriest(values: PriestFormValues): Promise<MutationResult> {
+export async function createPriest(
+  values: PriestFormValues,
+  parroquiaDestinoId?: number,
+): Promise<MutationResult & { id?: number }> {
   try {
     const parroquiaActivaId = useSessionStore.getState().parroquiaActivaId;
     const rol = useSessionStore.getState().rol;
 
-    const parroquiaId = rol === 'admin' ? (parroquiaActivaId ?? undefined) : undefined;
+    const parroquiaId = rol === 'admin' ? (parroquiaDestinoId ?? parroquiaActivaId ?? undefined) : undefined;
 
-    await PriestService.create(values, parroquiaId);
-    return { success: true };
+    const { id } = await PriestService.create(values, parroquiaId);
+    return { success: true, id };
   } catch (error) {
     return {
       success: false,

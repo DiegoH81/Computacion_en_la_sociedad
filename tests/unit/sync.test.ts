@@ -119,8 +119,8 @@ describe('subir la cola', () => {
 
   it('incluye las correcciones, y varias ediciones se envían como una sola', async () => {
     const id = baptisms.create(db, parish1, input(), undefined);
-    baptisms.update(db, parish1, id, input({ nombre: 'Diego' }));
-    baptisms.update(db, parish1, id, input({ nombre: 'Diogo' }));
+    baptisms.update(db, parish1, id, input({ correcciones: [{ campo: 'nombres', valorNuevo: 'Diego' }] }));
+    baptisms.update(db, parish1, id, input({ nombre: 'Diego', correcciones: [{ campo: 'nombres', valorNuevo: 'Diogo' }] }));
     const { request, calls } = fakeRemote(acceptAll());
 
     await pushPending(db, request, 'token');

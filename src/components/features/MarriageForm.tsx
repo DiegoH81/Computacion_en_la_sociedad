@@ -4,7 +4,12 @@ import { FormDialog } from '../ui/FormDialog';
 import { FormInput } from '../ui/FormInput';
 import { FormSectionTitle } from '../ui/FormSectionTitle';
 import { InlineFormField } from '../ui/InlineFormField';
-import { MarginalNotesField } from './MarginalNotesField';
+import { DuplicateWarning } from './DuplicateWarning';
+import { MarginalNotesButton } from './MarginalNotesButton';
+import { useDuplicateCheck } from './useDuplicateCheck';
+import { MarginalNotesSection } from './MarginalNotesSection';
+import { useMarginalNotes } from './useMarginalNotes';
+import { spouseOptions, type CorrectionDraft } from '../../lib/personCorrections';
 import { SacramentRegisterPanel, type SacramentRecordInfo } from './SacramentRegisterPanel';
 import { MarriageFamilyFields, MarriagePersonFields, type PersonMarriageData } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
@@ -38,6 +43,7 @@ export interface MarriageFormValues {
   testigo3: string;
   testigo4: string;
   notasMarginales: string;
+  correcciones: CorrectionDraft[];
 }
 
 const EMPTY_VALUES: MarriageFormValues = {
@@ -55,6 +61,7 @@ const EMPTY_VALUES: MarriageFormValues = {
   testigo3: '',
   testigo4: '',
   notasMarginales: '',
+  correcciones: [],
 };
 
 const TESTIGOS = [
@@ -98,6 +105,30 @@ export function MarriageForm({
   isSearchingPriests,
 }: MarriageFormProps) {
   const [values, setValues] = useState<MarriageFormValues>(initialValues ?? EMPTY_VALUES);
+  const notes = useMarginalNotes(Boolean(initialValues?.notasMarginales || recordInfo?.correcciones.length));
+
+  const duplicates = useDuplicateCheck('matrimonio', recordInfo?.sacramentoId, [
+    {
+      para: 'Esposo',
+      dni: values.esposo.dni,
+      nombre: values.esposo.nombre,
+      apellidoPaterno: values.esposo.apellidoPaterno,
+      apellidoMaterno: values.esposo.apellidoMaterno,
+      fechaNacimiento: values.esposo.fechaNacimiento,
+      padreNombre: values.esposo.padreNombre,
+      madreNombre: values.esposo.madreNombre,
+    },
+    {
+      para: 'Esposa',
+      dni: values.esposa.dni,
+      nombre: values.esposa.nombre,
+      apellidoPaterno: values.esposa.apellidoPaterno,
+      apellidoMaterno: values.esposa.apellidoMaterno,
+      fechaNacimiento: values.esposa.fechaNacimiento,
+      padreNombre: values.esposa.padreNombre,
+      madreNombre: values.esposa.madreNombre,
+    },
+  ]);
 
   function update<K extends keyof MarriageFormValues>(key: K, value: MarriageFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
@@ -117,6 +148,7 @@ export function MarriageForm({
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
+      notice={<DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />}
     >
       <FormSectionTitle>Datos de registro en el libro</FormSectionTitle>
       <SacramentRegisterPanel
@@ -151,6 +183,7 @@ export function MarriageForm({
               onSearch={onSearchPriest}
               options={priestOptions}
               isLoading={isSearchingPriests}
+              parroquiaId={recordInfo?.parroquiaId}
             />
           </InlineFormField>
         </div>
@@ -161,9 +194,21 @@ export function MarriageForm({
         ))}
 
         <div className="sm:col-span-2">
-          <MarginalNotesField value={values.notasMarginales} onChange={(v) => update('notasMarginales', v)} />
+          <MarginalNotesButton isOpen={notes.isOpen} onToggle={notes.toggle} />
         </div>
       </div>
+
+      {notes.isOpen && (
+        <MarginalNotesSection
+          sectionRef={notes.sectionRef}
+          notes={values.notasMarginales}
+          onNotesChange={(v) => update('notasMarginales', v)}
+          options={spouseOptions(values.esposo, values.esposa)}
+          corrections={values.correcciones}
+          onCorrectionsChange={(v) => update('correcciones', v)}
+          recorded={recordInfo?.correcciones}
+        />
+      )}
     </FormDialog>
   );
 }
