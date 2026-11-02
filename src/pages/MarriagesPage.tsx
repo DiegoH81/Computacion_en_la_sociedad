@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { SacramentSearchPanel, type SortField } from '../components/features/SacramentSearchPanel';
 import { MarriageForm, type MarriageFormValues } from '../components/features/MarriageForm';
+import type { SacramentRecordInfo } from '../components/features/SacramentRegisterPanel';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
 import { MarriagePrintView } from '../components/features/MarriagePrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
@@ -46,6 +47,8 @@ export function MarriagesPage() {
     { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; marriageId: number }
   >({ mode: 'closed' });
   const [editingInitialValues, setEditingInitialValues] = useState<MarriageFormValues | undefined>();
+  const [editingRecord, setEditingRecord] = useState<SacramentRecordInfo | undefined>();
+  const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
   const [printData, setPrintData] = useState<Parameters<typeof MarriagePrintView>[0]['data'] | null>(
     null,
@@ -180,6 +183,21 @@ export function MarriagesPage() {
         testigo4: String(m.testigo_4 ?? ''),
         notasMarginales: String(m.notas_marginales ?? ''),
       });
+      setEditingRecord({
+        parroquiaNombre: String(m.parroquia_nombre ?? ''),
+        creadoEn: String(m.created_at ?? ''),
+        modificadoEn: String(m.updated_at ?? ''),
+      });
+
+      if (m.celebrante_id) {
+        setPriestOptions([
+          {
+            id: Number(m.celebrante_id),
+            nombreCompleto: String(m.celebrante_nombre ?? ''),
+            parroquiaNombre: String(m.parroquia_nombre ?? ''),
+          },
+        ]);
+      }
 
       setFormState({ mode: 'edit', marriageId });
     } catch {
@@ -189,8 +207,16 @@ export function MarriagesPage() {
     }
   }
 
+  function closeForm() {
+    setFormState({ mode: 'closed' });
+    setEditingInitialValues(undefined);
+    setEditingRecord(undefined);
+    setFormError(null);
+  }
+
   async function handleSaveForm(values: MarriageFormValues) {
     setIsLoading(true);
+    setFormError(null);
 
     const result =
       formState.mode === 'edit'
@@ -200,12 +226,11 @@ export function MarriagesPage() {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al guardar.');
+      setFormError(result.errorMessage ?? 'Error al guardar.');
       return;
     }
 
-    setFormState({ mode: 'closed' });
-    setEditingInitialValues(undefined);
+    closeForm();
     loadMarriages();
   }
 
@@ -275,10 +300,7 @@ export function MarriagesPage() {
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
-        onAdd={() => {
-          setEditingInitialValues(undefined);
-          setFormState({ mode: 'create' });
-        }}
+        onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
         onAnnul={(id) => setAnnulmentTargetId(id)}
@@ -289,11 +311,11 @@ export function MarriagesPage() {
         <MarriageForm
           mode={formState.mode}
           initialValues={editingInitialValues}
+          parroquiaNombre={editingRecord?.parroquiaNombre ?? parroquiaActivaNombre ?? ''}
+          recordInfo={editingRecord}
+          errorMessage={formError}
           onSave={handleSaveForm}
-          onCancel={() => {
-            setFormState({ mode: 'closed' });
-            setEditingInitialValues(undefined);
-          }}
+          onCancel={closeForm}
           isLoading={isLoading}
           priestOptions={priestOptions}
           onSearchPriest={handleSearchPriest}

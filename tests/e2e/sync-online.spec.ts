@@ -104,10 +104,10 @@ async function goToBaptisms(window: Page): Promise<void> {
 async function createBaptism(window: Page, registro: string, nombre: string): Promise<void> {
   await window.getByRole('button', { name: '+ Agregar' }).click();
   await field(window, 'Fecha del sacramento').fill('2020-05-10');
-  await field(window, 'N° libro').fill('7');
-  await field(window, 'N° folio').fill('3');
-  await field(window, 'N° registro').fill(registro);
-  await field(window, 'Nombre').fill(nombre);
+  await field(window, 'N° de libro').fill('7');
+  await field(window, 'N° de folio').fill('3');
+  await field(window, 'N° de registro').fill(registro);
+  await field(window, 'Nombres').fill(nombre);
   await field(window, 'Apellido paterno').fill('Sincro');
   await field(window, 'Apellido materno').fill('Prueba');
   await window.getByRole('button', { name: 'Guardar cambios' }).click();
@@ -117,7 +117,7 @@ async function createBaptism(window: Page, registro: string, nombre: string): Pr
 async function renameBaptism(window: Page, registro: string, nombre: string): Promise<void> {
   await window.getByRole('checkbox', { name: `Seleccionar partida ${registro}` }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
-  await field(window, 'Nombre').fill(nombre);
+  await field(window, 'Nombres').fill(nombre);
   await window.getByRole('button', { name: 'Guardar cambios' }).click();
   await expect(window.getByRole('button', { name: 'Guardar cambios' })).toBeHidden();
 }
@@ -210,7 +210,8 @@ test('login sin internet: exige un primer ingreso online y luego valida localmen
   await goToBaptisms(pc.window);
   await createBaptism(pc.window, '9002', 'Bernardina');
   await expect(pc.window.getByRole('cell', { name: 'Bernardina' })).toBeVisible();
-  await expect(badge(pc.window)).toHaveText('1 sin subir');
+  // El indicador se actualiza cada 5 s: esperar justo ese tiempo haría fallar la prueba al azar.
+  await expect(badge(pc.window)).toHaveText('1 sin subir', { timeout: 10_000 });
 
   // ...y al volver internet se sube sin pedir de nuevo la contraseña.
   mode = 'normal';

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { SacramentSearchPanel, type SortField } from '../components/features/SacramentSearchPanel';
 import { BaptismForm, type BaptismFormValues } from '../components/features/BaptismForm';
+import type { SacramentRecordInfo } from '../components/features/SacramentRegisterPanel';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
 import { BaptismPrintView } from '../components/features/BaptismPrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
@@ -46,6 +47,8 @@ export function BaptismsPage() {
     { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; baptismId: number }
   >({ mode: 'closed' });
   const [editingInitialValues, setEditingInitialValues] = useState<BaptismFormValues | undefined>();
+  const [editingRecord, setEditingRecord] = useState<SacramentRecordInfo | undefined>();
+  const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
   const [printData, setPrintData] = useState<Parameters<typeof BaptismPrintView>[0]['data'] | null>(
     null,
@@ -160,6 +163,20 @@ export function BaptismsPage() {
         madrina: String(b.madrina ?? ''),
         anotaciones: String(b.anotaciones ?? ''),
       });
+      setEditingRecord({
+        parroquiaNombre: String(b.parroquia_nombre ?? ''),
+        creadoEn: String(b.created_at ?? ''),
+        modificadoEn: String(b.updated_at ?? ''),
+      });
+      if (b.celebrante_id) {
+        setPriestOptions([
+          {
+            id: Number(b.celebrante_id),
+            nombreCompleto: String(b.celebrante_nombre ?? ''),
+            parroquiaNombre: String(b.parroquia_nombre ?? ''),
+          },
+        ]);
+      }
 
       setFormState({ mode: 'edit', baptismId });
     } catch {
@@ -169,8 +186,16 @@ export function BaptismsPage() {
     }
   }
 
+  function closeForm() {
+    setFormState({ mode: 'closed' });
+    setEditingInitialValues(undefined);
+    setEditingRecord(undefined);
+    setFormError(null);
+  }
+
   async function handleSaveForm(values: BaptismFormValues) {
     setIsLoading(true);
+    setFormError(null);
 
     const result =
       formState.mode === 'edit'
@@ -180,12 +205,11 @@ export function BaptismsPage() {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al guardar.');
+      setFormError(result.errorMessage ?? 'Error al guardar.');
       return;
     }
 
-    setFormState({ mode: 'closed' });
-    setEditingInitialValues(undefined);
+    closeForm();
     loadBaptisms();
   }
 
@@ -254,10 +278,7 @@ export function BaptismsPage() {
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
-        onAdd={() => {
-          setEditingInitialValues(undefined);
-          setFormState({ mode: 'create' });
-        }}
+        onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
         onAnnul={(id) => setAnnulmentTargetId(id)}
@@ -268,11 +289,11 @@ export function BaptismsPage() {
         <BaptismForm
           mode={formState.mode}
           initialValues={editingInitialValues}
+          parroquiaNombre={editingRecord?.parroquiaNombre ?? parroquiaActivaNombre ?? ''}
+          recordInfo={editingRecord}
+          errorMessage={formError}
           onSave={handleSaveForm}
-          onCancel={() => {
-            setFormState({ mode: 'closed' });
-            setEditingInitialValues(undefined);
-          }}
+          onCancel={closeForm}
           isLoading={isLoading}
           priestOptions={priestOptions}
           onSearchPriest={handleSearchPriest}

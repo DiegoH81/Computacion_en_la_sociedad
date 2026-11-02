@@ -10,6 +10,7 @@ import {
   ConfirmationForm,
   type ConfirmationFormValues,
 } from '../components/features/ConfirmationForm';
+import type { SacramentRecordInfo } from '../components/features/SacramentRegisterPanel';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
 import { SacramentPrintView } from '../components/features/SacramentPrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
@@ -60,6 +61,8 @@ export function ConfirmationsPage() {
   const [editingInitialValues, setEditingInitialValues] = useState<
     ConfirmationFormValues | undefined
   >();
+  const [editingRecord, setEditingRecord] = useState<SacramentRecordInfo | undefined>();
+  const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
   const [printData, setPrintData] = useState<Parameters<typeof SacramentPrintView>[0] | null>(
     null,
@@ -178,6 +181,20 @@ export function ConfirmationsPage() {
           anotaciones: String(c.anotaciones ?? ''),
         },
       });
+      setEditingRecord({
+        parroquiaNombre: String(c.parroquia_nombre ?? ''),
+        creadoEn: String(c.created_at ?? ''),
+        modificadoEn: String(c.updated_at ?? ''),
+      });
+      if (c.celebrante_id) {
+        setPriestOptions([
+          {
+            id: Number(c.celebrante_id),
+            nombreCompleto: String(c.celebrante_nombre ?? ''),
+            parroquiaNombre: String(c.parroquia_nombre ?? ''),
+          },
+        ]);
+      }
 
       setFormState({ mode: 'edit', confirmationId });
     } catch {
@@ -187,8 +204,16 @@ export function ConfirmationsPage() {
     }
   }
 
+  function closeForm() {
+    setFormState({ mode: 'closed' });
+    setEditingInitialValues(undefined);
+    setEditingRecord(undefined);
+    setFormError(null);
+  }
+
   async function handleSaveForm(values: ConfirmationFormValues) {
     setIsLoading(true);
+    setFormError(null);
 
     const result =
       formState.mode === 'edit'
@@ -198,12 +223,11 @@ export function ConfirmationsPage() {
     setIsLoading(false);
 
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al guardar.');
+      setFormError(result.errorMessage ?? 'Error al guardar.');
       return;
     }
 
-    setFormState({ mode: 'closed' });
-    setEditingInitialValues(undefined);
+    closeForm();
     loadConfirmations();
   }
 
@@ -282,10 +306,7 @@ export function ConfirmationsPage() {
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
-        onAdd={() => {
-          setEditingInitialValues(undefined);
-          setFormState({ mode: 'create' });
-        }}
+        onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
         onAnnul={(id) => setAnnulmentTargetId(id)}
@@ -296,11 +317,11 @@ export function ConfirmationsPage() {
         <ConfirmationForm
           mode={formState.mode}
           initialValues={editingInitialValues}
+          parroquiaNombre={editingRecord?.parroquiaNombre ?? parroquiaActivaNombre ?? ''}
+          recordInfo={editingRecord}
+          errorMessage={formError}
           onSave={handleSaveForm}
-          onCancel={() => {
-            setFormState({ mode: 'closed' });
-            setEditingInitialValues(undefined);
-          }}
+          onCancel={closeForm}
           isLoading={isLoading}
           priestOptions={priestOptions}
           onSearchPriest={handleSearchPriest}

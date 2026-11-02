@@ -50,20 +50,33 @@ test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras r
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
 
   await window.getByRole('button', { name: '+ Agregar' }).click();
-  await fillRegister(window, '501');
+  await fillRegister(window, '501', 'N° de');
   await field(window, 'DNI').fill('12345678');
-  await field(window, 'Nombre').fill('Diago');
+  await field(window, 'Nombres').fill('Diago');
   await field(window, 'Apellido paterno').fill('Quispe');
   await field(window, 'Apellido materno').fill('Mamani');
-  await field(window, 'Edad').fill('30');
+  await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
+  await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('30');
+  await window.getByRole('combobox', { name: 'Fecha de bautizo: día' }).selectOption('15');
+  await window.getByRole('combobox', { name: 'Fecha de bautizo: mes' }).selectOption('08');
+  await window.getByRole('combobox', { name: 'Fecha de bautizo: año' }).selectOption('2001');
+  await window.getByPlaceholder('Buscar celebrante...').fill('Braulio');
+  await window.getByRole('button', { name: /Braulio Guido/ }).click();
+  await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
+  await window.getByRole('textbox', { name: 'Notas marginales' }).fill('Nota de bautismo');
   await save(window);
   await expect(window.getByRole('cell', { name: 'Diago' })).toBeVisible();
 
   await window.getByRole('checkbox', { name: 'Seleccionar partida 501' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
   await expect(field(window, 'DNI')).toHaveValue('12345678');
-  await expect(field(window, 'Edad')).toHaveValue('30');
-  await field(window, 'Nombre').fill('Diego');
+  await expect(window.getByRole('spinbutton', { name: 'Edad', exact: true })).toHaveValue('30');
+  await expect(window.getByRole('combobox', { name: 'Fecha de bautizo: mes' })).toHaveValue('08');
+  await expect(window.getByPlaceholder('Buscar celebrante...')).toHaveValue(/Braulio Guido/);
+  await expect(window.getByRole('textbox', { name: 'Notas marginales' })).toHaveValue('Nota de bautismo');
+  await expect(field(window, 'Parroquia')).toHaveValue('Parroquia 1');
+  await expect(window.getByRole('dialog').getByText('Creado en:').locator('+ span')).not.toBeEmpty();
+  await field(window, 'Nombres').fill('Diego');
   await save(window);
   await expect(window.getByRole('cell', { name: 'Diego' })).toBeVisible();
 
@@ -86,19 +99,33 @@ test('confirmación: conserva edad y DNI, y se puede anular con motivo', async (
   await window.getByRole('button', { name: 'Índice y partida de confirmación' }).click();
 
   await window.getByRole('button', { name: '+ Agregar' }).click();
-  await fillRegister(window, '502');
+  await fillRegister(window, '502', 'N° de');
   await field(window, 'DNI').fill('87654321');
-  await field(window, 'Nombre').fill('Lucia');
+  await field(window, 'Nombres').fill('Lucia');
   await field(window, 'Apellido paterno').fill('Flores');
   await field(window, 'Apellido materno').fill('Rojas');
-  await field(window, 'Edad').fill('15');
+  await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
+  await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('15');
+  await window.getByRole('combobox', { name: 'Fecha de confirmación: día' }).selectOption('20');
+  await window.getByRole('combobox', { name: 'Fecha de confirmación: mes' }).selectOption('11');
+  await window.getByRole('combobox', { name: 'Fecha de confirmación: año' }).selectOption('2015');
+  await window.getByPlaceholder('Buscar celebrante...').fill('Braulio');
+  await window.getByRole('button', { name: /Braulio Guido/ }).click();
+  await field(window, 'Padrino').fill('Mario');
+  await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
+  await window.getByRole('textbox', { name: 'Notas marginales' }).fill('Nota de confirmación');
   await save(window);
 
   await window.getByRole('checkbox', { name: 'Seleccionar partida 502' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
   await expect(field(window, 'DNI')).toHaveValue('87654321');
-  await expect(field(window, 'Edad')).toHaveValue('15');
-  await window.getByRole('main').getByRole('button', { name: 'Volver' }).click();
+  await expect(window.getByRole('spinbutton', { name: 'Edad', exact: true })).toHaveValue('15');
+  await expect(window.getByRole('combobox', { name: 'Fecha de confirmación: mes' })).toHaveValue('11');
+  await expect(window.getByPlaceholder('Buscar celebrante...')).toHaveValue(/Braulio Guido/);
+  await expect(field(window, 'Padrino')).toHaveValue('Mario');
+  await expect(window.getByRole('textbox', { name: 'Notas marginales' })).toHaveValue('Nota de confirmación');
+  await expect(field(window, 'Parroquia')).toHaveValue('Parroquia 1');
+  await window.getByRole('dialog').getByRole('button', { name: 'Cancelar' }).click();
 
   await window.getByRole('button', { name: 'Anular', exact: true }).click();
   await window.locator('textarea').fill('Registro duplicado');
@@ -135,15 +162,15 @@ test('cola: lo que se guarda por pantalla queda pendiente, y al cerrar se sube',
   const window = await launchAndLogin();
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
   await window.getByRole('button', { name: '+ Agregar' }).click();
-  await fillRegister(window, '504');
-  await field(window, 'Nombre').fill('Rosa');
+  await fillRegister(window, '504', 'N° de');
+  await field(window, 'Nombres').fill('Rosa');
   await field(window, 'Apellido paterno').fill('Vargas');
   await field(window, 'Apellido materno').fill('Rojas');
   await save(window);
 
   await window.getByRole('checkbox', { name: 'Seleccionar partida 504' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
-  await field(window, 'Nombre').fill('Rosario');
+  await field(window, 'Nombres').fill('Rosario');
   await save(window);
 
   const encryptedKey = readFileSync(path.join(userData, 'prelatura-local.key')).toString('base64');
@@ -171,8 +198,17 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
   await window.getByRole('button', { name: '+ Agregar' }).click();
   await expect(window.getByText('DNI padre')).toHaveCount(0);
   await fillRegister(window, '503', 'N° de');
-  await field(window, 'Nombre esposo').fill('Carlos');
-  await field(window, 'Nombre esposa').fill('Elena');
+  await window.getByRole('textbox', { name: 'Nombres del esposo' }).fill('Carlos');
+  await window.getByRole('textbox', { name: 'Nombres de la esposa' }).fill('Elena');
+
+  // La partida física puede traer solo la edad: se registra una de las dos.
+  await window.getByRole('checkbox', { name: 'Prefiere edad del esposo' }).check();
+  await window.getByRole('spinbutton', { name: 'Edad del esposo' }).fill('30');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' }).selectOption('29');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: mes' }).selectOption('02');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: año' }).selectOption('1996');
+  await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
+  await window.getByRole('textbox', { name: 'Notas marginales' }).fill('Nota de prueba');
   await save(window);
 
   await expect(window.getByRole('cell', { name: /Carlos/ })).toBeVisible();
@@ -180,5 +216,12 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
 
   await window.getByRole('checkbox', { name: 'Seleccionar partida 503' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
-  await expect(field(window, 'Nombre esposa')).toHaveValue('Elena');
+  const dialog = window.getByRole('dialog', { name: 'Editar partida' });
+  await expect(dialog.getByRole('textbox', { name: 'Nombres de la esposa' })).toHaveValue('Elena');
+  await expect(dialog.getByRole('spinbutton', { name: 'Edad del esposo' })).toHaveValue('30');
+  await expect(dialog.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' })).toHaveValue('29');
+  await expect(dialog.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: año' })).toHaveValue('1996');
+  await expect(dialog.getByRole('textbox', { name: 'Notas marginales' })).toHaveValue('Nota de prueba');
+  await expect(field(window, 'Parroquia')).toHaveValue('Parroquia 1');
+  await expect(dialog.getByText('Creado en:').locator('+ span')).not.toBeEmpty();
 });

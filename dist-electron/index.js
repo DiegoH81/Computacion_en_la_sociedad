@@ -353,7 +353,6 @@ function applyReferenceData(db, data) {
 }
 //#endregion
 //#region electron/main/services/syncEngine.ts
-/** Debe coincidir con MAX_CAMBIOS_POR_ENVIO en worker/src/services/syncService.ts. */
 var PUSH_BATCH_SIZE = 20;
 function getSyncValue(db, clave) {
 	return db.prepare("SELECT valor FROM sync_estado WHERE clave = ?").get(clave)?.valor ?? null;
@@ -378,7 +377,6 @@ function applyResult(db, row, result) {
 		} else db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?`).run(result.version, row.id);
 	})();
 }
-/** Sube lo pendiente. Los conflictos esperan a una persona; los rechazados se reintentan. */
 async function pushPending(db, request, token) {
 	const pending = db.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' ORDER BY entidad = 'ministro' DESC, id`).pluck().all();
 	const selectRow = db.prepare("SELECT * FROM sync_cola WHERE id = ?");
@@ -408,7 +406,6 @@ function applyPage(db, page) {
 	})();
 }
 var isMissingReference = (error) => error instanceof MissingReferenceError || error?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
-/** Cada página se guarda entera junto con su cursor: un corte solo obliga a repetir la siguiente. */
 async function pullChanges(db, request, token) {
 	for (;;) {
 		const cursor = getSyncValue(db, "cursor") ?? "0";
@@ -429,7 +426,6 @@ async function runSync(db, request, token) {
 	await pullChanges(db, request, token);
 	setSyncValue(db, "ultima_sync", (/* @__PURE__ */ new Date()).toISOString());
 }
-/** "servidor" descarta lo local; "local" vuelve a subirlo partiendo de la versión actual del servidor. */
 async function resolveConflict(db, request, token, entidad, clientId, choice) {
 	const { registro } = await request(`/api/sync/record?${`entidad=${encodeURIComponent(entidad)}&client_id=${encodeURIComponent(clientId)}`}`, { token });
 	db.transaction(() => {
@@ -1074,7 +1070,7 @@ var marriages = {
 	getById(db, id) {
 		const row = db.prepare(`SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
                 s.fecha_evento AS fecha_matrimonio, s.ministro_id AS celebrante_id,
-                s.anotaciones AS notas_marginales,
+                s.anotaciones AS notas_marginales, s.created_at, s.updated_at,
                 s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                 m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
                 ${spouseSelect("c1", "esposo", 1)},
@@ -1317,7 +1313,6 @@ async function verifyOffline(db, username, password) {
 }
 //#endregion
 //#region electron/main/services/remote.ts
-/** PRELATURA_API_URL permite apuntar a otro servidor sin recompilar, por ejemplo en las pruebas. */
 var WORKER_BASE_URL = process.env.PRELATURA_API_URL ?? void 0 ?? "http://localhost:8787";
 var DEFAULT_TIMEOUT_MS = 3e4;
 var CONNECTION_ERROR = "No se pudo conectar con el servidor. Verifique su conexión.";
@@ -1343,7 +1338,6 @@ var remoteRequest = async (path, options = {}) => {
 	if (data === null) throw new ServiceError(CONNECTION_ERROR, 0);
 	return data;
 };
-/** Sin conexión o con el servidor caído se puede seguir trabajando; un rechazo (4xx) no se ignora. */
 function isConnectivityError(error) {
 	return error instanceof ServiceError && (error.status === 0 || error.status >= 500);
 }
@@ -1415,7 +1409,6 @@ async function loginOffline(username, password) {
 		usuario
 	};
 }
-/** Primero online. La verificación local solo se usa si no hay conexión: nunca tras un rechazo del servidor. */
 async function login(payload) {
 	const { username, password } = payload;
 	let response;
@@ -1577,7 +1570,7 @@ function singlePersonSacrament(tipo) {
 		},
 		getById(db, id) {
 			const row = db.prepare(`SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
-                  s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones,
+                  s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones, s.created_at, s.updated_at,
                   s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                   pe.dni, pe.nombres AS nombre, pe.apellido_paterno, pe.apellido_materno,
                   pe.fecha_nacimiento, pe.edad, pe.lugar_nacimiento,

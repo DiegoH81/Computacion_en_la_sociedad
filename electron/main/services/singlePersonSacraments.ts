@@ -86,7 +86,7 @@ export function singlePersonSacrament(tipo: keyof typeof CONFIG) {
       const row = db
         .prepare(
           `SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
-                  s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones,
+                  s.fecha_evento AS ${eventColumn}, s.ministro_id AS celebrante_id, s.anotaciones, s.created_at, s.updated_at,
                   s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                   pe.dni, pe.nombres AS nombre, pe.apellido_paterno, pe.apellido_materno,
                   pe.fecha_nacimiento, pe.edad, pe.lugar_nacimiento,

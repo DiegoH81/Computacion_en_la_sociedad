@@ -119,7 +119,7 @@ export const marriages = {
       .prepare(
         `SELECT ${HEADER_SELECT}, ${MINISTER_NAME_SELECT},
                 s.fecha_evento AS fecha_matrimonio, s.ministro_id AS celebrante_id,
-                s.anotaciones AS notas_marginales,
+                s.anotaciones AS notas_marginales, s.created_at, s.updated_at,
                 s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
                 m.lugar AS lugar_matrimonio, m.testigo_1, m.testigo_2, m.testigo_3, m.testigo_4,
                 ${spouseSelect('c1', 'esposo', 1)},

@@ -1,4 +1,8 @@
+import { DateSelect } from '../ui/DateSelect';
 import { Field } from '../ui/Field';
+import { FormPanel } from '../ui/FormPanel';
+import { StackedFormField } from '../ui/StackedFormField';
+import { MarginalNotesField } from './MarginalNotesField';
 import { PriestSelector } from './PriestSelector';
 
 export interface SacramentCelebrationData {
@@ -17,7 +21,7 @@ interface PriestOption {
 
 interface SacramentCelebrationFieldsProps {
   title: string; // ej. "Datos de bautismo" o "Datos de confirmación"
-  fechaLabel: string; // ej. "Fecha del bautizo" o "Fecha de confirmación"
+  fechaLabel: string; // ej. "Fecha de bautizo" o "Fecha de confirmación"
   values: SacramentCelebrationData;
   onChange: (values: SacramentCelebrationData) => void;
   priestOptions: PriestOption[];
@@ -34,45 +38,29 @@ export function SacramentCelebrationFields({
   onSearchPriest,
   isSearchingPriests,
 }: SacramentCelebrationFieldsProps) {
-  function update<K extends keyof SacramentCelebrationData>(
-    key: K,
-    value: SacramentCelebrationData[K],
-  ) {
+  function update<K extends keyof SacramentCelebrationData>(key: K, value: SacramentCelebrationData[K]) {
     onChange({ ...values, [key]: value });
   }
 
   return (
-    <section>
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">{title}</h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label={fechaLabel}
-          type="date"
-          value={values.fechaCelebracion}
-          onChange={(v) => update('fechaCelebracion', v)}
+    <FormPanel title={title}>
+      <StackedFormField label={fechaLabel}>
+        <DateSelect ariaLabel={fechaLabel} value={values.fechaCelebracion} onChange={(v) => update('fechaCelebracion', v)} />
+      </StackedFormField>
+      <StackedFormField label="Celebrante">
+        <PriestSelector
+          value={values.celebranteId}
+          onSelect={(id) => update('celebranteId', id)}
+          onSearch={onSearchPriest}
+          options={priestOptions}
+          isLoading={isSearchingPriests}
         />
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Celebrante</label>
-          <PriestSelector
-            value={values.celebranteId}
-            onSelect={(id) => update('celebranteId', id)}
-            onSearch={onSearchPriest}
-            options={priestOptions}
-            isLoading={isSearchingPriests}
-          />
-        </div>
-        <Field label="Padrino" value={values.padrino} onChange={(v) => update('padrino', v)} />
-        <Field label="Madrina" value={values.madrina} onChange={(v) => update('madrina', v)} />
-        <div className="sm:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Anotaciones</label>
-          <textarea
-            value={values.anotaciones}
-            onChange={(e) => update('anotaciones', e.target.value)}
-            rows={3}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-          />
-        </div>
+      </StackedFormField>
+      <Field variant="panel" label="Padrino" value={values.padrino} onChange={(v) => update('padrino', v)} />
+      <Field variant="panel" label="Madrina" value={values.madrina} onChange={(v) => update('madrina', v)} />
+      <div className="mt-auto pt-3">
+        <MarginalNotesField value={values.anotaciones} onChange={(v) => update('anotaciones', v)} />
       </div>
-    </section>
+    </FormPanel>
   );
 }
