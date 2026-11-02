@@ -502,3 +502,55 @@ test('duplicados: muestra las tres más altas y permite ver todas', async () => 
   await warning.getByRole('button', { name: 'Ver menos' }).click();
   await expect(rows).toHaveCount(3);
 });
+
+test('estadísticas: resumen por año de la parroquia, con su tabla', async () => {
+  const window = await launchAndLogin();
+
+  // Un año sin otras partidas, para que las demás pruebas no alteren los números.
+  await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  await field(window, 'Fecha del sacramento').fill('1951-03-10');
+  await field(window, 'N° de libro').fill('1');
+  await field(window, 'N° de folio').fill('1');
+  await field(window, 'N° de registro').fill('901');
+  await field(window, 'Nombres').fill('Eusebia');
+  await field(window, 'Apellido paterno').fill('Pari');
+  await field(window, 'Apellido materno').fill('Luque');
+  await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
+  await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('35');
+  await save(window);
+  await window.getByRole('button', { name: 'Volver' }).first().click();
+
+  await window.getByRole('button', { name: 'Estadísticas' }).click();
+  await window.getByLabel('Año', { exact: true }).selectOption('1951');
+
+  await expect(window.getByTestId('stat-bautismo')).toHaveText('1');
+  await expect(window.getByTestId('stat-confirmacion')).toHaveText('0');
+  await expect(window.getByTestId('stat-matrimonio')).toHaveText('0');
+
+  const monthly = window.getByRole('region', { name: 'Partidas por mes en 1951' });
+  await expect(monthly).toContainText('Mes con más partidas: marzo (1)');
+  await monthly.getByText('Ver como tabla').click();
+  await expect(monthly.getByRole('row', { name: 'marzo 1 0 0 1' })).toBeVisible();
+
+  // Pasar sobre una barra muestra el detalle, y también al llegar con el teclado.
+  await monthly.getByLabel('marzo: 1 partidas').focus();
+  await expect(window.getByRole('status').filter({ hasText: 'marzo de 1951' })).toContainText('Bautismos');
+
+  const ages = window.getByRole('region', { name: 'Edad al recibir el sacramento' });
+  await ages.getByText('Ver como tabla').click();
+  await expect(ages.getByRole('row', { name: '30 a 49 años 1 0 0' })).toBeVisible();
+  await expect(ages).toContainText('Promedio: 35 años');
+
+  // La tendencia se puede ver dentro del año elegido, mes a mes.
+  const trend = window.getByRole('region', { name: 'Tendencia' });
+  await expect(trend).toContainText('Hace falta más de un año');
+  await trend.getByRole('button', { name: 'Por meses de 1951' }).click();
+  await expect(trend).toContainText('De enero de 1951 a diciembre de 1951');
+  await trend.getByText('Ver como tabla').click();
+  await expect(trend.getByRole('row', { name: 'marzo de 1951 1 0 0' })).toBeVisible();
+
+  // Otro año no cuenta esa partida.
+  await window.getByLabel('Año', { exact: true }).selectOption(String(new Date().getFullYear()));
+  await expect(window.getByRole('region', { name: 'Partidas por mes en 1951' })).toHaveCount(0);
+});

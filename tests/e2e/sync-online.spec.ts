@@ -221,8 +221,8 @@ test('login sin internet: exige un primer ingreso online y luego valida localmen
   await goToBaptisms(pc.window);
   await createBaptism(pc.window, '9002', 'Bernardina');
   await expect(pc.window.getByRole('cell', { name: 'Bernardina' })).toBeVisible();
-  // El indicador se actualiza cada 5 s: esperar justo ese tiempo haría fallar la prueba al azar.
-  await expect(badge(pc.window)).toHaveText('1 sin subir', { timeout: 10_000 });
+  // Al guardar se actualiza enseguida, sin esperar la revisión periódica de cada 5 s.
+  await expect(badge(pc.window)).toHaveText('1 sin subir', { timeout: 2_000 });
 
   // ...y al volver internet se sube sin pedir de nuevo la contraseña.
   mode = 'normal';
@@ -395,4 +395,75 @@ test('si el archivo está dañado, lo aparta y reconstruye desde el servidor', a
   await expect(pc.window.getByText(/La base local se reconstruyó/)).toBeVisible();
   await pc.window.getByRole('button', { name: 'Entendido' }).click();
   await expect(pc.window.getByText(/La base local se reconstruyó/)).toBeHidden();
+});
+
+test('cerrar sesión: vuelve al login sin sincronizar, y otro usuario puede entrar', async () => {
+  const userData = newPc();
+  const pc = await login(userData);
+  const { window } = pc;
+  const sessionStatus = () =>
+    window.evaluate(async () => {
+      const response = await (window as unknown as { electronAPI: { localRequest: (method: string) => Promise<{ ok: boolean; status?: number }> } }).electronAPI.localRequest('sync.status');
+      return response.ok ? 'activa' : response.status;
+    });
+
+  await goToBaptisms(window);
+  await createBaptism(window, '9007', 'Gumersinda');
+  expect(await sessionStatus()).toBe('activa');
+
+  // Desde el menú lateral, dentro de una sección.
+  await window.getByRole('button', { name: 'Abrir menú lateral' }).click();
+  await window.getByRole('navigation', { name: 'Menú lateral' }).getByRole('button', { name: 'Cerrar sesión' }).click();
+  await expect(window.getByPlaceholder('Nombre de usuario')).toBeVisible();
+  expect(await sessionStatus()).toBe(401);
+
+  // Ninguna pantalla con sesión queda accesible.
+  await window.evaluate(() => {
+    window.location.hash = '#/dashboard';
+  });
+  await expect(window.getByPlaceholder('Nombre de usuario')).toBeVisible();
+  await expect(window.getByText(DASHBOARD_TEXT)).toHaveCount(0);
+
+  // Cerrar sesión no subió nada: otra PC todavía no tiene esa partida.
+  const other = await login(newPc());
+  await goToBaptisms(other.window);
+  await searchBaptism(other.window, 'Gumersinda');
+  await expect(other.window.getByRole('cell', { name: 'Gumersinda' })).toHaveCount(0);
+
+  // Otro usuario entra en la misma PC, y el botón también está en el menú principal.
+  await submitLogin(window, 'admin', 'admin123');
+  await expect(window.getByText('Seleccionar Parroquia')).toBeVisible({ timeout: 30_000 });
+  await window.getByRole('combobox').selectOption({ label: 'Parroquia 2' });
+  await window.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  expect(await sessionStatus()).toBe('activa');
+  await window.getByRole('button', { name: 'Cerrar sesión' }).click();
+  await expect(window.getByPlaceholder('Nombre de usuario')).toBeVisible();
+});
+
+test('cerrar sesión sin internet: conserva lo pendiente y la entrada sin conexión', async () => {
+  const userData = newPc();
+  let pc = await login(userData);
+  await closeApp(pc.app);
+
+  mode = 'sin-internet';
+  pc = await open(userData);
+  await submitLogin(pc.window, 'parroco1', 'parroco123');
+  await expect(pc.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  await goToBaptisms(pc.window);
+  await createBaptism(pc.window, '9008', 'Hermelinda');
+  await expect(pc.window.getByRole('cell', { name: 'Hermelinda' })).toBeVisible();
+  await expect(badge(pc.window)).toHaveText('1 sin subir', { timeout: 2_000 });
+
+  await pc.window.getByRole('button', { name: 'Abrir menú lateral' }).click();
+  await pc.window.getByRole('navigation', { name: 'Menú lateral' }).getByRole('button', { name: 'Cerrar sesión' }).click();
+  await expect(pc.window.getByPlaceholder('Nombre de usuario')).toBeVisible();
+
+  // Sigue sin internet: las credenciales guardadas bastan, y la partida sigue en esta PC.
+  await submitLogin(pc.window, 'parroco1', 'parroco123');
+  await expect(pc.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  await expect(badge(pc.window)).toHaveText('1 sin subir');
+  await goToBaptisms(pc.window);
+  await searchBaptism(pc.window, 'Hermelinda');
+  await expect(pc.window.getByRole('cell', { name: 'Hermelinda' })).toHaveCount(1);
 });

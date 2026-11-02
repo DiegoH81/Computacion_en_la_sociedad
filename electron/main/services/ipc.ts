@@ -8,8 +8,9 @@ import { ministers, type MinisterInput } from './ministers';
 import { readParishLogo, saveParishLogo } from './parishLogo';
 import { listParishes } from './reference';
 import { getIndexEntries, listIndexBooks } from './sacramentIndex';
-import { dismissSyncNotice, getSyncStatus, login, requireSession, resolveSyncConflict, syncNow } from './session';
+import { dismissSyncNotice, getSyncStatus, login, logout, requireSession, resolveSyncConflict, syncNow } from './session';
 import { singlePersonSacrament, type SinglePersonInput } from './singlePersonSacraments';
+import { getStatistics } from './statistics';
 import type { ConflictChoice } from './syncEngine';
 import type { SyncEntity } from './syncQueue';
 
@@ -46,6 +47,10 @@ function sacramentHandlers(prefix: string, key: string, service: Sacrament) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const handlers: Record<string, (payload: any) => unknown> = {
   'auth.login': login,
+  'auth.logout': () => {
+    logout();
+    return { success: true };
+  },
   'sync.status': () => getSyncStatus(),
   'sync.run': async () => {
     requireSession();
@@ -67,6 +72,10 @@ const handlers: Record<string, (payload: any) => unknown> = {
   'sacraments.findDuplicates': ({ tipo, excludeId, personas }: { tipo: SacramentType; excludeId?: number; personas: DuplicatePersonInput[] }) => {
     requireSession();
     return findDuplicates(getLocalDb(), tipo, excludeId, personas);
+  },
+  'statistics.get': ({ parroquiaId, anio }: { parroquiaId: unknown; anio: unknown }) => {
+    requireSession();
+    return getStatistics(getLocalDb(), positiveId(parroquiaId), anio);
   },
   'parishes.logo': ({ id }: { id: unknown }) => {
     requireSession();

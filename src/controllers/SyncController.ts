@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../lib/apiClient';
+import { LOCAL_CHANGE_EVENT } from '../lib/localClient';
 import { SyncService, type ConflictChoice, type SyncStatus } from '../services/SyncService';
 import { useSessionStore } from '../store/sessionStore';
 import { useSyncStore } from '../store/syncStore';
@@ -24,7 +25,11 @@ export function useSyncPolling(): void {
 
     refresh();
     const interval = setInterval(refresh, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+    window.addEventListener(LOCAL_CHANGE_EVENT, refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(LOCAL_CHANGE_EVENT, refresh);
+    };
   }, []);
 }
 

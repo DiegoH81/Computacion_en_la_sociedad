@@ -137,3 +137,24 @@ export function CrestIcon({ className }: IconProps) {
     </PngOrSvg>
   );
 }
+
+export function StatisticsIcon({ className }: IconProps) {
+  return (
+    <svg {...lineProps} className={className}>
+      <path d="M10 54h44" />
+      <path d="M16 54V36h8v18" />
+      <path d="M28 54V22h8v32" />
+      <path d="M40 54V30h8v24" />
+    </svg>
+  );
+}
+
+export function LogoutIcon({ className }: IconProps) {
+  return (
+    <svg {...lineProps} className={className}>
+      <path d="M26 10H14a4 4 0 0 0-4 4v36a4 4 0 0 0 4 4h12" />
+      <path d="M28 32h26" />
+      <path d="M44 20l12 12-12 12" />
+    </svg>
+  );
+}

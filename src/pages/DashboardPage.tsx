@@ -1,6 +1,7 @@
 // src/pages/DashboardPage.tsx
 
 import { useNavigate } from 'react-router-dom';
+import { LogoutButton } from '../components/features/LogoutButton';
 import { SyncStatusBadge } from '../components/features/SyncStatusBadge';
 import { DecorativeWave } from '../components/ui/DecorativeWave';
 import { MenuActionButton } from '../components/ui/MenuActionButton';
@@ -11,6 +12,7 @@ import {
   MarriageIcon,
   ParishIcon,
   SettingsIcon,
+  StatisticsIcon,
   UserIcon,
 } from '../components/ui/MenuIcons';
 import { useSessionStore } from '../store/sessionStore';
@@ -51,6 +53,11 @@ export function DashboardPage() {
               <UserIcon className="h-12 w-12" />
               {usuarioNombre}
             </div>
+
+            <LogoutButton
+              className="flex shrink-0 items-center gap-2 rounded-lg bg-dark-app px-3 py-2 text-sm font-semibold whitespace-nowrap text-white hover:opacity-90"
+              iconClassName="h-5 w-5"
+            />
           </div>
         </header>
 
@@ -59,7 +66,7 @@ export function DashboardPage() {
             ¿Qué gestión desea realizar el día de hoy?
           </p>
 
-          <div className="grid w-full grid-cols-4 gap-6">
+          <div className="grid w-full grid-cols-5 gap-4">
             <MenuActionButton
               icon={<ParishIcon className={ICON_STYLES} />}
               label="Cambiar parroquia"
@@ -79,6 +86,11 @@ export function DashboardPage() {
               icon={<MarriageIcon className={ICON_STYLES} />}
               label="Índice y partida de matrimonio"
               onClick={() => navigate('/matrimonios')}
+            />
+            <MenuActionButton
+              icon={<StatisticsIcon className={ICON_STYLES} />}
+              label="Estadísticas"
+              onClick={() => navigate('/estadisticas')}
             />
           </div>
         </main>

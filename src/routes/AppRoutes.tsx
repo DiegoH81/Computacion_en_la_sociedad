@@ -9,6 +9,7 @@ import { ConfirmationsPage } from '../pages/ConfirmationsPage';
 import { UsersPage } from '../pages/UsersPage';
 import { SettingsPage } from '../pages/SettingsPage'
 import { SyncPage } from '../pages/SyncPage';
+import { StatisticsPage } from '../pages/StatisticsPage';
 
 import { useSessionStore } from '../store/sessionStore';
 
@@ -108,6 +109,15 @@ export function AppRoutes() {
         <ProtectedRoute>
           <SettingsPage />
         </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/estadisticas"
+        element={
+          <ProtectedRoute>
+            <StatisticsPage />
+          </ProtectedRoute>
         }
       />
 

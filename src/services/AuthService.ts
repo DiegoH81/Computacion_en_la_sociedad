@@ -21,6 +21,10 @@ export const AuthService = {
     return localRequest<LoginResponse>('auth.login', { username, password });
   },
 
+  logout(): Promise<{ success: true }> {
+    return localRequest<{ success: true }>('auth.logout');
+  },
+
   getParishes(): Promise<{ parishes: Parish[] }> {
     return localRequest<{ parishes: Parish[] }>('parishes.list');
   },

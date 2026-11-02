@@ -204,6 +204,18 @@ export async function syncBeforeQuit(limitMs: number): Promise<void> {
   await Promise.race([syncNow(), new Promise((resolve) => setTimeout(resolve, limitMs))]);
 }
 
+/**
+ * Vuelve al estado previo al login: no sincroniza ni toca la base local. Lo pendiente sigue en la
+ * cola, y la verificación guardada permite volver a entrar sin internet.
+ */
+export function logout(): void {
+  stopPeriodicSync();
+  session = null;
+  credentials = null;
+  mode = 'sin-conexion';
+  lastError = null;
+}
+
 export function stopPeriodicSync(): void {
   if (timer) clearInterval(timer);
   timer = null;

@@ -1,6 +1,7 @@
 import { AuthService } from '../services/AuthService';
 import { ApiError } from '../lib/apiClient';
 import { useSessionStore } from '../store/sessionStore';
+import { useSyncStore } from '../store/syncStore';
 
 export interface LoginControllerResult {
   success: boolean;
@@ -49,5 +50,17 @@ export async function handleLogin(
       return { success: false, errorMessage: error.message };
     }
     return { success: false, errorMessage: 'Ocurrió un error inesperado.' };
+  }
+}
+
+/** Aunque falle el cierre en Electron, la pantalla no debe seguir mostrando la sesión. */
+export async function handleLogout(): Promise<void> {
+  try {
+    await AuthService.logout();
+  } catch (error) {
+    console.error('No se pudo cerrar la sesión local:', error);
+  } finally {
+    useSyncStore.getState().setStatus(null);
+    useSessionStore.getState().clearSession();
   }
 }

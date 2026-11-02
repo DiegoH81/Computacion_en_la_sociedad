@@ -50,6 +50,15 @@ test('usuario de parroquia inicia sesión y llega directo al dashboard', async (
   await expect(window.getByText('¿Qué gestión desea realizar el día de hoy?')).toBeVisible();
   await expect(window.getByText('Parroquia 1', { exact: true })).toBeVisible();
 
+  // Al entrar no se le pide elegir parroquia.
+  await expect(window.getByText('Seleccionar Parroquia')).toHaveCount(0);
+
+  // Si quiere consultar otra, puede cambiarla desde el menú lateral de cualquier sección.
+  await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
+  await window.getByRole('button', { name: 'Abrir menú lateral' }).click();
+  await window.getByRole('navigation', { name: 'Menú lateral' }).getByRole('button', { name: 'Cambiar parroquia' }).click();
+  await expect(window.getByText('Seleccionar Parroquia')).toBeVisible();
+
   await app.close();
 });
 
@@ -67,6 +76,13 @@ test('admin inicia sesión y debe seleccionar parroquia antes del dashboard', as
 
   await expect(window.getByText('¿Qué gestión desea realizar el día de hoy?')).toBeVisible();
   await expect(window.getByText('Parroquia 2')).toBeVisible();
+
+  // Puede volver a elegir cuando quiera.
+  await window.getByRole('button', { name: 'Cambiar parroquia' }).click();
+  await expect(window.getByText('Seleccionar Parroquia')).toBeVisible();
+  await window.getByRole('combobox').selectOption({ label: 'Parroquia 1' });
+  await window.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(window.getByText('Parroquia 1', { exact: true })).toBeVisible();
 
   await app.close();
 });
