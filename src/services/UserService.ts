@@ -1,72 +1,43 @@
+import type { SearchFilters, SearchPage, User } from '../../shared/models';
 import { apiRequest } from '../lib/apiClient';
-
-export interface UserListItem {
-  id: number;
-  username: string;
-  nombre: string;
-  apellido_paterno: string;
-  apellido_materno: string;
-  parroquia_nombre: string | null; // null en cuentas admin
-  activo: number;
-}
-
-export interface SearchUsersParams {
-  nombre?: string;
-  apellidoPaterno?: string;
-  apellidoMaterno?: string;
-  sortBy: 'nombre' | 'apellido_paterno' | 'apellido_materno';
-  sortDirection: 'asc' | 'desc';
-  page: number;
-}
-
-export type ParishChoiceBody =
-  | { kind: 'existing'; parroquiaId: number }
-  | { kind: 'new'; nombre: string };
-
-export interface CreateUserBody {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  username: string;
-  password: string;
-  parroquia: ParishChoiceBody;
-}
-
-export interface UpdateUserBody {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  password?: string; // ausente = conservar la contraseña actual
-}
 
 const PAGE_SIZE = 20;
 
+/** Gestión de cuentas en el Worker (solo admin). Se manda y recibe el model User de shared/models.ts. */
 export const UserService = {
-  search(
-    params: SearchUsersParams,
-    token: string,
-  ): Promise<{ users: UserListItem[]; totalPages: number }> {
+  search(filters: SearchFilters, token: string): Promise<SearchPage<User>> {
     const query = new URLSearchParams();
-    if (params.nombre) query.set('nombre', params.nombre);
-    if (params.apellidoPaterno) query.set('apellidoPaterno', params.apellidoPaterno);
-    if (params.apellidoMaterno) query.set('apellidoMaterno', params.apellidoMaterno);
-    query.set('sortBy', params.sortBy);
-    query.set('sortDirection', params.sortDirection);
-    query.set('page', String(params.page));
-    query.set('pageSize', String(PAGE_SIZE));
+    if (filters.nombres) query.set('nombres', filters.nombres);
+    if (filters.apellido_paterno) query.set('apellido_paterno', filters.apellido_paterno);
+    if (filters.apellido_materno) query.set('apellido_materno', filters.apellido_materno);
+    if (filters.parroquia_id) query.set('parroquia_id', String(filters.parroquia_id));
+    if (filters.orden) query.set('orden', filters.orden);
+    if (filters.direccion) query.set('direccion', filters.direccion);
+    query.set('pagina', String(filters.pagina ?? 1));
+    query.set('por_pagina', String(PAGE_SIZE));
 
     return apiRequest(`/api/users?${query.toString()}`, { token });
   },
 
-  create(body: CreateUserBody, token: string): Promise<{ id: number }> {
-    return apiRequest('/api/users', { method: 'POST', body, token });
+  create(user: User, token: string): Promise<{ id: number }> {
+    return apiRequest('/api/users', { method: 'POST', body: user, token });
   },
 
-  update(userId: number, body: UpdateUserBody, token: string): Promise<{ success: true }> {
-    return apiRequest(`/api/users/${userId}`, { method: 'PUT', body, token });
+  update(user: User, token: string): Promise<{ success: true }> {
+    return apiRequest(`/api/users/${user.id}`, { method: 'PUT', body: user, token });
   },
 
   toggleActive(userId: number, token: string): Promise<{ success: true }> {
     return apiRequest(`/api/users/${userId}/toggle-active`, { method: 'PATCH', token });
+  },
+
+  /** Si el admin de la sesión es el principal: el único que crea y modifica a otros admins. */
+  me(token: string): Promise<{ principal: boolean }> {
+    return apiRequest('/api/users/me', { token });
+  },
+
+  /** Pasa la marca de principal a otro admin activo. Solo la puede pasar el principal. */
+  makePrincipal(userId: number, token: string): Promise<{ success: true }> {
+    return apiRequest(`/api/users/${userId}/make-principal`, { method: 'PATCH', token });
   },
 };

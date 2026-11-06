@@ -5,7 +5,7 @@ import { useSyncStore } from '../../store/syncStore';
 
 function label(status: SyncStatus): string {
   if (status.conflictos + status.rechazados > 0) return 'Revisar sincronización';
-  if (status.enCurso) return 'Sincronizando…';
+  if (status.en_curso) return 'Sincronizando…';
   if (status.modo === 'requiere-login') return 'Inicie sesión de nuevo';
   if (status.modo === 'error') return 'Error al sincronizar';
   if (status.pendientes > 0) return `${status.pendientes} sin subir`;

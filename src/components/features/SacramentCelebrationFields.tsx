@@ -1,3 +1,4 @@
+import type { Baptism, Minister } from '../../../shared/models';
 import { DateSelect } from '../ui/DateSelect';
 import { Field } from '../ui/Field';
 import { FormPanel } from '../ui/FormPanel';
@@ -5,26 +6,12 @@ import { StackedFormField } from '../ui/StackedFormField';
 import { MarginalNotesButton } from './MarginalNotesButton';
 import { PriestSelector } from './PriestSelector';
 
-export interface SacramentCelebrationData {
-  fechaCelebracion: string;
-  celebranteId: number | null;
-  padrino: string;
-  madrina: string;
-  anotaciones: string;
-}
-
-interface PriestOption {
-  id: number;
-  nombreCompleto: string;
-  parroquiaNombre: string;
-}
-
 interface SacramentCelebrationFieldsProps {
   title: string; // ej. "Datos de bautismo" o "Datos de confirmación"
   fechaLabel: string; // ej. "Fecha de bautizo" o "Fecha de confirmación"
-  values: SacramentCelebrationData;
-  onChange: (values: SacramentCelebrationData) => void;
-  priestOptions: PriestOption[];
+  record: Baptism;
+  onChange: (record: Baptism) => void;
+  priestOptions: Minister[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
   priestParishId?: number;
@@ -32,10 +19,11 @@ interface SacramentCelebrationFieldsProps {
   onToggleNotes: () => void;
 }
 
+/** La celebración de un bautismo o una confirmación: fecha, celebrante y padrinos. */
 export function SacramentCelebrationFields({
   title,
   fechaLabel,
-  values,
+  record,
   onChange,
   priestOptions,
   onSearchPriest,
@@ -44,27 +32,29 @@ export function SacramentCelebrationFields({
   notesOpen,
   onToggleNotes,
 }: SacramentCelebrationFieldsProps) {
-  function update<K extends keyof SacramentCelebrationData>(key: K, value: SacramentCelebrationData[K]) {
-    onChange({ ...values, [key]: value });
-  }
+  const sacramento = record.sacramento;
 
   return (
     <FormPanel title={title}>
-      <StackedFormField label={fechaLabel}>
-        <DateSelect ariaLabel={fechaLabel} value={values.fechaCelebracion} onChange={(v) => update('fechaCelebracion', v)} />
+      <StackedFormField label={fechaLabel} isGroup>
+        <DateSelect
+          ariaLabel={fechaLabel}
+          value={sacramento.fecha_evento ?? ''}
+          onChange={(v) => onChange({ ...record, sacramento: { ...sacramento, fecha_evento: v } })}
+        />
       </StackedFormField>
       <StackedFormField label="Celebrante">
         <PriestSelector
-          value={values.celebranteId}
-          onSelect={(id) => update('celebranteId', id)}
+          value={sacramento.ministro_id}
+          onSelect={(id) => onChange({ ...record, sacramento: { ...sacramento, ministro_id: id } })}
           onSearch={onSearchPriest}
           options={priestOptions}
           isLoading={isSearchingPriests}
           parroquiaId={priestParishId}
         />
       </StackedFormField>
-      <Field variant="panel" label="Padrino" value={values.padrino} onChange={(v) => update('padrino', v)} />
-      <Field variant="panel" label="Madrina" value={values.madrina} onChange={(v) => update('madrina', v)} />
+      <Field variant="panel" label="Padrino" value={record.padrino_1 ?? ''} onChange={(v) => onChange({ ...record, padrino_1: v })} />
+      <Field variant="panel" label="Madrina" value={record.padrino_2 ?? ''} onChange={(v) => onChange({ ...record, padrino_2: v })} />
       <div className="mt-auto pt-3">
         <MarginalNotesButton isOpen={notesOpen} onToggle={onToggleNotes} />
       </div>

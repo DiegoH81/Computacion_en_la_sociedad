@@ -17,7 +17,7 @@ export interface Statistics {
 }
 
 export const StatisticsService = {
-  get(parroquiaId: number, anio: number | undefined): Promise<Statistics> {
-    return localRequest('statistics.get', { parroquiaId, anio });
+  get(parroquia_id: number, anio: number | undefined): Promise<Statistics> {
+    return localRequest('statistics.get', { parroquia_id, anio });
   },
 };

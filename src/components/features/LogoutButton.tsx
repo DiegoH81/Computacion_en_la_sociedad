@@ -18,6 +18,7 @@ export function LogoutButton({ className, iconClassName }: LogoutButtonProps) {
   return (
     <button type="button" onClick={logout} className={className}>
       <LogoutIcon className={iconClassName} />
+      Cerrar sesión
     </button>
   );
 }

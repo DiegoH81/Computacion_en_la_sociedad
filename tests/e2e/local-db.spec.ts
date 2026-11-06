@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { openLocalDatabase } from '../../electron/main/localDb/database';
+import { open_local_database } from '../../electron/main/db/database';
 
 test('la app crea la base local cifrada y la reabre con la clave guardada', async () => {
   const userData = mkdtempSync(path.join(tmpdir(), 'prelatura-e2e-'));
@@ -37,7 +37,7 @@ test('la app crea la base local cifrada y la reabre con la clave guardada', asyn
     expect(readFileSync(keyPath).equals(keyBefore)).toBe(true);
 
     // Con la clave que guardó la app, el archivo abre y ya tiene el esquema completo.
-    const db = openLocalDatabase(databasePath, key);
+    const db = open_local_database(databasePath, key);
     const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).pluck().all();
     db.close();
     expect(tables).toEqual(expect.arrayContaining(['ministros', 'personas', 'sacramentos', 'cambios_persona']));

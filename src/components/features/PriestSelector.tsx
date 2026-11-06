@@ -1,20 +1,15 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { createPriest } from '../../controllers/PriestController';
-import type { PriestFormValues } from '../../services/PriestService';
+import type { Minister } from '../../../shared/models';
+import { createPriest, ministerName } from '../../controllers/PriestController';
+import { emptyMinister } from '../../lib/emptyRecords';
 import { PriestFormModal } from './PriestFormModal';
-
-interface PriestOption {
-  id: number;
-  nombreCompleto: string;
-  parroquiaNombre: string;
-}
 
 interface PriestSelectorProps {
   value: number | null;
   onSelect: (priestId: number) => void;
   onSearch: (query: string) => void;
-  options: PriestOption[];
+  options: Minister[];
   isLoading: boolean;
   /** Parroquia de la partida que se edita. Por defecto, la activa. */
   parroquiaId?: number;
@@ -42,13 +37,13 @@ export function PriestSelector({
     onSearch(newQuery);
   }
 
-  function handleSelect(option: PriestOption) {
-    onSelect(option.id);
-    setQuery(option.nombreCompleto);
+  function handleSelect(option: Minister) {
+    onSelect(option.id as number);
+    setQuery(ministerName(option));
     setIsOpen(false);
   }
 
-  async function handleCreate(values: PriestFormValues) {
+  async function handleCreate(values: Minister) {
     setIsSaving(true);
     setCreateError(null);
     const result = await createPriest(values, parroquiaId);
@@ -60,7 +55,7 @@ export function PriestSelector({
     }
 
     onSelect(result.id);
-    setQuery([values.nombre, values.apellidoPaterno, values.apellidoMaterno].map((name) => name.trim()).join(' '));
+    setQuery(ministerName({ ...values, nombre: values.nombre.trim(), apellido_paterno: values.apellido_paterno.trim(), apellido_materno: values.apellido_materno.trim() }));
     setIsOpen(false);
     setIsCreating(false);
   }
@@ -69,7 +64,7 @@ export function PriestSelector({
     <div className="relative">
       <input
         type="text"
-        value={isOpen ? query : (selectedOption?.nombreCompleto ?? query)}
+        value={isOpen ? query : (selectedOption ? ministerName(selectedOption) : query)}
         onChange={(e) => handleQueryChange(e.target.value)}
         onFocus={() => {
           setIsOpen(true);
@@ -96,8 +91,8 @@ export function PriestSelector({
                   onClick={() => handleSelect(option)}
                   className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50"
                 >
-                  <span className="font-medium text-slate-800">{option.nombreCompleto}</span>
-                  <span className="text-xs text-slate-500">{option.parroquiaNombre}</span>
+                  <span className="font-medium text-slate-800">{ministerName(option)}</span>
+                  <span className="text-xs text-slate-500">{option.parroquia?.nombre}</span>
                 </button>
               ))}
           </div>
@@ -120,7 +115,7 @@ export function PriestSelector({
         createPortal(
           <PriestFormModal
             mode="create"
-            initialValues={{ titulo: '', nombre: query.trim(), apellidoPaterno: '', apellidoMaterno: '' }}
+            initialValues={{ ...emptyMinister(), nombre: query.trim() }}
             errorMessage={createError}
             onSave={handleCreate}
             onCancel={() => setIsCreating(false)}

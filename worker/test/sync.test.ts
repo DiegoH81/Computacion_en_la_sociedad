@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import { signJwt } from '../src/lib/jwt';
-import type { CambioEntrante, MinistroSync, PartidaSync, ResultadoSync } from '../src/services/syncTypes';
+import { sign_jwt } from '../src/utils/crypto';
+import type { ChangeResult, MinisterData, RecordData, SyncChange } from '../../shared/sync';
 import { resetDatabase } from './helpers/resetDatabase';
 
 const db = () => env.prelatura_db;
 const DEVICE = '11111111-2222-4333-8444-555555555555';
 const KEY = 'ab'.repeat(32);
 
-const tokenParish1 = () => signJwt({ usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
-const tokenParish2 = () => signJwt({ usuarioId: 2, rol: 'usuario_parroquia', parroquiaId: 2 }, env.JWT_SECRET);
-const tokenAdmin = () => signJwt({ usuarioId: 3, rol: 'admin', parroquiaId: null }, env.JWT_SECRET);
+const tokenParish1 = () => sign_jwt({ usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
+const tokenParish2 = () => sign_jwt({ usuarioId: 2, rol: 'usuario_parroquia', parroquiaId: 2 }, env.JWT_SECRET);
+const tokenAdmin = () => sign_jwt({ usuarioId: 3, rol: 'admin', parroquiaId: null }, env.JWT_SECRET);
 
 function api(path: string, token: string, init: { method?: string; body?: unknown } = {}) {
   return SELF.fetch(`https://example.com${path}`, {
@@ -20,16 +20,16 @@ function api(path: string, token: string, init: { method?: string; body?: unknow
   });
 }
 
-async function push(token: string, cambios: CambioEntrante[]): Promise<ResultadoSync[]> {
+async function push(token: string, cambios: SyncChange[]): Promise<ChangeResult[]> {
   const response = await api('/api/sync/push', token, { method: 'POST', body: { cambios } });
   expect(response.status).toBe(200);
-  return ((await response.json()) as { resultados: ResultadoSync[] }).resultados;
+  return ((await response.json()) as { resultados: ChangeResult[] }).resultados;
 }
 
 async function pull(token: string, cursor = 0) {
   const response = await api(`/api/sync/pull?cursor=${cursor}`, token);
   expect(response.status).toBe(200);
-  return (await response.json()) as { partidas: PartidaSync[]; cursor: number; hayMas: boolean };
+  return (await response.json()) as { partidas: RecordData[]; cursor: number; hayMas: boolean };
 }
 
 const persona = (client_id: string, nombres = 'Diego') => ({
@@ -45,7 +45,7 @@ const persona = (client_id: string, nombres = 'Diego') => ({
   madre: null,
 });
 
-const bautismo = (overrides: Partial<PartidaSync> = {}): PartidaSync => ({
+const bautismo = (overrides: Partial<RecordData> = {}): RecordData => ({
   tipo: 'bautismo',
   client_id: 'partida-1',
   parroquia_id: 1,
@@ -66,7 +66,7 @@ const bautismo = (overrides: Partial<PartidaSync> = {}): PartidaSync => ({
   ...overrides,
 });
 
-const matrimonio = (overrides: Partial<PartidaSync> = {}): PartidaSync => ({
+const matrimonio = (overrides: Partial<RecordData> = {}): RecordData => ({
   ...bautismo(),
   tipo: 'matrimonio',
   client_id: 'matrimonio-1',
@@ -75,7 +75,7 @@ const matrimonio = (overrides: Partial<PartidaSync> = {}): PartidaSync => ({
   ...overrides,
 });
 
-const cambio = (datos: PartidaSync | MinistroSync, version_base: number | null, cola_id = 'cola-1'): CambioEntrante => ({
+const cambio = (datos: RecordData | MinisterData, version_base: number | null, cola_id = 'cola-1'): SyncChange => ({
   entidad: 'tipo' in datos ? datos.tipo : 'ministro',
   client_id: datos.client_id,
   version_base,
@@ -83,7 +83,7 @@ const cambio = (datos: PartidaSync | MinistroSync, version_base: number | null, 
   datos,
 });
 
-const resultado = (r: ResultadoSync) => r.estado;
+const resultado = (r: ChangeResult) => r.estado;
 const count = async (table: string) =>
   (await db().prepare(`SELECT COUNT(*) AS total FROM ${table}`).first<{ total: number }>())?.total;
 
@@ -280,7 +280,7 @@ describe('subir cambios', () => {
 });
 
 describe('ministros', () => {
-  const ministro = (overrides: Partial<MinistroSync> = {}): MinistroSync => ({
+  const ministro = (overrides: Partial<MinisterData> = {}): MinisterData => ({
     client_id: 'ministro-2',
     parroquia_id: 1,
     titulo: 'Padre',
@@ -383,7 +383,7 @@ describe('descargar', () => {
     await push(token, [cambio(bautismo(), null)]);
 
     const response = await api('/api/sync/record?entidad=bautismo&client_id=partida-1', token);
-    expect(((await response.json()) as { registro: PartidaSync }).registro).toMatchObject({ client_id: 'partida-1', version: 1 });
+    expect(((await response.json()) as { registro: RecordData }).registro).toMatchObject({ client_id: 'partida-1', version: 1 });
     expect((await api('/api/sync/record?entidad=bautismo&client_id=nada', token)).status).toBe(404);
   });
 

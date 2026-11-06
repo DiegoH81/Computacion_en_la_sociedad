@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import type { Marriage, Minister, Person } from '../../../shared/models';
+import { emptyMarriage } from '../../lib/emptyRecords';
+import { newChanges, personOptions, recordedChanges, type CorrectionDraft } from '../../lib/personCorrections';
 import { DateSelect } from '../ui/DateSelect';
 import { FormDialog } from '../ui/FormDialog';
 import { FormInput } from '../ui/FormInput';
@@ -6,96 +9,49 @@ import { FormSectionTitle } from '../ui/FormSectionTitle';
 import { InlineFormField } from '../ui/InlineFormField';
 import { DuplicateWarning } from './DuplicateWarning';
 import { MarginalNotesButton } from './MarginalNotesButton';
-import { useDuplicateCheck } from './useDuplicateCheck';
 import { MarginalNotesSection } from './MarginalNotesSection';
-import { useMarginalNotes } from './useMarginalNotes';
-import { spouseOptions, type CorrectionDraft } from '../../lib/personCorrections';
-import { SacramentRegisterPanel, type SacramentRecordInfo } from './SacramentRegisterPanel';
-import { MarriageFamilyFields, MarriagePersonFields, type PersonMarriageData } from './MarriagePersonFields';
+import { MarriageFamilyFields, MarriagePersonFields } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
-
-const EMPTY_PERSON: PersonMarriageData = {
-  dni: '',
-  nombre: '',
-  apellidoPaterno: '',
-  apellidoMaterno: '',
-  lugarNacimiento: '',
-  fechaNacimiento: '',
-  edad: '',
-  parroquiaBautismo: '',
-  fechaBautismo: '',
-  padreNombre: '',
-  madreNombre: '',
-};
-
-export interface MarriageFormValues {
-  fechaSacramento: string;
-  numeroLibro: string;
-  numeroFolio: string;
-  numeroRegistro: string;
-  esposo: PersonMarriageData;
-  esposa: PersonMarriageData;
-  fechaMatrimonio: string;
-  celebranteId: number | null;
-  lugarMatrimonio: string;
-  testigo1: string;
-  testigo2: string;
-  testigo3: string;
-  testigo4: string;
-  notasMarginales: string;
-  correcciones: CorrectionDraft[];
-}
-
-const EMPTY_VALUES: MarriageFormValues = {
-  fechaSacramento: '',
-  numeroLibro: '',
-  numeroFolio: '',
-  numeroRegistro: '',
-  esposo: EMPTY_PERSON,
-  esposa: EMPTY_PERSON,
-  fechaMatrimonio: '',
-  celebranteId: null,
-  lugarMatrimonio: '',
-  testigo1: '',
-  testigo2: '',
-  testigo3: '',
-  testigo4: '',
-  notasMarginales: '',
-  correcciones: [],
-};
+import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { useDuplicateCheck } from './useDuplicateCheck';
+import { useMarginalNotes } from './useMarginalNotes';
 
 const TESTIGOS = [
-  { key: 'testigo1', label: 'Testigo 1:' },
-  { key: 'testigo2', label: 'Testigo 2:' },
-  { key: 'testigo3', label: 'Testigo 3:' },
-  { key: 'testigo4', label: 'Testigo 4:' },
+  { key: 'testigo_1', label: 'Testigo 1:' },
+  { key: 'testigo_2', label: 'Testigo 2:' },
+  { key: 'testigo_3', label: 'Testigo 3:' },
+  { key: 'testigo_4', label: 'Testigo 4:' },
 ] as const;
 
-interface PriestOption {
-  id: number;
-  nombreCompleto: string;
-  parroquiaNombre: string;
-}
-
 interface MarriageFormProps {
-  mode: 'create' | 'edit';
-  initialValues?: MarriageFormValues;
+  /** La partida que se edita, tal como llegó de Electron. Sin ella, se crea una nueva. */
+  initialRecord?: Marriage;
   parroquiaNombre: string;
-  recordInfo?: SacramentRecordInfo;
   errorMessage?: string | null;
-  onSave: (values: MarriageFormValues) => void;
+  onSave: (record: Marriage) => void;
   onCancel: () => void;
   isLoading: boolean;
-  priestOptions: PriestOption[];
+  priestOptions: Minister[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
 }
 
+function duplicateQuery(para: string, person: Person) {
+  return {
+    para,
+    dni: person.dni,
+    nombres: person.nombres,
+    apellido_paterno: person.apellido_paterno,
+    apellido_materno: person.apellido_materno,
+    fecha_nacimiento: person.fecha_nacimiento,
+    padre: person.padre,
+    madre: person.madre,
+  };
+}
+
 export function MarriageForm({
-  mode,
-  initialValues,
+  initialRecord,
   parroquiaNombre,
-  recordInfo,
   errorMessage,
   onSave,
   onCancel,
@@ -104,92 +60,73 @@ export function MarriageForm({
   onSearchPriest,
   isSearchingPriests,
 }: MarriageFormProps) {
-  const [values, setValues] = useState<MarriageFormValues>(initialValues ?? EMPTY_VALUES);
-  const notes = useMarginalNotes(Boolean(initialValues?.notasMarginales || recordInfo?.correcciones.length));
+  const [record, setRecord] = useState<Marriage>(initialRecord ?? emptyMarriage());
+  const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
+  const recorded = [...recordedChanges(record.conyuge_1, 'conyuge_1'), ...recordedChanges(record.conyuge_2, 'conyuge_2')];
+  const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length));
 
-  const duplicates = useDuplicateCheck('matrimonio', recordInfo?.sacramentoId, [
-    {
-      para: 'Esposo',
-      dni: values.esposo.dni,
-      nombre: values.esposo.nombre,
-      apellidoPaterno: values.esposo.apellidoPaterno,
-      apellidoMaterno: values.esposo.apellidoMaterno,
-      fechaNacimiento: values.esposo.fechaNacimiento,
-      padreNombre: values.esposo.padreNombre,
-      madreNombre: values.esposo.madreNombre,
-    },
-    {
-      para: 'Esposa',
-      dni: values.esposa.dni,
-      nombre: values.esposa.nombre,
-      apellidoPaterno: values.esposa.apellidoPaterno,
-      apellidoMaterno: values.esposa.apellidoMaterno,
-      fechaNacimiento: values.esposa.fechaNacimiento,
-      padreNombre: values.esposa.padreNombre,
-      madreNombre: values.esposa.madreNombre,
-    },
+  const duplicates = useDuplicateCheck('matrimonio', record.sacramento.id, [
+    duplicateQuery('Esposo', record.conyuge_1),
+    duplicateQuery('Esposa', record.conyuge_2),
   ]);
 
-  function update<K extends keyof MarriageFormValues>(key: K, value: MarriageFormValues[K]) {
-    setValues((prev) => ({ ...prev, [key]: value }));
-  }
+  const sacramento = record.sacramento;
+  const updateSacrament = (changes: Partial<Marriage['sacramento']>) =>
+    setRecord((prev) => ({ ...prev, sacramento: { ...prev.sacramento, ...changes } }));
 
-  const spouses = {
-    esposo: values.esposo,
-    esposa: values.esposa,
-    onChangeEsposo: (person: PersonMarriageData) => update('esposo', person),
-    onChangeEsposa: (person: PersonMarriageData) => update('esposa', person),
-  };
+  function handleSave() {
+    // Las correcciones nuevas de cada cónyuge se agregan a las ya registradas (que Electron no vuelve a guardar).
+    onSave({
+      ...record,
+      conyuge_1: { ...record.conyuge_1, cambios: [...record.conyuge_1.cambios, ...newChanges(drafts, 'conyuge_1')] },
+      conyuge_2: { ...record.conyuge_2, cambios: [...record.conyuge_2.cambios, ...newChanges(drafts, 'conyuge_2')] },
+    });
+  }
 
   return (
     <FormDialog
-      title={mode === 'create' ? 'Agregar partida' : 'Editar partida'}
-      onSave={() => onSave(values)}
+      title={initialRecord ? 'Editar partida' : 'Agregar partida'}
+      onSave={handleSave}
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
       notice={<DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />}
     >
       <FormSectionTitle>Datos de registro en el libro</FormSectionTitle>
-      <SacramentRegisterPanel
-        values={values}
-        onChange={(changes) => setValues((prev) => ({ ...prev, ...changes }))}
-        parroquiaNombre={parroquiaNombre}
-        recordInfo={recordInfo}
-      />
+      <SacramentRegisterPanel sacramento={sacramento} onChange={updateSacrament} parroquiaNombre={parroquiaNombre} />
 
       <FormSectionTitle>Datos personales de los cónyuges</FormSectionTitle>
-      <MarriagePersonFields {...spouses} />
+      <MarriagePersonFields marriage={record} onChange={setRecord} />
 
       <FormSectionTitle>Familiares</FormSectionTitle>
-      <MarriageFamilyFields {...spouses} />
+      <MarriageFamilyFields marriage={record} onChange={setRecord} />
 
       <div className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-xl bg-table-panel p-4 sm:grid-cols-2">
-        <InlineFormField label="Fecha de matrimonio:">
+        <InlineFormField label="Fecha de matrimonio:" isGroup>
           <DateSelect
             ariaLabel="Fecha de matrimonio"
-            value={values.fechaMatrimonio}
-            onChange={(v) => update('fechaMatrimonio', v)}
+            value={sacramento.fecha_evento ?? ''}
+            onChange={(v) => updateSacrament({ fecha_evento: v })}
           />
         </InlineFormField>
         <InlineFormField label="Lugar de matrimonio:">
-          <FormInput value={values.lugarMatrimonio} onChange={(e) => update('lugarMatrimonio', e.target.value)} />
+          <FormInput value={record.lugar ?? ''} onChange={(e) => setRecord((prev) => ({ ...prev, lugar: e.target.value }))} />
         </InlineFormField>
         <div className="sm:col-span-2">
           <InlineFormField label="Celebrante:">
             <PriestSelector
-              value={values.celebranteId}
-              onSelect={(id) => update('celebranteId', id)}
+              value={sacramento.ministro_id}
+              onSelect={(id) => updateSacrament({ ministro_id: id })}
               onSearch={onSearchPriest}
               options={priestOptions}
               isLoading={isSearchingPriests}
-              parroquiaId={recordInfo?.parroquiaId}
+              parroquiaId={sacramento.parroquia_id}
             />
           </InlineFormField>
         </div>
         {TESTIGOS.map(({ key, label }) => (
           <InlineFormField key={key} label={label}>
-            <FormInput value={values[key]} onChange={(e) => update(key, e.target.value)} />
+            <FormInput value={record[key] ?? ''} onChange={(e) => setRecord((prev) => ({ ...prev, [key]: e.target.value }))} />
           </InlineFormField>
         ))}
 
@@ -201,12 +138,12 @@ export function MarriageForm({
       {notes.isOpen && (
         <MarginalNotesSection
           sectionRef={notes.sectionRef}
-          notes={values.notasMarginales}
-          onNotesChange={(v) => update('notasMarginales', v)}
-          options={spouseOptions(values.esposo, values.esposa)}
-          corrections={values.correcciones}
-          onCorrectionsChange={(v) => update('correcciones', v)}
-          recorded={recordInfo?.correcciones}
+          notes={sacramento.anotaciones ?? ''}
+          onNotesChange={(anotaciones) => updateSacrament({ anotaciones })}
+          options={[...personOptions(record.conyuge_1, 'conyuge_1'), ...personOptions(record.conyuge_2, 'conyuge_2')]}
+          corrections={drafts}
+          onCorrectionsChange={setDrafts}
+          recorded={recorded}
         />
       )}
     </FormDialog>

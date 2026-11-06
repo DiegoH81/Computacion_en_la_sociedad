@@ -30,11 +30,14 @@ function renderEdit() {
       mode="edit"
       parishes={PARISHES}
       initialValues={{
-        nombre: 'Ana',
-        apellidoPaterno: 'Quispe',
-        apellidoMaterno: 'Mamani',
+        id: 7,
         username: 'ana.quispe',
-        parroquiaNombre: 'Parroquia 2',
+        rol: 'usuario_parroquia',
+        parroquia_id: 2,
+        nombre: 'Ana',
+        apellido_paterno: 'Quispe',
+        apellido_materno: 'Mamani',
+        parroquia_nombre: 'Parroquia 2',
       }}
       onSave={onSave}
       onCancel={vi.fn()}
@@ -92,10 +95,11 @@ describe('UserFormModal', () => {
           nombre: 'Ana',
           username: 'ana.quispe',
           password: 'passwordNueva123',
-          confirmPassword: 'passwordNueva123',
-          parroquia: { kind: 'existing', parroquiaId: 2 },
+          parroquia_id: 2,
         }),
+        'passwordNueva123',
       );
+      expect(onSave.mock.calls[0][0]).not.toHaveProperty('parroquia_nueva');
     });
 
     it('entrega una parroquia nueva con el nombre escrito', () => {
@@ -106,18 +110,33 @@ describe('UserFormModal', () => {
       submit();
 
       expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ parroquia: { kind: 'new', nombre: 'Parroquia Nueva' } }),
+        expect.objectContaining({ parroquia_id: null, parroquia_nueva: 'Parroquia Nueva' }),
+        '',
       );
     });
 
-    it('sin elegir parroquia entrega parroquiaId null (el Controller lo rechaza)', () => {
+    it('sin elegir parroquia entrega parroquia_id null (el Controller lo rechaza)', () => {
       const { onSave } = renderCreate();
 
       submit();
 
-      expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ parroquia: { kind: 'existing', parroquiaId: null } }),
-      );
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ parroquia_id: null }), '');
+    });
+
+    it('solo ofrece crear administradores si se permite', () => {
+      renderCreate();
+      expect(screen.queryByLabelText('Tipo de cuenta')).toBeNull();
+    });
+
+    it('un administrador no lleva parroquia: se oculta el selector y se entrega parroquia_id null', () => {
+      const { onSave } = renderCreate({ canCreateAdmin: true });
+
+      fireEvent.change(screen.getByLabelText('Parroquia'), { target: { value: '2' } });
+      fireEvent.change(screen.getByLabelText('Tipo de cuenta'), { target: { value: 'admin' } });
+
+      expect(screen.queryByLabelText('Parroquia')).toBeNull();
+      submit();
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ rol: 'admin', parroquia_id: null }), '');
     });
 
     it('el campo de contraseña oculta lo escrito y evita el autocompletado de contraseñas viejas', () => {
@@ -171,7 +190,8 @@ describe('UserFormModal', () => {
       submit();
 
       expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ nombre: 'Ana María', password: '', confirmPassword: '' }),
+        expect.objectContaining({ id: 7, nombre: 'Ana María', parroquia_id: 2, password: '' }),
+        '',
       );
     });
   });

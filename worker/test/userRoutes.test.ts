@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { signJwt } from '../src/lib/jwt';
+import { sign_jwt } from '../src/utils/crypto';
 
 const ADMIN_ID = 1;
 const PARISH_USER_ID = 2;
 
 const NEW_USER_BODY = {
   nombre: 'Ana',
-  apellidoPaterno: 'Quispe',
-  apellidoMaterno: 'Mamani',
+  apellido_paterno: 'Quispe',
+  apellido_materno: 'Mamani',
   username: 'ana.quispe',
   password: 'passwordNueva123',
-  parroquia: { kind: 'new', nombre: 'Parroquia Nueva' },
+  parroquia_nueva: 'Parroquia Nueva',
 };
 
 function tokenFor(
@@ -20,7 +20,7 @@ function tokenFor(
   rol: 'admin' | 'usuario_parroquia',
   parroquiaId: number | null,
 ): Promise<string> {
-  return signJwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
+  return sign_jwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
 }
 
 async function api(
@@ -73,7 +73,7 @@ describe('rutas /api/users (Worker real + D1)', () => {
     const ENDPOINTS: Array<[string, string, unknown]> = [
       ['GET', '/api/users', undefined],
       ['POST', '/api/users', NEW_USER_BODY],
-      ['PUT', '/api/users/1', { nombre: 'X', apellidoPaterno: 'Y' }],
+      ['PUT', '/api/users/1', { nombre: 'X', apellido_paterno: 'Y' }],
       ['PATCH', '/api/users/1/toggle-active', undefined],
     ];
 
@@ -91,13 +91,13 @@ describe('rutas /api/users (Worker real + D1)', () => {
 
       expect(response.status).toBe(200);
       expect(raw).not.toContain('password_hash');
-      const data = JSON.parse(raw) as { users: unknown[]; totalPages: number };
-      expect(data.users).toHaveLength(2);
-      expect(data.totalPages).toBe(1);
+      const data = JSON.parse(raw) as { resultados: unknown[]; total_paginas: number };
+      expect(data.resultados).toHaveLength(2);
+      expect(data.total_paginas).toBe(1);
     });
 
     it('parámetros de paginación inválidos no provocan un error 500', async () => {
-      const response = await api('/api/users?page=abc&pageSize=-5&sortBy=cualquiera', {
+      const response = await api('/api/users?pagina=abc&por_pagina=-5&orden=cualquiera', {
         token: adminToken,
       });
 
@@ -164,12 +164,12 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const { id: newUserId } = (await created.json()) as { id: number };
 
       // 2. Aparece en la búsqueda, con su parroquia.
-      const search = await api('/api/users?apellidoPaterno=Quispe', { token: adminToken });
+      const search = await api('/api/users?apellido_paterno=Quispe', { token: adminToken });
       const found = (await search.json()) as {
-        users: Array<{ id: number; username: string; parroquia_nombre: string }>;
+        resultados: Array<{ id: number; username: string; parroquia_nombre: string }>;
       };
-      expect(found.users).toHaveLength(1);
-      expect(found.users[0]).toMatchObject({
+      expect(found.resultados).toHaveLength(1);
+      expect(found.resultados[0]).toMatchObject({
         id: newUserId,
         username: 'ana.quispe',
         parroquia_nombre: 'Parroquia Nueva',
@@ -209,11 +209,11 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const response = await api(`/api/users/${PARISH_USER_ID}`, {
         method: 'PUT',
         token: adminToken,
-        body: { nombre: 'Usuario', apellidoPaterno: 'Parroquia', password: 'contraseñaNueva456' },
+        body: { nombre: 'Usuario', apellido_paterno: 'Parroquia', password: 'contraseñaNueva456' },
       });
       expect(response.status).toBe(200);
 
-      const afterEdit = await api('/api/users?apellidoPaterno=Parroquia', { token: adminToken });
+      const afterEdit = await api('/api/users?apellido_paterno=Parroquia', { token: adminToken });
       expect(afterEdit.status).toBe(200);
     });
   });

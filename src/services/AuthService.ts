@@ -1,20 +1,10 @@
+import type { Parish as ParishRow } from '../../shared/models';
+import type { LoginResponse } from '../../shared/sync';
 import { localRequest } from '../lib/localClient';
 
-export interface LoginResponse {
-  token: string;
-  usuario: {
-    id: number;
-    nombreCompleto: string;
-    rol: 'admin' | 'usuario_parroquia';
-    parroquiaId: number | null;
-    parroquiaNombre: string | null;
-  };
-}
 
-export interface Parish {
-  id: number;
-  nombre: string;
-}
+/** Lo que llega de cada parroquia en las listas para elegir. */
+export type Parish = Pick<ParishRow, 'id' | 'nombre'>;
 
 export const AuthService = {
   login(username: string, password: string): Promise<LoginResponse> {
@@ -25,7 +15,7 @@ export const AuthService = {
     return localRequest<{ success: true }>('auth.logout');
   },
 
-  getParishes(): Promise<{ parishes: Parish[] }> {
-    return localRequest<{ parishes: Parish[] }>('parishes.list');
+  getParishes(): Promise<{ parroquias: Parish[] }> {
+    return localRequest<{ parroquias: Parish[] }>('parishes.list');
   },
 };

@@ -1,32 +1,46 @@
-import { todayLongDate } from '../../lib/dates';
+import type { Baptism } from '../../../shared/models';
+import { formatLongDate, todayLongDate } from '../../lib/dates';
+import { birthValue, celebrantName, fullName, printText } from '../../lib/printFields';
 import { BlankDateLine, CertificateLogo, DottedField, SerialNumber, SignatureLine } from '../print/CertificateParts';
 
-export interface SinglePersonPrintData {
-  logo: string | null;
-  parroquiaNombre: string;
-  ubicacion: string;
-  numeroLibro: string;
-  numeroFolio: string;
-  numeroRegistro: string;
-  fields: { label: string; value: string }[];
-  anotaciones: string;
-}
+const TITLES = {
+  bautismo: { sacramento: 'Bautismo', libroDe: 'bautismos' },
+  confirmacion: { sacramento: 'Confirmación', libroDe: 'confirmaciones' },
+};
 
 interface SinglePersonPrintViewProps {
-  /** "Bautismo" o "Confirmación", tal como va en el título. */
-  sacramento: string;
-  /** Plural para el texto de certificación, ej. "bautismos". */
-  libroDe: string;
-  data: SinglePersonPrintData;
+  record: Baptism;
+  logo: string | null;
 }
 
-export function SinglePersonPrintView({ sacramento, libroDe, data }: SinglePersonPrintViewProps) {
+/** La constancia de bautismo o de confirmación. La de bautismo trae además el nacimiento. */
+export function SinglePersonPrintView({ record, logo }: SinglePersonPrintViewProps) {
+  const { sacramento: partida, persona } = record;
+  const tipo = partida.tipo === 'confirmacion' ? 'confirmacion' : 'bautismo';
+  const { sacramento, libroDe } = TITLES[tipo];
   const sacramentoMinuscula = sacramento.toLowerCase();
+
+  const fields = [
+    { label: 'Nombres', value: persona.nombres },
+    { label: 'Apellidos', value: fullName(persona.apellido_paterno, persona.apellido_materno) },
+    { label: 'Padre', value: printText(persona.padre) },
+    { label: 'Madre', value: printText(persona.madre) },
+    ...(tipo === 'bautismo'
+      ? [
+          { label: 'Lugar de nacimiento', value: printText(persona.lugar_nacimiento) },
+          { label: 'Fecha de nacimiento', value: birthValue(persona.fecha_nacimiento, persona.edad) },
+        ]
+      : []),
+    { label: `Fecha de ${sacramento}`, value: formatLongDate(printText(partida.fecha_evento)) },
+    { label: 'Celebrante', value: celebrantName(partida.ministro) },
+    { label: 'Padrino', value: printText(record.padrino_1) },
+    { label: 'Madrina', value: printText(record.padrino_2) },
+  ];
 
   return (
     <div className="flex h-full min-h-[270mm] flex-col font-sans text-[10pt] text-black">
       <header className="grid grid-cols-[42mm_1fr] gap-[4mm]">
-        <CertificateLogo logo={data.logo} />
+        <CertificateLogo logo={logo} />
         <div className="flex flex-col">
           <h1 className="text-[20pt] font-bold">PRELATURA DE AYAVIRI</h1>
           <div className="flex flex-wrap items-baseline justify-between gap-[4mm]">
@@ -37,7 +51,7 @@ export function SinglePersonPrintView({ sacramento, libroDe, data }: SinglePerso
           <div className="mt-auto">
             <DottedField
               label="Parroquia:"
-              value={data.parroquiaNombre}
+              value={printText(partida.parroquia?.nombre)}
               labelClassName="text-[13pt] font-bold"
               valueClassName="text-[10pt] font-bold uppercase"
             />
@@ -47,12 +61,12 @@ export function SinglePersonPrintView({ sacramento, libroDe, data }: SinglePerso
 
       <div className="mt-[10mm] grid grid-cols-[50mm_1fr] gap-[6mm]">
         <aside className="flex flex-col gap-[2mm]">
-          <DottedField label="Libro:" value={data.numeroLibro} valueClassName="text-center font-bold" />
-          <DottedField label="Folio:" value={data.numeroFolio} valueClassName="text-center font-bold" />
-          <DottedField label="Número:" value={data.numeroRegistro} valueClassName="text-center font-bold" />
+          <DottedField label="Libro:" value={partida.libro} valueClassName="text-center font-bold" />
+          <DottedField label="Folio:" value={partida.folio} valueClassName="text-center font-bold" />
+          <DottedField label="Número:" value={partida.numero} valueClassName="text-center font-bold" />
 
           <h3 className="mt-[10mm] text-[11pt] font-bold">Anotaciones marginales</h3>
-          <p className="whitespace-pre-wrap break-words text-[9.5pt] leading-snug">{data.anotaciones}</p>
+          <p className="whitespace-pre-wrap break-words text-[9.5pt] leading-snug">{printText(partida.anotaciones)}</p>
         </aside>
 
         <section className="flex flex-col gap-[2.2mm]">
@@ -60,14 +74,14 @@ export function SinglePersonPrintView({ sacramento, libroDe, data }: SinglePerso
             El suscrito Certifica, que en el libro de {libroDe} cuyos datos indicamos al margen, se encuentra una partida
             de {sacramentoMinuscula} cuyos datos son:
           </p>
-          {data.fields.map((field) => (
+          {fields.map((field) => (
             <DottedField key={field.label} label={`${field.label}:`} value={field.value} valueClassName="font-bold uppercase" />
           ))}
         </section>
       </div>
 
       <p className="mt-[14mm] text-right">
-        {data.ubicacion ? `${data.ubicacion}, ` : ''}
+        {partida.parroquia?.ubicacion ? `${partida.parroquia.ubicacion}, ` : ''}
         {todayLongDate()}
       </p>
 

@@ -4,40 +4,35 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { openLocalDatabase, type LocalDatabase } from '../../electron/main/localDb/database';
-import type { Session } from '../../electron/main/services/common';
-import { marriages } from '../../electron/main/services/marriages';
-import { applyReferenceData } from '../../electron/main/services/reference';
-import { singlePersonSacrament, type SinglePersonInput } from '../../electron/main/services/singlePersonSacraments';
-import { ageAt, getStatistics } from '../../electron/main/services/statistics';
+import { open_local_database, type LocalDatabase } from '../../electron/main/db/database';
+import type { Session } from '../../electron/main/models/session';
+import { annul_sacrament, create_marriage, create_person_sacrament } from '../../electron/main/controllers/sacraments';
+import { baptism, change, marriage, type BaptismValues } from './helpers/records';
+import { save_reference_data } from '../../electron/main/sync/sync';
+import { age_at, get_statistics } from '../../electron/main/controllers/statistics';
 
-const baptisms = singlePersonSacrament('bautismo');
-const confirmations = singlePersonSacrament('confirmacion');
-const parish1: Session = { usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1, token: 't' };
-const parish2: Session = { usuarioId: 2, rol: 'usuario_parroquia', parroquiaId: 2, token: 't' };
+const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
+const parish2: Session = { user_id: 2, role: 'usuario_parroquia', parish_id: 2, token: 't' };
 const NOW = new Date(2026, 5, 15); // 15 de junio de 2026
 
 let dir: string;
 let db: LocalDatabase;
 
-const partida = (fecha: string, overrides: Partial<SinglePersonInput> = {}): SinglePersonInput => ({
-  fechaSacramento: fecha,
-  numeroLibro: '1',
-  numeroFolio: '1',
-  numeroRegistro: '1',
-  nombre: 'Ana',
-  apellidoPaterno: 'Paz',
-  apellidoMaterno: 'Rey',
-  ...overrides,
-});
+// Una partida de Ana Paz Rey registrada en esa fecha, libro 1, folio 1, número 1.
+const partida = (fecha: string, values: BaptismValues = {}) =>
+  baptism('bautismo', {
+    ...values,
+    sacramento: { fecha_emision: fecha, libro: '1', folio: '1', numero: '1', ...values.sacramento },
+    persona: { nombres: 'Ana', apellido_paterno: 'Paz', apellido_materno: 'Rey', ...values.persona },
+  });
 
-const stats = (year?: number, parroquiaId = 1) => getStatistics(db, parroquiaId, year, NOW);
+const stats = (year?: number, parroquiaId = 1) => get_statistics(db, parroquiaId, year, NOW);
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'prelatura-statistics-'));
-  db = openLocalDatabase(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
-  const user = (id: number, parroquia_id: number) => ({ id, parroquia_id, username: `u${id}`, rol: 'usuario_parroquia', nombre: 'U', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 });
-  applyReferenceData(db, {
+  db = open_local_database(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
+  const user = (id: number, parroquia_id: number) => ({ id, parroquia_id, username: `u${id}`, rol: 'usuario_parroquia' as const, nombre: 'U', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 });
+  save_reference_data(db, {
     parroquias: [
       { id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 },
       { id: 2, nombre: 'Parroquia 2', ubicacion: null, activa: 1 },
@@ -57,25 +52,57 @@ afterEach(() => {
 
 describe('edad al recibir el sacramento', () => {
   it('cuenta solo los cumpleaños ya cumplidos', () => {
-    expect(ageAt('2000-06-15', '2010-06-15')).toBe(10);
-    expect(ageAt('2000-06-16', '2010-06-15')).toBe(9);
-    expect(ageAt('2000-06-15', '2000-07-01')).toBe(0);
+    expect(age_at('2000-06-15', '2010-06-15')).toBe(10);
+    expect(age_at('2000-06-16', '2010-06-15')).toBe(9);
+    expect(age_at('2000-06-15', '2000-07-01')).toBe(0);
   });
 
   it('descarta datos incoherentes o incompletos', () => {
-    expect(ageAt('2011-01-01', '2010-06-15')).toBeNull();
-    expect(ageAt('1700-01-01', '2010-06-15')).toBeNull();
-    expect(ageAt(null, '2010-06-15')).toBeNull();
-    expect(ageAt('25/02/1979', '2010-06-15')).toBeNull();
+    expect(age_at('2011-01-01', '2010-06-15')).toBeNull();
+    expect(age_at('1700-01-01', '2010-06-15')).toBeNull();
+    expect(age_at(null, '2010-06-15')).toBeNull();
+    expect(age_at('25/02/1979', '2010-06-15')).toBeNull();
+  });
+
+  it('con fechas incompletas calcula solo si no hay duda', () => {
+    expect(age_at('2000-03', '2010-06-15')).toBe(10);
+    expect(age_at('2000-09', '2010-06-15')).toBe(9);
+    expect(age_at('2000-03-20', '2010-06')).toBe(10);
+    // El mismo mes sin día, o solo el año: pudo haber cumplido o no.
+    expect(age_at('2000-06', '2010-06-15')).toBeNull();
+    expect(age_at('2000', '2010-06-15')).toBeNull();
+    expect(age_at('2000-03-20', '2010')).toBeNull();
+  });
+});
+
+describe('estadísticas con fechas incompletas', () => {
+  it('una partida con solo año, o año y mes, cuenta en lo que se puede saber', () => {
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-06-01', { sacramento: { fecha_evento: '2006-02' } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-06-01', { sacramento: { fecha_evento: '2006' } }));
+
+    const { anios, totales, mensual } = stats(2006);
+
+    expect(anios).toContain(2006);
+    expect(totales.bautismo.anio).toBe(2);
+    expect(totales.bautismo.historico).toBe(2);
+    // Solo la que tiene mes aparece en el gráfico por mes.
+    expect(mensual[1].bautismo).toBe(1);
+    expect(mensual.reduce((sum, month) => sum + month.bautismo, 0)).toBe(1);
+  });
+
+  it('el mes en curso cuenta una partida con año y mes, sin día', () => {
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { sacramento: { fecha_evento: '2026-06' } }));
+
+    expect(stats(2026).totales.bautismo.mes).toBe(1);
   });
 });
 
 describe('estadísticas', () => {
   it('cuenta por sacramento en el año, el mes actual y el histórico', () => {
-    baptisms.create(db, parish1, partida('2026-06-01'), undefined);
-    baptisms.create(db, parish1, partida('2026-02-01'), undefined);
-    baptisms.create(db, parish1, partida('2020-02-01'), undefined);
-    confirmations.create(db, parish1, partida('2026-06-10'), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-06-01'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-02-01'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2020-02-01'));
+    create_person_sacrament(db, 'confirmacion', parish1, partida('2026-06-10'));
 
     const { totales } = stats(2026);
 
@@ -85,18 +112,18 @@ describe('estadísticas', () => {
   });
 
   it('un año en curso se compara con el mismo tramo del anterior; uno pasado, con el año completo', () => {
-    baptisms.create(db, parish1, partida('2025-03-01'), undefined);
-    baptisms.create(db, parish1, partida('2025-06-15'), undefined);
-    baptisms.create(db, parish1, partida('2025-06-16'), undefined);
-    baptisms.create(db, parish1, partida('2024-11-30'), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, partida('2025-03-01'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2025-06-15'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2025-06-16'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2024-11-30'));
 
     expect(stats(2026).totales.bautismo.anterior).toBe(2);
     expect(stats(2025).totales.bautismo.anterior).toBe(1);
   });
 
   it('usa la fecha de la celebración y, si falta, la del registro', () => {
-    baptisms.create(db, parish1, partida('2026-01-20', { fechaBautizo: '2025-12-28' }), undefined);
-    baptisms.create(db, parish1, partida('2026-03-05'), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-20', { sacramento: { fecha_evento: '2025-12-28' } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-03-05'));
 
     expect(stats(2025).mensual[11].bautismo).toBe(1);
     expect(stats(2026).mensual[2].bautismo).toBe(1);
@@ -104,10 +131,10 @@ describe('estadísticas', () => {
   });
 
   it('solo cuenta la parroquia indicada y excluye las anuladas', () => {
-    baptisms.create(db, parish2, partida('2026-01-01'), undefined);
-    const anulada = baptisms.create(db, parish1, partida('2026-01-01'), undefined);
-    baptisms.create(db, parish1, partida('2026-01-02'), undefined);
-    baptisms.annul(db, parish1, anulada, 'Duplicada');
+    create_person_sacrament(db, 'bautismo', parish2, partida('2026-01-01'));
+    const anulada = create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-02'));
+    annul_sacrament(db, parish1, anulada, 'Duplicada');
 
     expect(stats(2026).totales.bautismo.anio).toBe(1);
     expect(stats(2026).registro.anuladas).toBe(1);
@@ -115,10 +142,10 @@ describe('estadísticas', () => {
   });
 
   it('agrupa edades con la fecha de nacimiento o la edad, y separa las que no tienen dato', () => {
-    baptisms.create(db, parish1, partida('2026-01-01', { fechaNacimiento: '2025-12-01' }), undefined);
-    baptisms.create(db, parish1, partida('2026-01-01', { edad: '8' }), undefined);
-    baptisms.create(db, parish1, partida('2026-01-01', { edad: '50' }), undefined);
-    baptisms.create(db, parish1, partida('2026-01-01'), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { fecha_nacimiento: '2025-12-01' } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { edad: 8 } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { edad: 50 } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01'));
 
     expect(stats(2026).edades.bautismo).toEqual({
       bandas: [1, 0, 1, 0, 0, 0, 1],
@@ -128,14 +155,11 @@ describe('estadísticas', () => {
   });
 
   it('en matrimonio cuenta a los dos cónyuges en las edades, pero una sola partida', () => {
-    marriages.create(db, parish1, {
-      fechaSacramento: '2026-02-14',
-      numeroLibro: '1',
-      numeroFolio: '1',
-      numeroRegistro: '1',
-      esposo: { nombre: 'Luis', apellidoPaterno: 'Paz', edad: '30' },
-      esposa: { nombre: 'Rosa', apellidoPaterno: 'Rey', edad: '28' },
-    }, undefined);
+    create_marriage(db, parish1, marriage({
+      sacramento: { fecha_emision: '2026-02-14', libro: '1', folio: '1', numero: '1' },
+      conyuge_1: { nombres: 'Luis', apellido_paterno: 'Paz', edad: 30 },
+      conyuge_2: { nombres: 'Rosa', apellido_paterno: 'Rey', edad: 28 },
+    }));
 
     const { totales, edades } = stats(2026);
 
@@ -145,10 +169,10 @@ describe('estadísticas', () => {
   });
 
   it('ordena a los celebrantes y resume el estado del registro', () => {
-    baptisms.create(db, parish1, partida('2026-01-01', { celebranteId: 2 }), undefined);
-    baptisms.create(db, parish1, partida('2026-01-02', { celebranteId: 2 }), undefined);
-    confirmations.create(db, parish1, partida('2026-01-03', { celebranteId: 1 }), undefined);
-    baptisms.create(db, parish1, partida('2026-01-04', { correcciones: [{ campo: 'nombres', valorNuevo: 'Anita' }] }), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { sacramento: { ministro_id: 2 } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-02', { sacramento: { ministro_id: 2 } }));
+    create_person_sacrament(db, 'confirmacion', parish1, partida('2026-01-03', { sacramento: { ministro_id: 1 } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-04', { persona: { cambios: [change('nombres', 'Anita')] } }));
 
     const { ministros, registro } = stats(2026);
 
@@ -160,8 +184,8 @@ describe('estadísticas', () => {
   });
 
   it('ofrece los años con datos y el actual, y arma la tendencia hasta el año elegido', () => {
-    baptisms.create(db, parish1, partida('2023-05-01'), undefined);
-    baptisms.create(db, parish1, partida('2025-05-01'), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, partida('2023-05-01'));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2025-05-01'));
 
     const result = stats(2025);
 
@@ -172,7 +196,7 @@ describe('estadísticas', () => {
 
   it('con un año inválido o sin datos usa el actual', () => {
     expect(stats(undefined)).toMatchObject({ anio: 2026, esAnioActual: true, anios: [2026] });
-    expect(getStatistics(db, 1, '1; DROP TABLE personas', NOW).anio).toBe(2026);
+    expect(get_statistics(db, 1, '1; DROP TABLE personas', NOW).anio).toBe(2026);
     expect(stats(undefined).ministros).toEqual([]);
     expect(stats(undefined).registro).toEqual({ anuladas: 0, sinCelebrante: 0, conCorrecciones: 0 });
   });

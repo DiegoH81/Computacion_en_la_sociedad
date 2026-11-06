@@ -13,11 +13,11 @@ export interface SyncItem {
 
 export interface SyncStatus {
   modo: ConnectionMode;
-  enCurso: boolean;
+  en_curso: boolean;
   pendientes: number;
   conflictos: number;
   rechazados: number;
-  ultimaSync: string | null;
+  ultima_sync: string | null;
   aviso: string | null;
   mensaje: string | null;
   token: string;
@@ -33,8 +33,8 @@ export const SyncService = {
     return localRequest<SyncStatus>('sync.run');
   },
 
-  resolve(entidad: string, clientId: string, choice: ConflictChoice): Promise<SyncStatus> {
-    return localRequest<SyncStatus>('sync.resolve', { entidad, clientId, choice });
+  resolve(entidad: string, client_id: string, eleccion: ConflictChoice): Promise<SyncStatus> {
+    return localRequest<SyncStatus>('sync.resolve', { entidad, client_id, eleccion });
   },
 
   dismissNotice(): Promise<unknown> {

@@ -1,21 +1,11 @@
-import { PriestService, type PriestFormValues, type Priest } from '../services/PriestService';
+import type { Minister, SearchFilters } from '../../shared/models';
 import { ApiError } from '../lib/apiClient';
+import { PriestService } from '../services/PriestService';
 import { useSessionStore } from '../store/sessionStore';
-
-export interface PriestRowUI {
-  id: number;
-  titulo: string;
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  parroquiaNombre: string;
-  parroquiaId: number;
-  activo: boolean;
-}
 
 export interface SearchResult {
   success: boolean;
-  priests?: PriestRowUI[];
+  priests?: Minister[];
   totalPages?: number;
   errorMessage?: string;
 }
@@ -25,42 +15,16 @@ export interface MutationResult {
   errorMessage?: string;
 }
 
-function toPriestRowUI(p: Priest): PriestRowUI {
-  return {
-    id: p.id,
-    titulo: p.titulo ?? '',
-    nombre: p.nombre,
-    apellidoPaterno: p.apellido_paterno,
-    apellidoMaterno: p.apellido_materno,
-    parroquiaNombre: p.parroquia_nombre,
-    parroquiaId: p.parroquia_id,
-    activo: p.activo === 1,
-  };
+/** "Manuel Torres Rios": como se muestra un ministro en las listas. */
+export function ministerName(minister: Minister): string {
+  return [minister.nombre, minister.apellido_paterno, minister.apellido_materno].filter(Boolean).join(' ');
 }
 
-export async function searchPriests(params: {
-  nombre?: string;
-  apellidoPaterno?: string;
-  apellidoMaterno?: string;
-  sortBy: 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
-  sortDirection: 'asc' | 'desc';
-  page: number;
-  /** Por defecto, la parroquia activa: solo se ven los ministros de una parroquia a la vez. */
-  parroquiaId?: number;
-}): Promise<SearchResult> {
+/** Con parroquia_id busca solo en esa parroquia; sin él, en todas. */
+export async function searchPriests(filters: SearchFilters): Promise<SearchResult> {
   try {
-    // Traduce el nombre de campo de UI (camelCase) al que espera el backend (snake_case).
-    const sortByBackend =
-      params.sortBy === 'apellidoPaterno'
-        ? 'apellido_paterno'
-        : params.sortBy === 'apellidoMaterno'
-          ? 'apellido_materno'
-          : 'nombre';
-
-    const parroquiaId = params.parroquiaId ?? useSessionStore.getState().parroquiaActivaId ?? undefined;
-    const response = await PriestService.search({ ...params, sortBy: sortByBackend, parroquiaId });
-
-    return { success: true, priests: response.priests.map(toPriestRowUI), totalPages: response.totalPages };
+    const page = await PriestService.search(filters);
+    return { success: true, priests: page.resultados, totalPages: page.total_paginas };
   } catch (error) {
     return {
       success: false,
@@ -69,17 +33,13 @@ export async function searchPriests(params: {
   }
 }
 
-export async function createPriest(
-  values: PriestFormValues,
-  parroquiaDestinoId?: number,
-): Promise<MutationResult & { id?: number }> {
+/** Un admin lo crea en la parroquia indicada (o en la activa); un usuario de parroquia, siempre en la suya. */
+export async function createPriest(minister: Minister, parroquiaDestinoId?: number): Promise<MutationResult & { id?: number }> {
   try {
-    const parroquiaActivaId = useSessionStore.getState().parroquiaActivaId;
-    const rol = useSessionStore.getState().rol;
+    const { rol, parroquiaActivaId } = useSessionStore.getState();
+    const parroquia_id = rol === 'admin' ? (parroquiaDestinoId ?? parroquiaActivaId ?? undefined) : undefined;
 
-    const parroquiaId = rol === 'admin' ? (parroquiaDestinoId ?? parroquiaActivaId ?? undefined) : undefined;
-
-    const { id } = await PriestService.create(values, parroquiaId);
+    const { id } = await PriestService.create({ ...minister, parroquia_id });
     return { success: true, id };
   } catch (error) {
     return {
@@ -89,12 +49,9 @@ export async function createPriest(
   }
 }
 
-export async function updatePriest(
-  priestId: number,
-  values: PriestFormValues,
-): Promise<MutationResult> {
+export async function updatePriest(minister: Minister): Promise<MutationResult> {
   try {
-    await PriestService.update(priestId, values);
+    await PriestService.update(minister);
     return { success: true };
   } catch (error) {
     return {

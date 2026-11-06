@@ -30,7 +30,7 @@ npx wrangler whoami
 npx wrangler d1 create prelatura-db
 ```
 
-**3. Aplica las migraciones y prepara la base.** Las migraciones crean usuarios de prueba con contraseñas conocidas, y el segundo comando los elimina. Por eso va **antes de desplegar**: así el Worker nunca queda público con esas contraseñas. Guarda la contraseña que muestra, porque no se vuelve a mostrar.
+**3. Aplica las migraciones y prepara la base.** Las migraciones crean usuarios de prueba con contraseñas conocidas, y el segundo comando los elimina. Por eso va **antes de desplegar**: así el Worker nunca queda público con esas contraseñas. Guarda la contraseña que muestra, porque no se vuelve a mostrar. Ese administrador queda como el **principal**: el único que puede crear otros administradores (y pasarle la marca a otro desde la pantalla de usuarios).
 
 ```powershell
 npx wrangler d1 migrations apply prelatura-db --remote
@@ -57,4 +57,4 @@ npx wrangler deploy
 
 ## Límites a vigilar
 
-Vigentes al 2026-11-01 en el plan gratuito de Workers: 10 ms de CPU por petición y 50 llamadas a D1 por petición. La app sube 20 cambios por petición y descarga 50 partidas por página para respetar el límite de llamadas. El límite de CPU no se ha medido en Cloudflare real, porque `wrangler dev` no lo aplica. Si aparece el error 1102, hay que pasar al plan de pago o reducir `MAX_PARTIDAS_POR_PAGINA`.
+Vigentes al 2026-11-01 en el plan gratuito de Workers: 10 ms de CPU por petición y 50 llamadas a D1 por petición. La app sube 20 cambios por petición y descarga 50 partidas por página para respetar el límite de llamadas. El límite de CPU no se ha medido en Cloudflare real, porque `wrangler dev` no lo aplica. Si aparece el error 1102, hay que pasar al plan de pago o reducir `MAX_RECORDS_PER_PAGE` (en `src/utils/config.ts`).

@@ -48,8 +48,8 @@ export function useSyncActions() {
   return {
     errorMessage,
     syncNow: () => perform(() => SyncService.run()),
-    resolve: (entidad: string, clientId: string, choice: ConflictChoice) =>
-      perform(() => SyncService.resolve(entidad, clientId, choice)),
+    resolve: (entidad: string, client_id: string, eleccion: ConflictChoice) =>
+      perform(() => SyncService.resolve(entidad, client_id, eleccion)),
     dismissNotice: () =>
       perform(async () => {
         await SyncService.dismissNotice();

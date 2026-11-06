@@ -3,9 +3,9 @@ import { DateSelect } from './DateSelect';
 import { FormInput } from './FormInput';
 
 interface BirthDateOrAgeProps {
-  fecha: string;
-  edad: string;
-  onChange: (values: { fecha: string; edad: string }) => void;
+  fecha: string | null;
+  edad: number | null;
+  onChange: (values: { fecha: string | null; edad: number | null }) => void;
   /** Rótulo sobre el control. Sin él, el rótulo lo pone quien lo usa, como en las filas en espejo. */
   label?: string;
   /** Distingue a la persona si hay dos en el formulario, ej. "del esposo". */
@@ -14,12 +14,12 @@ interface BirthDateOrAgeProps {
 
 /** La partida física puede traer la fecha de nacimiento o solo la edad: se registra una de las dos. */
 export function BirthDateOrAge({ fecha, edad, onChange, label, personLabel = '' }: BirthDateOrAgeProps) {
-  const [prefersAge, setPrefersAge] = useState(Boolean(edad) && !fecha);
+  const [prefersAge, setPrefersAge] = useState(edad !== null && !fecha);
   const named = (text: string) => `${text} ${personLabel}`.trim();
 
   function togglePrefersAge(checked: boolean) {
     setPrefersAge(checked);
-    onChange(checked ? { fecha: '', edad } : { fecha, edad: '' });
+    onChange(checked ? { fecha: null, edad } : { fecha, edad: null });
   }
 
   const toggle = (
@@ -49,14 +49,14 @@ export function BirthDateOrAge({ fecha, edad, onChange, label, personLabel = '' 
           min={0}
           placeholder="Edad"
           aria-label={named('Edad')}
-          value={edad}
-          onChange={(e) => onChange({ fecha, edad: e.target.value })}
+          value={edad ?? ''}
+          onChange={(e) => onChange({ fecha, edad: e.target.value === '' ? null : Number(e.target.value) })}
         />
       ) : (
         <DateSelect
           ariaLabel={named('Fecha de nacimiento')}
-          value={fecha}
-          onChange={(value) => onChange({ fecha: value, edad })}
+          value={fecha ?? ''}
+          onChange={(value) => onChange({ fecha: value || null, edad })}
         />
       )}
       {!label && toggle}

@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react';
 import { A4Page, A4PrintPreview } from '../print/A4PrintPreview';
 import { loadIndexBooks, loadIndexEntries } from '../../controllers/SacramentIndexController';
-import type { SacramentIndexEntry, SacramentType } from '../../services/SacramentIndexService';
+import type { IndexEntry } from '../../../shared/models';
+import type { SacramentType } from '../../../shared/sync';
 
 const ROWS_PER_PAGE = 39;
 const ALL_BOOKS = '__todos__';
@@ -10,8 +11,8 @@ const NUMBER_CELL = `${CELL} text-center`;
 
 type Loaded<T> = { key: string; data: T } | { key: string; error: string };
 
-function formatName(entry: SacramentIndexEntry): string {
-  const apellidos = `${entry.apellidoPaterno} ${entry.apellidoMaterno}`.trim();
+function formatName(entry: IndexEntry): string {
+  const apellidos = `${entry.apellido_paterno} ${entry.apellido_materno}`.trim();
   return `${apellidos}, ${entry.nombres}`;
 }
 
@@ -39,7 +40,7 @@ export function SacramentIndexPreview({
   const bookFieldId = useId();
   const [books, setBooks] = useState<Loaded<string[]> | null>(null);
   const [selectedBook, setSelectedBook] = useState<string | null>(null);
-  const [entries, setEntries] = useState<Loaded<SacramentIndexEntry[]> | null>(null);
+  const [entries, setEntries] = useState<Loaded<IndexEntry[]> | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -109,7 +110,7 @@ export function SacramentIndexPreview({
                 <td className={`${CELL} uppercase ${name.length > 48 ? 'text-[7.5pt]' : ''}`}>{name}</td>
                 <td className={NUMBER_CELL}>{entry.libro}</td>
                 <td className={NUMBER_CELL}>{entry.folio}</td>
-                <td className={NUMBER_CELL}>{entry.registro}</td>
+                <td className={NUMBER_CELL}>{entry.numero}</td>
               </tr>
             );
           })}

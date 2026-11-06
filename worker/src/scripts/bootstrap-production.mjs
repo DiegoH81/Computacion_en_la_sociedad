@@ -1,6 +1,7 @@
 // Prepara una base recién migrada para producción: las migraciones crean datos de prueba con
 // contraseñas conocidas (admin/admin123, parroco1/parroco123). Este script los quita y crea un
-// administrador real con una contraseña aleatoria, que se muestra una sola vez.
+// administrador real con una contraseña aleatoria, que se muestra una sola vez. Ese administrador
+// queda como el principal: el único que puede crear otros administradores.
 //
 // Uso, desde worker/:
 //   node src/scripts/bootstrap-production.mjs --admin=usuario --nombre=Ana --paterno=Quispe --materno=Mamani
@@ -15,7 +16,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 
-const PBKDF2_ITERATIONS = 100_000; // Igual que worker/src/lib/password.ts.
+const PBKDF2_ITERATIONS = 100_000; // Igual que PASSWORD_ITERATIONS en worker/src/utils/config.ts.
 
 const { values } = parseArgs({
   options: {
@@ -60,8 +61,11 @@ DELETE FROM parroquias WHERE nombre IN ('Parroquia 1', 'Parroquia 2', 'Parroquia
   AND id NOT IN (SELECT parroquia_id FROM sacramentos)
   AND id NOT IN (SELECT parroquia_id FROM personas);
 
-INSERT INTO usuarios (username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno)
-VALUES (${sqlText(values.admin)}, ${sqlText(hash)}, 'admin', NULL, ${sqlText(values.nombre)}, ${sqlText(values.paterno)}, ${sqlText(values.materno)});
+-- Solo puede haber un principal (lo asegura un índice UNIQUE): se quita antes de dárselo al nuevo.
+UPDATE usuarios SET principal = 0 WHERE principal = 1;
+
+INSERT INTO usuarios (username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno, principal)
+VALUES (${sqlText(values.admin)}, ${sqlText(hash)}, 'admin', NULL, ${sqlText(values.nombre)}, ${sqlText(values.paterno)}, ${sqlText(values.materno)}, 1);
 `;
 
 const directory = mkdtempSync(path.join(tmpdir(), 'prelatura-bootstrap-'));
@@ -83,7 +87,7 @@ if (result.status !== 0) {
   process.exit(1);
 }
 
-console.log('Base preparada: se quitaron los datos de prueba y se creó el administrador.');
+console.log('Base preparada: se quitaron los datos de prueba y se creó el administrador principal.');
 console.log(`  Usuario:    ${values.admin}`);
 console.log(`  Contraseña: ${password}`);
 console.log('Guárdela ahora: no se vuelve a mostrar.');

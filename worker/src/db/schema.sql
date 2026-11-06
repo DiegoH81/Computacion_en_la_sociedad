@@ -16,7 +16,8 @@ CREATE TABLE usuarios (
   parroquia_id INTEGER NULL REFERENCES parroquias(id),
   activo INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
-, nombre TEXT NOT NULL DEFAULT '', apellido_paterno TEXT NOT NULL DEFAULT '', apellido_materno TEXT NOT NULL DEFAULT '');
+, nombre TEXT NOT NULL DEFAULT '', apellido_paterno TEXT NOT NULL DEFAULT '', apellido_materno TEXT NOT NULL DEFAULT ''
+, principal INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE ministros (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +152,8 @@ INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (2, 'Par
 INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (3, 'Parroquia 3', 1, NULL);
 INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (1, 'admin', '100000:ONr8hN0xK3ji61Hi4jmtVQ==:ODk7gds76M2Wqs/FpbZ7Shvj4JpVdYiABTVmNnpVPSc=', 'admin', NULL, 1, '2026-11-01 01:20:10', 'Administrador', 'De', 'Prueba');
 INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (2, 'parroco1', '100000:FG9geNY/YFbv7KyJsADGoQ==:L6CaX3WNHwLSu5PTOr82shmb32hpm5B3Qdaewe/0Q5s=', 'usuario_parroquia', 1, 1, '2026-11-01 01:20:10', 'Usuario', 'Parroquia', 'Uno');
+-- El administrador de prueba es el principal (ver migración 0013).
+UPDATE "usuarios" SET "principal" = 1 WHERE "username" = 'admin';
 INSERT INTO "ministros" ("id", "client_id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id") VALUES (1, '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a01', 'Braulio', 'Guido', 'Alvaro', 1);
 INSERT INTO "ministros" ("id", "client_id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id") VALUES (2, '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a02', 'Manuel', 'Torres', 'Rios', 2);
 
@@ -162,6 +165,8 @@ CREATE UNIQUE INDEX idx_ministros_client_id ON ministros (client_id);
 CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
 
 CREATE INDEX idx_usuarios_busqueda ON usuarios (nombre, apellido_paterno, apellido_materno);
+
+CREATE UNIQUE INDEX idx_usuarios_un_principal ON usuarios (principal) WHERE principal = 1;
 
 CREATE UNIQUE INDEX idx_parroquias_nombre_unico ON parroquias (nombre COLLATE NOCASE);
 

@@ -1,42 +1,31 @@
+import type { Person } from '../../../shared/models';
 import { BirthDateOrAge } from '../ui/BirthDateOrAge';
 import { Field } from '../ui/Field';
 import { FormPanel } from '../ui/FormPanel';
 
-export interface SacramentPersonPanelData {
-  dni: string;
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  fechaNacimiento: string;
-  edad: string;
-  lugarNacimiento: string;
-  padreNombre: string;
-  madreNombre: string;
-}
-
 interface SacramentPersonPanelProps {
-  values: SacramentPersonPanelData;
-  onChange: (values: Partial<SacramentPersonPanelData>) => void;
+  persona: Person;
+  onChange: (changes: Partial<Person>) => void;
 }
 
-export function SacramentPersonPanel({ values, onChange }: SacramentPersonPanelProps) {
+export function SacramentPersonPanel({ persona, onChange }: SacramentPersonPanelProps) {
   return (
     <FormPanel title="Datos personales">
-      <Field variant="panel" label="DNI" value={values.dni} onChange={(v) => onChange({ dni: v })} />
-      <Field variant="panel" label="Nombres" value={values.nombre} onChange={(v) => onChange({ nombre: v })} />
+      <Field variant="panel" label="DNI" value={persona.dni ?? ''} onChange={(v) => onChange({ dni: v })} />
+      <Field variant="panel" label="Nombres" value={persona.nombres} onChange={(v) => onChange({ nombres: v })} />
       <div className="grid grid-cols-2 gap-2">
-        <Field variant="panel" label="Apellido paterno" value={values.apellidoPaterno} onChange={(v) => onChange({ apellidoPaterno: v })} />
-        <Field variant="panel" label="Apellido materno" value={values.apellidoMaterno} onChange={(v) => onChange({ apellidoMaterno: v })} />
+        <Field variant="panel" label="Apellido paterno" value={persona.apellido_paterno} onChange={(v) => onChange({ apellido_paterno: v })} />
+        <Field variant="panel" label="Apellido materno" value={persona.apellido_materno} onChange={(v) => onChange({ apellido_materno: v })} />
       </div>
       <BirthDateOrAge
         label="Fecha de nacimiento"
-        fecha={values.fechaNacimiento}
-        edad={values.edad}
-        onChange={({ fecha, edad }) => onChange({ fechaNacimiento: fecha, edad })}
+        fecha={persona.fecha_nacimiento}
+        edad={persona.edad}
+        onChange={({ fecha, edad }) => onChange({ fecha_nacimiento: fecha, edad })}
       />
-      <Field variant="panel" label="Lugar de nacimiento" value={values.lugarNacimiento} onChange={(v) => onChange({ lugarNacimiento: v })} />
-      <Field variant="panel" label="Padre" value={values.padreNombre} onChange={(v) => onChange({ padreNombre: v })} />
-      <Field variant="panel" label="Madre" value={values.madreNombre} onChange={(v) => onChange({ madreNombre: v })} />
+      <Field variant="panel" label="Lugar de nacimiento" value={persona.lugar_nacimiento ?? ''} onChange={(v) => onChange({ lugar_nacimiento: v })} />
+      <Field variant="panel" label="Padre" value={persona.padre ?? ''} onChange={(v) => onChange({ padre: v })} />
+      <Field variant="panel" label="Madre" value={persona.madre ?? ''} onChange={(v) => onChange({ madre: v })} />
     </FormPanel>
   );
 }

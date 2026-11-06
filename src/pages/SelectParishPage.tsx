@@ -19,7 +19,7 @@ export function SelectParishPage() {
     if (!token) return;
 
     AuthService.getParishes()
-      .then((response) => setParishes(response.parishes))
+      .then((response) => setParishes(response.parroquias))
       .catch((error) => {
         setErrorMessage(
           error instanceof ApiError ? error.message : 'No se pudieron cargar las parroquias.',

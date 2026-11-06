@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { openLocalDatabase, type LocalDatabase } from '../../electron/main/localDb/database';
-import { LOCAL_MIGRATIONS } from '../../electron/main/localDb/schema';
+import { open_local_database, type LocalDatabase } from '../../electron/main/db/database';
+import { LOCAL_MIGRATIONS } from '../../electron/main/db/migrations';
 
 const KEY = randomBytes(32).toString('hex');
 
@@ -15,7 +15,7 @@ let file: string;
 let db: LocalDatabase | null;
 
 function open(key = KEY, migrations?: readonly string[]): LocalDatabase {
-  db = openLocalDatabase(file, key, migrations);
+  db = open_local_database(file, key, migrations);
   return db;
 }
 
