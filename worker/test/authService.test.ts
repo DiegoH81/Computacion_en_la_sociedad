@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { login } from '../src/services/authService';
-import { hashPassword } from '../src/lib/password';
+import { login } from '../src/auth/login';
+import { hash_password } from '../src/auth/password';
 
 const TEST_JWT_SECRET = 'secreto-de-prueba-para-integration-tests';
 
@@ -15,7 +15,7 @@ describe('authService.login (integración con D1)', () => {
       .bind('Parroquia de Prueba')
       .run();
 
-    const hashActivo = await hashPassword('passwordCorrecta123');
+    const hashActivo = await hash_password('passwordCorrecta123');
     await env.prelatura_db
       .prepare(
         `INSERT INTO usuarios (username, password_hash, nombre, apellido_paterno, apellido_materno,
@@ -25,7 +25,7 @@ describe('authService.login (integración con D1)', () => {
       .bind('usuario.activo', hashActivo, 'Usuario', 'Activo', 'Test', 'usuario_parroquia', 1, 1)
       .run();
 
-    const hashInactivo = await hashPassword('passwordCorrecta123');
+    const hashInactivo = await hash_password('passwordCorrecta123');
     await env.prelatura_db
       .prepare(
         `INSERT INTO usuarios (username, password_hash, nombre, apellido_paterno, apellido_materno,

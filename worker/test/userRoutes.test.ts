@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { signJwt } from '../src/lib/jwt';
+import { sign_jwt } from '../src/auth/jwt';
 
 const ADMIN_ID = 1;
 const PARISH_USER_ID = 2;
@@ -20,7 +20,7 @@ function tokenFor(
   rol: 'admin' | 'usuario_parroquia',
   parroquiaId: number | null,
 ): Promise<string> {
-  return signJwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
+  return sign_jwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
 }
 
 async function api(

@@ -1,32 +1,32 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { hashPassword, verifyPassword } from '../src/lib/password';
-import { login } from '../src/services/authService';
+import { hash_password, verify_password } from '../src/auth/password';
+import { login } from '../src/auth/login';
 import {
-  searchUsers,
-  createUser,
-  updateUser,
-  toggleUserActive,
-  type CreateUserInput,
-  type SearchUsersFilters,
-  type UserAdminContext,
-} from '../src/services/userService';
+  search_users,
+  create_user,
+  update_user,
+  toggle_user_active,
+  type NewUserBody,
+  type UserSearch,
+  type TokenUser,
+} from '../src/users/users';
 
-const ADMIN: UserAdminContext = { rol: 'admin', usuarioId: 1 };
-const PARISH_USER: UserAdminContext = { rol: 'usuario_parroquia', usuarioId: 2 };
+const ADMIN: TokenUser = { rol: 'admin', usuarioId: 1 };
+const PARISH_USER: TokenUser = { rol: 'usuario_parroquia', usuarioId: 2 };
 
 const ADMIN_PASSWORD = 'adminPassword123';
 const PARISH_USER_PASSWORD = 'parrocoPassword123';
 
-const SEARCH_ALL: SearchUsersFilters = {
-  sortBy: 'nombre',
-  sortDirection: 'asc',
+const SEARCH_ALL: UserSearch = {
+  sort_by: 'nombre',
+  sort_direction: 'asc',
   page: 1,
-  pageSize: 20,
+  page_size: 20,
 };
 
-const VALID_CREATE: CreateUserInput = {
+const VALID_CREATE: NewUserBody = {
   nombre: 'Ana',
   apellidoPaterno: 'Quispe',
   apellidoMaterno: 'Mamani',
@@ -54,8 +54,8 @@ async function getUser(id: number) {
 
 describe('userService (integración con D1)', () => {
   beforeAll(async () => {
-    adminHash = await hashPassword(ADMIN_PASSWORD);
-    parishUserHash = await hashPassword(PARISH_USER_PASSWORD);
+    adminHash = await hash_password(ADMIN_PASSWORD);
+    parishUserHash = await hash_password(PARISH_USER_PASSWORD);
   });
 
   beforeEach(async () => {
@@ -80,17 +80,17 @@ describe('userService (integración con D1)', () => {
   // -------------------------------------------------------------------------
   describe('solo un admin puede gestionar usuarios', () => {
     const attempts: Array<[string, () => Promise<{ success: boolean; status?: number }>]> = [
-      ['searchUsers', () => searchUsers(env.prelatura_db, PARISH_USER, SEARCH_ALL)],
-      ['createUser', () => createUser(env.prelatura_db, PARISH_USER, VALID_CREATE)],
+      ['search_users', () => search_users(env.prelatura_db, PARISH_USER, SEARCH_ALL)],
+      ['create_user', () => create_user(env.prelatura_db, PARISH_USER, VALID_CREATE)],
       [
-        'updateUser',
+        'update_user',
         () =>
-          updateUser(env.prelatura_db, PARISH_USER, 1, {
+          update_user(env.prelatura_db, PARISH_USER, 1, {
             nombre: 'Hackeado',
             apellidoPaterno: 'X',
           }),
       ],
-      ['toggleUserActive', () => toggleUserActive(env.prelatura_db, PARISH_USER, 1)],
+      ['toggle_user_active', () => toggle_user_active(env.prelatura_db, PARISH_USER, 1)],
     ];
 
     it.each(attempts)('%s rechaza a un usuario_parroquia con 403', async (_name, run) => {
@@ -104,13 +104,13 @@ describe('userService (integración con D1)', () => {
       const usersBefore = await count('usuarios');
       const adminBefore = await getUser(1);
 
-      await createUser(env.prelatura_db, PARISH_USER, VALID_CREATE);
-      await updateUser(env.prelatura_db, PARISH_USER, 1, {
+      await create_user(env.prelatura_db, PARISH_USER, VALID_CREATE);
+      await update_user(env.prelatura_db, PARISH_USER, 1, {
         nombre: 'Hackeado',
         apellidoPaterno: 'X',
         password: 'passwordRobada123',
       });
-      await toggleUserActive(env.prelatura_db, PARISH_USER, 1);
+      await toggle_user_active(env.prelatura_db, PARISH_USER, 1);
 
       expect(await count('usuarios')).toBe(usersBefore);
       expect(await getUser(1)).toEqual(adminBefore);
@@ -118,9 +118,9 @@ describe('userService (integración con D1)', () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('searchUsers', () => {
+  describe('search_users', () => {
     it('lista las cuentas con el nombre de su parroquia (null para admin)', async () => {
-      const result = await searchUsers(env.prelatura_db, ADMIN, SEARCH_ALL);
+      const result = await search_users(env.prelatura_db, ADMIN, SEARCH_ALL);
 
       expect(result.success).toBe(true);
       if (!result.success) return;
@@ -133,7 +133,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('nunca expone password_hash', async () => {
-      const result = await searchUsers(env.prelatura_db, ADMIN, SEARCH_ALL);
+      const result = await search_users(env.prelatura_db, ADMIN, SEARCH_ALL);
 
       expect(result.success).toBe(true);
       if (!result.success) return;
@@ -143,9 +143,9 @@ describe('userService (integración con D1)', () => {
     });
 
     it('filtra por apellido paterno', async () => {
-      const result = await searchUsers(env.prelatura_db, ADMIN, {
+      const result = await search_users(env.prelatura_db, ADMIN, {
         ...SEARCH_ALL,
-        apellidoPaterno: 'Parroquia',
+        father_last_name: 'Parroquia',
       });
 
       expect(result.success).toBe(true);
@@ -154,9 +154,9 @@ describe('userService (integración con D1)', () => {
     });
 
     it('ordena de forma descendente', async () => {
-      const result = await searchUsers(env.prelatura_db, ADMIN, {
+      const result = await search_users(env.prelatura_db, ADMIN, {
         ...SEARCH_ALL,
-        sortDirection: 'desc',
+        sort_direction: 'desc',
       });
 
       expect(result.success).toBe(true);
@@ -166,7 +166,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('pagina los resultados', async () => {
-      const result = await searchUsers(env.prelatura_db, ADMIN, { ...SEARCH_ALL, pageSize: 1 });
+      const result = await search_users(env.prelatura_db, ADMIN, { ...SEARCH_ALL, page_size: 1 });
 
       expect(result.success).toBe(true);
       if (!result.success) return;
@@ -175,10 +175,10 @@ describe('userService (integración con D1)', () => {
     });
 
     it('usa "nombre" como fallback seguro si sortBy no está en la lista blanca', async () => {
-      const result = await searchUsers(env.prelatura_db, ADMIN, {
+      const result = await search_users(env.prelatura_db, ADMIN, {
         ...SEARCH_ALL,
-        // @ts-expect-error -- simula un valor malicioso de sortBy
-        sortBy: 'id; DROP TABLE usuarios; --',
+        // @ts-expect-error -- simula un valor malicioso de sort_by
+        sort_by: 'id; DROP TABLE usuarios; --',
       });
 
       expect(result.success).toBe(true);
@@ -187,9 +187,9 @@ describe('userService (integración con D1)', () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('createUser', () => {
+  describe('create_user', () => {
     it('crea una cuenta en una parroquia existente y la contraseña queda hasheada', async () => {
-      const result = await createUser(env.prelatura_db, ADMIN, VALID_CREATE);
+      const result = await create_user(env.prelatura_db, ADMIN, VALID_CREATE);
 
       expect(result.success).toBe(true);
       if (!result.success) return;
@@ -200,11 +200,11 @@ describe('userService (integración con D1)', () => {
       expect(created?.parroquia_id).toBe(1);
       expect(created?.activo).toBe(1);
       expect(created?.password_hash).not.toBe('passwordNueva123');
-      expect(await verifyPassword('passwordNueva123', created?.password_hash as string)).toBe(true);
+      expect(await verify_password('passwordNueva123', created?.password_hash as string)).toBe(true);
     });
 
     it('la cuenta creada puede iniciar sesión de inmediato', async () => {
-      await createUser(env.prelatura_db, ADMIN, VALID_CREATE);
+      await create_user(env.prelatura_db, ADMIN, VALID_CREATE);
 
       const result = await login(env.prelatura_db, env.JWT_SECRET, 'ana.quispe', 'passwordNueva123');
 
@@ -218,7 +218,7 @@ describe('userService (integración con D1)', () => {
     it('crea la parroquia nueva junto con el usuario y los enlaza', async () => {
       const parishesBefore = await count('parroquias');
 
-      const result = await createUser(env.prelatura_db, ADMIN, {
+      const result = await create_user(env.prelatura_db, ADMIN, {
         ...VALID_CREATE,
         parroquia: { kind: 'new', nombre: 'Parroquia Nueva' },
       });
@@ -238,7 +238,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('acepta una cuenta sin apellido materno', async () => {
-      const result = await createUser(env.prelatura_db, ADMIN, {
+      const result = await create_user(env.prelatura_db, ADMIN, {
         ...VALID_CREATE,
         apellidoMaterno: undefined,
       });
@@ -249,11 +249,11 @@ describe('userService (integración con D1)', () => {
     });
 
     it('ignora cualquier rol enviado en el body: por esta vía no se crean admins', async () => {
-      const result = await createUser(env.prelatura_db, ADMIN, {
+      const result = await create_user(env.prelatura_db, ADMIN, {
         ...VALID_CREATE,
         rol: 'admin',
         parroquia_id: null,
-      } as unknown as CreateUserInput);
+      } as unknown as NewUserBody);
 
       expect(result.success).toBe(true);
       if (!result.success) return;
@@ -282,10 +282,10 @@ describe('userService (integración con D1)', () => {
         const usersBefore = await count('usuarios');
         const parishesBefore = await count('parroquias');
 
-        const result = await createUser(env.prelatura_db, ADMIN, {
+        const result = await create_user(env.prelatura_db, ADMIN, {
           ...VALID_CREATE,
           ...overrides,
-        } as CreateUserInput);
+        } as NewUserBody);
 
         expect(result.success).toBe(false);
         if (!result.success) expect(result.status).toBe(400);
@@ -296,7 +296,7 @@ describe('userService (integración con D1)', () => {
 
     describe('duplicados (409)', () => {
       it('rechaza un username que ya existe', async () => {
-        const result = await createUser(env.prelatura_db, ADMIN, {
+        const result = await create_user(env.prelatura_db, ADMIN, {
           ...VALID_CREATE,
           username: 'parroco1',
         });
@@ -308,7 +308,7 @@ describe('userService (integración con D1)', () => {
       it('rechaza un username que solo difiere en mayúsculas', async () => {
         const usersBefore = await count('usuarios');
 
-        const result = await createUser(env.prelatura_db, ADMIN, {
+        const result = await create_user(env.prelatura_db, ADMIN, {
           ...VALID_CREATE,
           username: 'ADMIN',
         });
@@ -322,7 +322,7 @@ describe('userService (integración con D1)', () => {
         const usersBefore = await count('usuarios');
         const parishesBefore = await count('parroquias');
 
-        const result = await createUser(env.prelatura_db, ADMIN, {
+        const result = await create_user(env.prelatura_db, ADMIN, {
           ...VALID_CREATE,
           parroquia: { kind: 'new', nombre: 'PARROQUIA 1' },
         });
@@ -336,7 +336,7 @@ describe('userService (integración con D1)', () => {
       it('un username duplicado con parroquia nueva no deja una parroquia huérfana', async () => {
         const parishesBefore = await count('parroquias');
 
-        const result = await createUser(env.prelatura_db, ADMIN, {
+        const result = await create_user(env.prelatura_db, ADMIN, {
           ...VALID_CREATE,
           username: 'parroco1',
           parroquia: { kind: 'new', nombre: 'Parroquia Huérfana' },
@@ -378,11 +378,11 @@ describe('userService (integración con D1)', () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('updateUser', () => {
+  describe('update_user', () => {
     it('actualiza nombre y apellidos sin tocar username, rol, parroquia ni contraseña', async () => {
       const before = await getUser(2);
 
-      const result = await updateUser(env.prelatura_db, ADMIN, 2, {
+      const result = await update_user(env.prelatura_db, ADMIN, 2, {
         nombre: 'Nuevo',
         apellidoPaterno: 'Apellido',
         apellidoMaterno: 'Cambiado',
@@ -402,7 +402,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('con contraseña nueva: la nueva funciona y la anterior deja de funcionar', async () => {
-      const result = await updateUser(env.prelatura_db, ADMIN, 2, {
+      const result = await update_user(env.prelatura_db, ADMIN, 2, {
         nombre: 'Usuario',
         apellidoPaterno: 'Parroquia',
         apellidoMaterno: 'Uno',
@@ -419,7 +419,7 @@ describe('userService (integración con D1)', () => {
     it('rechaza una contraseña nueva demasiado corta y no modifica nada', async () => {
       const before = await getUser(2);
 
-      const result = await updateUser(env.prelatura_db, ADMIN, 2, {
+      const result = await update_user(env.prelatura_db, ADMIN, 2, {
         nombre: 'Otro',
         apellidoPaterno: 'Nombre',
         password: '1234567',
@@ -431,7 +431,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('rechaza nombre o apellido paterno vacíos', async () => {
-      const result = await updateUser(env.prelatura_db, ADMIN, 2, {
+      const result = await update_user(env.prelatura_db, ADMIN, 2, {
         nombre: '  ',
         apellidoPaterno: 'X',
       });
@@ -441,7 +441,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('devuelve 404 si el usuario no existe', async () => {
-      const result = await updateUser(env.prelatura_db, ADMIN, 999, {
+      const result = await update_user(env.prelatura_db, ADMIN, 999, {
         nombre: 'X',
         apellidoPaterno: 'Y',
       });
@@ -451,13 +451,13 @@ describe('userService (integración con D1)', () => {
     });
 
     it('ignora intentos de cambiar username o rol', async () => {
-      await updateUser(env.prelatura_db, ADMIN, 2, {
+      await update_user(env.prelatura_db, ADMIN, 2, {
         nombre: 'Usuario',
         apellidoPaterno: 'Parroquia',
         username: 'otro.username',
         rol: 'admin',
         parroquia_id: 2,
-      } as unknown as Parameters<typeof updateUser>[3]);
+      } as unknown as Parameters<typeof update_user>[3]);
 
       const after = await getUser(2);
       expect(after?.username).toBe('parroco1');
@@ -467,17 +467,17 @@ describe('userService (integración con D1)', () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('toggleUserActive', () => {
+  describe('toggle_user_active', () => {
     it('deshabilita y vuelve a habilitar una cuenta', async () => {
-      await toggleUserActive(env.prelatura_db, ADMIN, 2);
+      await toggle_user_active(env.prelatura_db, ADMIN, 2);
       expect((await getUser(2))?.activo).toBe(0);
 
-      await toggleUserActive(env.prelatura_db, ADMIN, 2);
+      await toggle_user_active(env.prelatura_db, ADMIN, 2);
       expect((await getUser(2))?.activo).toBe(1);
     });
 
     it('una cuenta deshabilitada ya no puede iniciar sesión', async () => {
-      await toggleUserActive(env.prelatura_db, ADMIN, 2);
+      await toggle_user_active(env.prelatura_db, ADMIN, 2);
 
       const result = await login(env.prelatura_db, env.JWT_SECRET, 'parroco1', PARISH_USER_PASSWORD);
 
@@ -485,7 +485,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('un admin no puede deshabilitar su propia cuenta', async () => {
-      const result = await toggleUserActive(env.prelatura_db, ADMIN, ADMIN.usuarioId);
+      const result = await toggle_user_active(env.prelatura_db, ADMIN, ADMIN.usuarioId);
 
       expect(result.success).toBe(false);
       if (!result.success) expect(result.status).toBe(400);
@@ -493,7 +493,7 @@ describe('userService (integración con D1)', () => {
     });
 
     it('devuelve 404 si el usuario no existe', async () => {
-      const result = await toggleUserActive(env.prelatura_db, ADMIN, 999);
+      const result = await toggle_user_active(env.prelatura_db, ADMIN, 999);
 
       expect(result.success).toBe(false);
       if (!result.success) expect(result.status).toBe(404);

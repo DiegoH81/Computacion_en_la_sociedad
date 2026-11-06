@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type ElectronApplication, type Pag
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { openLocalDatabase } from '../../electron/main/localDb/database';
+import { open_local_database } from '../../electron/main/database/local_database';
 
 // El primer login y los datos de referencia vienen del Worker de pruebas (global-setup.ts).
 
@@ -204,7 +204,7 @@ test('cola: lo que se guarda por pantalla queda pendiente, y al cerrar se sube',
     encryptedKey,
   );
   const readQueue = () => {
-    const db = openLocalDatabase(path.join(userData, 'prelatura-local.db'), key);
+    const db = open_local_database(path.join(userData, 'prelatura-local.db'), key);
     const queue = db.prepare('SELECT entidad, version_base FROM sync_cola').all();
     db.close();
     return queue;
