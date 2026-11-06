@@ -1,18 +1,10 @@
-// Revisa los datos que manda una PC antes de guardarlos.
-//
-// Los datos llegan de la red, así que no confiamos en nada: cada función revisa campo por campo
-// y devuelve un objeto limpio. Si algo está mal, lanza un RejectedChange con el motivo,
-// y ese motivo es el que ve el usuario en la PC.
+// Check everything before sending online
 
-import type { JsonObject } from '../http';
-import { detail_columns, people_count, type MinisterData, type PersonCorrection, type PersonData, type RecordData, type SacramentType } from './sync_types';
+import type { MinisterData, PersonCorrection, PersonData, RecordData, SacramentType } from '../../../shared/sync';
+import { detail_columns, people_count } from '../models/sacrament';
+import type { JsonObject } from '../utils/helpers';
 
 export class RejectedChange extends Error {}
-
-export function is_sacrament_type(value: unknown): value is SacramentType
-{
-	return value === 'bautismo' || value === 'confirmacion' || value === 'matrimonio';
-}
 
 function is_integer(value: unknown): boolean
 {
@@ -24,7 +16,6 @@ function is_missing(value: unknown): boolean
 	return value === null || value === undefined;
 }
 
-// Texto obligatorio: no puede faltar ni estar vacío.
 function required_text(value: unknown, field: string): string
 {
 	if (typeof value !== 'string' || value.trim() === '')
@@ -33,7 +24,6 @@ function required_text(value: unknown, field: string): string
 	return value;
 }
 
-// Texto opcional: puede faltar (queda null), pero si viene tiene que ser texto.
 function optional_text(value: unknown, field: string): string | null
 {
 	if (is_missing(value))
@@ -59,7 +49,7 @@ function check_person(value: unknown): PersonData
 	return {
 		client_id: required_text(person.client_id, 'client_id de la persona'),
 		dni: dni,
-		// Los nombres pueden quedar vacíos, igual que en el formulario: es lo que dice la partida.
+		
 		nombres: optional_text(person.nombres, 'nombres') ?? '',
 		apellido_paterno: optional_text(person.apellido_paterno, 'apellido_paterno') ?? '',
 		apellido_materno: optional_text(person.apellido_materno, 'apellido_materno') ?? '',
@@ -105,7 +95,6 @@ export function check_record(type: SacramentType, value: unknown): RecordData
 	if (!is_missing(record.anulado_por_usuario_id) && !is_integer(record.anulado_por_usuario_id))
 		throw new RejectedChange('El usuario de la anulación no es válido.');
 
-	// Personas: la cantidad justa para el tipo y sin repetir la misma persona.
 	let people: PersonData[] = [];
 	if (Array.isArray(record.personas))
 		people = record.personas.map(check_person);
@@ -114,7 +103,7 @@ export function check_record(type: SacramentType, value: unknown): RecordData
 	if (people.length !== people_count(type) || different_ids.size !== people.length)
 		throw new RejectedChange('Las personas de la partida no son válidas.');
 
-	// Detalle: solo se copian las columnas que tiene este tipo; lo demás se ignora.
+	
 	const incoming_detail = record.detalle ?? {};
 	const detail: Record<string, string | null> = {};
 	for (const column of detail_columns(type))

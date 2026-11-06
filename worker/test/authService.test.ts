@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { login } from '../src/auth/login';
-import { hash_password } from '../src/auth/password';
+import { login } from '../src/controllers/login';
+import { hash_password } from '../src/utils/crypto';
 
 const TEST_JWT_SECRET = 'secreto-de-prueba-para-integration-tests';
 
@@ -44,63 +44,54 @@ describe('authService.login (integración con D1)', () => {
       'passwordCorrecta123',
     );
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.token).toBeTruthy();
-      expect(result.usuario.nombreCompleto).toBe('Usuario Activo Test');
-      expect(result.usuario.parroquiaNombre).toBe('Parroquia de Prueba');
-    }
+    expect(result.token).toBeTruthy();
+    expect(result.usuario.nombre_completo).toBe('Usuario Activo Test');
+    expect(result.usuario.parroquia_nombre).toBe('Parroquia de Prueba');
   });
 
   it('rechaza una contraseña incorrecta', async () => {
-    const result = await login(
+    await expect(login(
       env.prelatura_db,
       TEST_JWT_SECRET,
       'usuario.activo',
       'passwordIncorrecta',
-    );
-
-    expect(result.success).toBe(false);
+    )).rejects.toMatchObject({ status: 401 });
   });
 
   it('rechaza un usuario que no existe', async () => {
-    const result = await login(
+    await expect(login(
       env.prelatura_db,
       TEST_JWT_SECRET,
       'usuario.inexistente',
       'cualquierPassword',
-    );
-
-    expect(result.success).toBe(false);
+    )).rejects.toMatchObject({ status: 401 });
   });
 
   it('rechaza un usuario desactivado aunque la contraseña sea correcta', async () => {
-    const result = await login(
+    await expect(login(
       env.prelatura_db,
       TEST_JWT_SECRET,
       'usuario.inactivo',
       'passwordCorrecta123',
-    );
-
-    expect(result.success).toBe(false);
+    )).rejects.toMatchObject({ status: 401 });
   });
 
   it('no revela si el motivo del fallo fue usuario inexistente o contraseña incorrecta', async () => {
-    const resultUsuarioInexistente = await login(
+    const errorUsuarioInexistente = await login(
       env.prelatura_db,
       TEST_JWT_SECRET,
       'no.existe',
       'algo',
-    );
-    const resultPasswordIncorrecta = await login(
+    ).catch((error: Error) => error);
+    const errorPasswordIncorrecta = await login(
       env.prelatura_db,
       TEST_JWT_SECRET,
       'usuario.activo',
       'incorrecta',
-    );
+    ).catch((error: Error) => error);
 
-    if (!resultUsuarioInexistente.success && !resultPasswordIncorrecta.success) {
-      expect(resultUsuarioInexistente.message).toBe(resultPasswordIncorrecta.message);
-    }
+    expect(errorUsuarioInexistente).toBeInstanceOf(Error);
+    expect(errorPasswordIncorrecta).toBeInstanceOf(Error);
+    expect((errorUsuarioInexistente as Error).message).toBe((errorPasswordIncorrecta as Error).message);
   });
 });

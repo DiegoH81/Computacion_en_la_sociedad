@@ -1,19 +1,14 @@
-// Lecturas que hacen las PCs para bajarse los datos de la base online.
+// What online PCs get from online DB
 //
-//   GET /api/sync/pull?cursor=N   las partidas que cambiaron después de N (de a MAX_RECORDS_PER_PAGE)
-//   GET /api/sync/record          una sola partida o ministro, para resolver un conflicto
-//   GET /api/reference            parroquias, ministros y usuarios
-//
-// Sobre el cursor: la tabla sync_feed tiene una fila por partida con un número "seq".
-// Cada vez que una partida cambia, un trigger le da un seq nuevo (el más alto).
-// La PC recuerda el último seq que bajó y la próxima vez pide desde ahí.
+//   read_page        registers that changed after CURSOR
+//   read_record      one register to solve a conlict
+//   read_reference   parrishes, ministers and users
 
-import type { JsonObject } from '../http';
-import { detail_columns, type PersonCorrection, type PersonData, type RecordData } from './sync_types';
+import type { PersonCorrection, PersonData, RecordData } from '../../../shared/sync';
+import { detail_columns } from '../models/sacrament';
+import type { JsonObject } from '../utils/helpers';
 
-export const MAX_RECORDS_PER_PAGE = 50;
 
-// Columnas de "sacramentos" que se mandan a la PC. "s" es sacramentos y "m" es ministros.
 const SACRAMENT_COLUMNS = `s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,
 	s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion,
 	s.version, s.created_at, s.updated_at`;
@@ -23,7 +18,7 @@ const MINISTER_SELECT = `SELECT id, client_id, parroquia_id, titulo, nombre, ape
 
 type Row = JsonObject;
 
-// Agrupa las filas de bautismos, confirmaciones o matrimonios por su sacramento_id.
+
 function by_sacrament_id(rows: Row[]): Map<number, Row>
 {
 	const map = new Map<number, Row>();
@@ -33,13 +28,6 @@ function by_sacrament_id(rows: Row[]): Map<number, Row>
 	return map;
 }
 
-// Lee partidas completas en un solo db.batch(), así todas las tablas se leen en el mismo momento.
-//
-//   sacraments_sql   consulta de las filas de "sacramentos" (puede traer además la columna seq)
-//   ids_sql          subconsulta que devuelve los ids de esas mismas partidas
-//   values           valores de los "?" de las dos consultas (son los mismos)
-//
-// Devuelve una lista de { seq, record } en el orden de sacraments_sql.
 async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql: string, values: unknown[]): Promise<{ seq: number; record: RecordData }[]>
 {
 	const [sacraments, baptisms, confirmations, marriages, people, corrections] = await db.batch<Row>([
@@ -49,7 +37,6 @@ async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql
 		db.prepare(`SELECT * FROM confirmaciones WHERE sacramento_id IN (${ids_sql})`).bind(...values),
 		db.prepare(`SELECT * FROM matrimonios WHERE sacramento_id IN (${ids_sql})`).bind(...values),
 
-		// Todas las personas de esas partidas. Cada subconsulta usa sus propios "?", por eso values va cuatro veces.
 		db
 			.prepare(
 				`SELECT id, client_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, edad, lugar_nacimiento, padre, madre
@@ -92,7 +79,7 @@ async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql
 	{
 		const { id, seq, ...sacrament } = row;
 
-		// La fila con los datos propios del tipo y los ids de sus personas.
+		
 		let detail_row: Row | undefined;
 		let people_ids: number[] = [];
 
@@ -154,8 +141,7 @@ export async function read_page(db: D1Database, cursor: number, limit: number)
 
 	const rows = await read_full_records(db, sacraments_sql, ids_sql, [cursor, limit]);
 
-	// El cursor nuevo es el seq de la última partida de la página.
-	// Si la página vino llena, puede que haya más.
+	
 	let next_cursor = cursor;
 	if (rows.length > 0)
 		next_cursor = rows[rows.length - 1].seq;
@@ -167,7 +153,6 @@ export async function read_page(db: D1Database, cursor: number, limit: number)
 	};
 }
 
-// entidad es 'ministro' o un tipo de partida. Para las partidas se busca solo por client_id.
 export async function read_record(db: D1Database, entity: string, client_id: string)
 {
 	if (entity === 'ministro')
@@ -186,8 +171,6 @@ export async function read_record(db: D1Database, entity: string, client_id: str
 	return rows[0].record;
 }
 
-// Los datos que cada PC necesita tener para trabajar sin internet.
-// password_hash no se manda nunca.
 export async function read_reference(db: D1Database)
 {
 	const [parishes, ministers, users] = await db.batch([

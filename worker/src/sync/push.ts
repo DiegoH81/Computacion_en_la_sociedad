@@ -1,30 +1,27 @@
 // POST /api/sync/push: guarda en la base online los cambios que hizo una PC.
+// 
+// For each change
+//   1. Validation is done
+//   2. Authorization is validated (user or admin)
+//   3. Solve conflicts
+//   4. Everything goes in a db.batch (transaction)
 //
-// Por cada cambio:
-//   1. Se revisan los datos (validation.ts).
-//   2. Se revisa el permiso: un usuario de parroquia solo toca registros de su parroquia.
-//   3. Se busca un conflicto: si otra PC ya cambió el registro, no se pisa su trabajo.
-//   4. Todas las escrituras van en un solo db.batch(), que es una transacción:
-//      o se guarda todo o no se guarda nada.
-//
-// La respuesta dice, por cada cambio, si quedó "aplicado", en "conflicto" o "rechazado".
+// Answer returns either "aplicado", "conflicto" or "rechazado".
 
-import type { TokenUser } from '../auth/jwt';
-import { PERSON_FIELDS, type ChangeResult, type IncomingChange, type PersonData, type RecordData, type SacramentType } from './sync_types';
-import { check_minister, check_record, is_sacrament_type, RejectedChange } from './validation';
-
-// Cada cambio hace unas dos o tres llamadas a la base, y el plan gratuito permite 50 por petición.
-export const MAX_CHANGES_PER_PUSH = 20;
+import type { ChangeResult, PersonData, RecordData, SacramentType, SyncChange } from '../../../shared/sync';
+import { PERSON_FIELDS } from '../models/person';
+import { is_sacrament_type } from '../models/sacrament';
+import type { TokenUser } from '../utils/crypto';
+import { check_minister, check_record, RejectedChange } from './validation';
 
 const CONFLICT_REASON = 'Otra PC modificó este registro antes de que se subiera este cambio.';
 
 const NOW_SQL = `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`;
 
-// La parte de un registro que sirve para saber si hay conflicto.
 interface SavedVersion
 {
 	version: number;
-	ultimo_cola_id: string | null; // el último cambio de cola que se guardó en este registro
+	ultimo_cola_id: string | null;
 }
 
 interface SavedMinister extends SavedVersion
@@ -46,9 +43,8 @@ function check_permission(user: TokenUser, parish_id: number, what: string): voi
 		throw new RejectedChange(`No tiene permiso para modificar ${what} de otra parroquia.`);
 }
 
-// Hay conflicto si la PC partió de una versión que ya no es la actual.
-// No es conflicto si es el mismo cambio que se vuelve a mandar (por ejemplo, tras un corte de internet).
-function find_conflict(change: IncomingChange, saved: SavedVersion): ChangeResult | null
+
+function find_conflict(change: SyncChange, saved: SavedVersion): ChangeResult | null
 {
 	if (saved.ultimo_cola_id === change.cola_id)
 		return null;
@@ -59,12 +55,7 @@ function find_conflict(change: IncomingChange, saved: SavedVersion): ChangeResul
 	return { entidad: change.entidad, client_id: change.client_id, estado: 'conflicto', version: saved.version, motivo: CONFLICT_REASON };
 }
 
-// Primera sentencia de un batch que modifica un registro que ya existe.
-//
-// Entre que leímos la versión y que se ejecuta el batch, otra PC podría haber guardado algo.
-// Esta consulta vuelve a comparar la versión: si es la misma devuelve 1 y el batch sigue;
-// si cambió, llama a json() con un texto que no es JSON, eso da error y la base deshace el batch.
-// apply_change reconoce ese error (is_version_guard_error) y lo responde como conflicto.
+
 function version_guard(db: D1Database, table: 'sacramentos' | 'ministros', client_id: string, version: number): D1PreparedStatement
 {
 	const sql = `SELECT CASE WHEN (SELECT version FROM ${table} WHERE client_id = ?) = ? THEN 1 ELSE json('version distinta') END`;
@@ -76,11 +67,8 @@ function is_version_guard_error(error: unknown): boolean
 	return error instanceof Error && /malformed JSON/i.test(error.message);
 }
 
-// ---------------------------------------------------------------------------
-// Ministros
-// ---------------------------------------------------------------------------
-
-async function apply_minister(db: D1Database, user: TokenUser, change: IncomingChange): Promise<ChangeResult>
+// Ministers
+async function apply_minister(db: D1Database, user: TokenUser, change: SyncChange): Promise<ChangeResult>
 {
 	const minister = check_minister(change.datos);
 	if (minister.client_id !== change.client_id)
@@ -128,7 +116,7 @@ async function apply_minister(db: D1Database, user: TokenUser, change: IncomingC
 		);
 	}
 
-	// La última sentencia lee la versión nueva (un trigger de la base la sube en cada UPDATE).
+	
 	writes.push(db.prepare('SELECT version FROM ministros WHERE client_id = ?').bind(minister.client_id));
 
 	const results = await db.batch<{ version: number }>(writes);
@@ -136,10 +124,6 @@ async function apply_minister(db: D1Database, user: TokenUser, change: IncomingC
 
 	return { entidad: 'ministro', client_id: minister.client_id, estado: 'aplicado', version: version };
 }
-
-// ---------------------------------------------------------------------------
-// Partidas
-// ---------------------------------------------------------------------------
 
 function sacrament_table(type: SacramentType): string
 {
@@ -152,8 +136,7 @@ function sacrament_table(type: SacramentType): string
 	return 'matrimonios';
 }
 
-// Devuelve los client_id de las personas que ya tiene guardadas la partida, en orden.
-// null si la partida no tiene su fila en la tabla de su tipo.
+
 async function read_saved_people(db: D1Database, type: SacramentType, record_id: number): Promise<string[] | null>
 {
 	if (type === 'matrimonio')
@@ -186,7 +169,7 @@ async function read_saved_people(db: D1Database, type: SacramentType, record_id:
 	return [row.person];
 }
 
-// Crea la persona o, si ya existe, actualiza sus datos. Nunca cambia su parroquia.
+// Person
 function save_person(db: D1Database, parish_id: number, person: PersonData): D1PreparedStatement
 {
 	const columns = PERSON_FIELDS.join(', ');
@@ -203,8 +186,7 @@ function save_person(db: D1Database, parish_id: number, person: PersonData): D1P
 		.bind(person.client_id, parish_id, ...values);
 }
 
-// Crea la fila de "sacramentos" o, si ya existe, la actualiza.
-// El tipo y la parroquia no se actualizan: apply_record ya rechazó cualquier cambio de esos dos.
+// Sacraments
 function save_sacrament(db: D1Database, record: RecordData, queue_id: string): D1PreparedStatement
 {
 	return db
@@ -246,8 +228,6 @@ function save_sacrament(db: D1Database, record: RecordData, queue_id: string): D
 		);
 }
 
-// Bautismos y confirmaciones guardan lo mismo: la persona y dos padrinos.
-// La persona no cambia en un UPDATE, solo los padrinos.
 function save_godparents(db: D1Database, table: string, record: RecordData): D1PreparedStatement
 {
 	return db
@@ -261,7 +241,7 @@ function save_godparents(db: D1Database, table: string, record: RecordData): D1P
 		.bind(record.client_id, record.personas[0].client_id, record.detalle.padrino_1, record.detalle.padrino_2);
 }
 
-// Los cónyuges no cambian en un UPDATE, solo los demás datos.
+// Marriage
 function save_marriage(db: D1Database, record: RecordData): D1PreparedStatement
 {
 	const detail = record.detalle;
@@ -310,7 +290,7 @@ function save_detail(db: D1Database, record: RecordData): D1PreparedStatement
 	return save_godparents(db, sacrament_table(record.tipo), record);
 }
 
-// Una corrección que ya estaba guardada (mismo client_id) no se vuelve a insertar.
+// Change
 function save_correction(db: D1Database, record: RecordData, correction: RecordData['cambios'][number]): D1PreparedStatement
 {
 	return db
@@ -332,7 +312,8 @@ function save_correction(db: D1Database, record: RecordData, correction: RecordD
 		);
 }
 
-async function apply_record(db: D1Database, user: TokenUser, change: IncomingChange, type: SacramentType): Promise<ChangeResult>
+
+async function apply_record(db: D1Database, user: TokenUser, change: SyncChange, type: SacramentType): Promise<ChangeResult>
 {
 	const record = check_record(type, change.datos);
 	if (record.client_id !== change.client_id)
@@ -342,7 +323,6 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 
 	const people_ids = record.personas.map((person) => person.client_id);
 
-	// Los usuarios que nombra la partida: quienes hicieron correcciones y quien la anuló.
 	const user_set = new Set<number>();
 	for (const correction of record.cambios)
 		user_set.add(correction.usuario_id);
@@ -352,7 +332,6 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 
 	const user_ids = [...user_set];
 
-	// Paso 1: leer de una vez todo lo que hay que revisar.
 	const reads = await db.batch([
 		db.prepare('SELECT id, tipo, parroquia_id, version, estado, ultimo_cola_id FROM sacramentos WHERE client_id = ?').bind(record.client_id),
 		db.prepare('SELECT client_id FROM personas WHERE client_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(people_ids)),
@@ -367,11 +346,9 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 	const parish_exists = reads[3].results.length > 0;
 	const minister_exists = reads[4].results.length > 0;
 
-	// Paso 2: revisar.
 	if (!parish_exists)
 		throw new RejectedChange('La parroquia no existe en el servidor.');
 
-	// La PC sube los ministros antes que las partidas; si no llegó, la partida espera.
 	if (record.ministro_client_id && !minister_exists)
 		throw new RejectedChange('El ministro de esta partida todavía no está en el servidor.');
 
@@ -401,7 +378,6 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 		if (conflict)
 			return conflict;
 
-		// Las personas de una partida no se pueden cambiar por otras.
 		const saved_people = await read_saved_people(db, type, saved.id);
 		if (!saved_people || saved_people.some((client_id, i) => client_id !== people_ids[i]))
 			throw new RejectedChange('Las personas no corresponden a esta partida.');
@@ -410,7 +386,6 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 	}
 	else if (people_already_saved)
 	{
-		// Partida nueva, pero sus personas ya están en otra partida.
 		throw new RejectedChange('Las personas ya pertenecen a otra partida.');
 	}
 
@@ -420,8 +395,6 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 			throw new RejectedChange('Una corrección no corresponde a las personas de la partida.');
 	}
 
-	// Paso 3: guardar. El orden importa: primero las personas y la fila de sacramentos,
-	// porque las demás tablas las buscan por client_id.
 	for (const person of record.personas)
 		writes.push(save_person(db, record.parroquia_id, person));
 
@@ -439,12 +412,8 @@ async function apply_record(db: D1Database, user: TokenUser, change: IncomingCha
 	return { entidad: type, client_id: record.client_id, estado: 'aplicado', version: version };
 }
 
-// ---------------------------------------------------------------------------
-// Entrada
-// ---------------------------------------------------------------------------
 
-// Un cambio rechazado o en conflicto no detiene a los demás: cada uno lleva su propia respuesta.
-async function apply_change(db: D1Database, user: TokenUser, change: IncomingChange): Promise<ChangeResult>
+async function apply_change(db: D1Database, user: TokenUser, change: SyncChange): Promise<ChangeResult>
 {
 	const entity = change?.entidad;
 	const client_id = change?.client_id;
@@ -476,7 +445,6 @@ async function apply_change(db: D1Database, user: TokenUser, change: IncomingCha
 			return { entidad: entity, client_id: client_id, estado: 'conflicto', version: version, motivo: CONFLICT_REASON };
 		}
 
-		// Por ejemplo, un CHECK de la base que la validación no cubrió.
 		if (error instanceof Error && /constraint failed/i.test(error.message))
 		{
 			console.error('Cambio rechazado por la base:', error.message);
@@ -487,7 +455,7 @@ async function apply_change(db: D1Database, user: TokenUser, change: IncomingCha
 	}
 }
 
-export async function apply_changes(db: D1Database, user: TokenUser, changes: IncomingChange[]): Promise<ChangeResult[]>
+export async function apply_changes(db: D1Database, user: TokenUser, changes: SyncChange[]): Promise<ChangeResult[]>
 {
 	const results: ChangeResult[] = [];
 	for (const change of changes)

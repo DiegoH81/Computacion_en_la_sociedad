@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import { hash_password } from '../src/auth/password';
-import { sign_jwt } from '../src/auth/jwt';
+import { hash_password, sign_jwt } from '../src/utils/crypto';
 import { resetDatabase } from './helpers/resetDatabase';
 
 // Pruebas de index.ts por HTTP: qué rutas piden sesión, CORS y respuestas a peticiones mal formadas.
@@ -67,7 +66,7 @@ describe('POST /api/auth/login', () => {
 		const body = (await response.json()) as { token: string; usuario: Record<string, unknown> };
 		expect(body.token.split('.')).toHaveLength(3);
 		// Sin apellido materno no queda un espacio al final.
-		expect(body.usuario).toEqual({ id: 1, nombreCompleto: 'Ana Rojas', rol: 'usuario_parroquia', parroquiaId: 1, parroquiaNombre: 'San Pedro' });
+		expect(body.usuario).toEqual({ id: 1, nombre_completo: 'Ana Rojas', rol: 'usuario_parroquia', parroquia_id: 1, parroquia_nombre: 'San Pedro' });
 	});
 
 	it('el token sirve para las rutas protegidas', async () => {
@@ -114,8 +113,8 @@ describe('rutas protegidas', () => {
 		}
 
 		expect((await SELF.fetch(url('/api/otra-cosa'))).status).toBe(404);
-		// POST a parroquias no es una ruta: no se revisa el token.
-		expect((await SELF.fetch(url('/api/parishes'), { method: 'POST' })).status).toBe(404);
+		// DELETE a parroquias no es una ruta: no se revisa el token.
+		expect((await SELF.fetch(url('/api/parishes'), { method: 'DELETE' })).status).toBe(404);
 	});
 
 	it('un token mal firmado responde 401', async () => {

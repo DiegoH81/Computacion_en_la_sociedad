@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sign_jwt, verify_jwt } from '../src/auth/jwt';
+import { sign_jwt, verify_jwt } from '../src/utils/crypto';
 
 const TEST_SECRET = 'secreto-de-prueba-suficientemente-largo';
 

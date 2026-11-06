@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
-import { sign_jwt } from '../src/auth/jwt';
-import type { IncomingChange, MinisterData, RecordData, ChangeResult } from '../src/sync/sync_types';
+import { sign_jwt } from '../src/utils/crypto';
+import type { ChangeResult, MinisterData, RecordData, SyncChange } from '../../shared/sync';
 import { resetDatabase } from './helpers/resetDatabase';
 
 const db = () => env.prelatura_db;
@@ -20,7 +20,7 @@ function api(path: string, token: string, init: { method?: string; body?: unknow
   });
 }
 
-async function push(token: string, cambios: IncomingChange[]): Promise<ChangeResult[]> {
+async function push(token: string, cambios: SyncChange[]): Promise<ChangeResult[]> {
   const response = await api('/api/sync/push', token, { method: 'POST', body: { cambios } });
   expect(response.status).toBe(200);
   return ((await response.json()) as { resultados: ChangeResult[] }).resultados;
@@ -75,7 +75,7 @@ const matrimonio = (overrides: Partial<RecordData> = {}): RecordData => ({
   ...overrides,
 });
 
-const cambio = (datos: RecordData | MinisterData, version_base: number | null, cola_id = 'cola-1'): IncomingChange => ({
+const cambio = (datos: RecordData | MinisterData, version_base: number | null, cola_id = 'cola-1'): SyncChange => ({
   entidad: 'tipo' in datos ? datos.tipo : 'ministro',
   client_id: datos.client_id,
   version_base,

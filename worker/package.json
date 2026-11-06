@@ -9,6 +9,7 @@
     "test": "vitest",
     "cf-typegen": "wrangler types",
     "db:setup": "wrangler d1 execute prelatura-db --local --file=src/db/schema.sql",
+    "db:seed": "node src/scripts/seed-dev.mjs",
     "db:migrate:remote": "wrangler d1 migrations apply prelatura-db --remote"
   },
   "devDependencies": {
@@ -19,6 +20,7 @@
     "wrangler": "^4.141.0"
   },
   "dependencies": {
+    "hono": "^4.13.16",
     "jose": "^6.2.12"
   }
 }

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { sign_jwt } from '../src/auth/jwt';
-import { authenticate_request } from '../src/auth/authentication';
+import { sign_jwt } from '../src/utils/crypto';
+import { authenticate_request } from '../src/utils/middleware';
 
 const ACTIVE_USER_ID = 10;
 const DISABLED_USER_ID = 11;
@@ -43,12 +43,9 @@ describe('authMiddleware (integración con D1)', () => {
     it('acepta un token válido de un usuario activo', async () => {
       const token = await tokenFor(ACTIVE_USER_ID);
 
-      const result = await authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db);
+      const user = await authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db);
 
-      expect(result.authenticated).toBe(true);
-      if (result.authenticated) {
-        expect(result.payload.usuarioId).toBe(ACTIVE_USER_ID);
-      }
+      expect(user.usuarioId).toBe(ACTIVE_USER_ID);
     });
 
     it('rechaza un token con firma válida si el usuario fue deshabilitado después de emitirlo', async () => {
@@ -56,38 +53,27 @@ describe('authMiddleware (integración con D1)', () => {
       // invalida es que la cuenta ya no está activa. Este es el caso que antes pasaba.
       const token = await tokenFor(DISABLED_USER_ID);
 
-      const result = await authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db);
-
-      expect(result.authenticated).toBe(false);
-      if (!result.authenticated) {
-        expect(result.status).toBe(401);
-        expect(result.message).toBe(INVALID_SESSION_MESSAGE);
-      }
+      await expect(authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db))
+        .rejects.toMatchObject({ status: 401, message: INVALID_SESSION_MESSAGE });
     });
 
     it('rechaza un token válido si el usuario ya no existe', async () => {
       const token = await tokenFor(MISSING_USER_ID);
 
-      const result = await authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db);
-
-      expect(result.authenticated).toBe(false);
-      if (!result.authenticated) expect(result.status).toBe(401);
+      await expect(authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db))
+        .rejects.toMatchObject({ status: 401 });
     });
 
     it('rechaza una petición sin header Authorization', async () => {
-      const result = await authenticate_request(requestWith(), env.JWT_SECRET, env.prelatura_db);
-
-      expect(result.authenticated).toBe(false);
-      if (!result.authenticated) expect(result.status).toBe(401);
+      await expect(authenticate_request(requestWith(), env.JWT_SECRET, env.prelatura_db))
+        .rejects.toMatchObject({ status: 401 });
     });
 
     it('rechaza un token firmado con otro secreto', async () => {
       const token = await tokenFor(ACTIVE_USER_ID, 'otro-secreto-completamente-distinto');
 
-      const result = await authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db);
-
-      expect(result.authenticated).toBe(false);
-      if (!result.authenticated) expect(result.message).toBe(INVALID_SESSION_MESSAGE);
+      await expect(authenticate_request(requestWith(token), env.JWT_SECRET, env.prelatura_db))
+        .rejects.toMatchObject({ message: INVALID_SESSION_MESSAGE });
     });
 
     it('usa el mismo mensaje para cuenta deshabilitada que para token inválido (no da pistas)', async () => {
@@ -95,18 +81,17 @@ describe('authMiddleware (integración con D1)', () => {
         requestWith(await tokenFor(DISABLED_USER_ID)),
         env.JWT_SECRET,
         env.prelatura_db,
-      );
+      ).catch((error: Error) => error);
       const forged = await authenticate_request(
         requestWith(await tokenFor(ACTIVE_USER_ID, 'otro-secreto')),
         env.JWT_SECRET,
         env.prelatura_db,
-      );
+      ).catch((error: Error) => error);
 
-      if (!disabled.authenticated && !forged.authenticated) {
-        expect(disabled.message).toBe(forged.message);
-      } else {
+      if (!(disabled instanceof Error) || !(forged instanceof Error))
         throw new Error('ambos casos debían ser rechazados');
-      }
+
+      expect(disabled.message).toBe(forged.message);
     });
   });
 

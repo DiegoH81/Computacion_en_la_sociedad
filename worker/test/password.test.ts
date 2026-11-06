@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hash_password, verify_password } from '../src/auth/password';
+import { hash_password, verify_password } from '../src/utils/crypto';
 
 describe('password hashing (PBKDF2)', () => {
   it('genera un hash verificable con la contraseña correcta', async () => {
