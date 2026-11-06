@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type ElectronApplication, type Pag
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { open_local_database } from '../../electron/main/database/local_database';
+import { open_local_database } from '../../electron/main/db/database';
 
 // El primer login y los datos de referencia vienen del Worker de pruebas (global-setup.ts).
 
@@ -57,9 +57,9 @@ test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras r
   await field(window, 'Apellido materno').fill('Mamani');
   await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
   await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('30');
-  await window.getByRole('combobox', { name: 'Fecha de bautizo: día' }).selectOption('15');
-  await window.getByRole('combobox', { name: 'Fecha de bautizo: mes' }).selectOption('08');
   await window.getByRole('combobox', { name: 'Fecha de bautizo: año' }).selectOption('2001');
+  await window.getByRole('combobox', { name: 'Fecha de bautizo: mes' }).selectOption('08');
+  await window.getByRole('combobox', { name: 'Fecha de bautizo: día' }).selectOption('15');
   await window.getByPlaceholder('Buscar celebrante...').fill('Braulio');
   await window.getByRole('button', { name: /Braulio Guido/ }).click();
   await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
@@ -109,9 +109,9 @@ test('confirmación: conserva edad y DNI, y se puede anular con motivo', async (
   await field(window, 'Apellido materno').fill('Rojas');
   await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
   await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('15');
-  await window.getByRole('combobox', { name: 'Fecha de confirmación: día' }).selectOption('20');
-  await window.getByRole('combobox', { name: 'Fecha de confirmación: mes' }).selectOption('11');
   await window.getByRole('combobox', { name: 'Fecha de confirmación: año' }).selectOption('2015');
+  await window.getByRole('combobox', { name: 'Fecha de confirmación: mes' }).selectOption('11');
+  await window.getByRole('combobox', { name: 'Fecha de confirmación: día' }).selectOption('20');
   await window.getByPlaceholder('Buscar celebrante...').fill('Braulio');
   await window.getByRole('button', { name: /Braulio Guido/ }).click();
   await field(window, 'Padrino').fill('Mario');
@@ -150,7 +150,7 @@ test('confirmación: conserva edad y DNI, y se puede anular con motivo', async (
   await window.getByRole('button', { name: 'Anular', exact: true }).click();
   await window.locator('textarea').fill('Registro duplicado');
   await window.getByRole('button', { name: 'Confirmar anulación' }).click();
-  await expect(window.getByText('Anulado', { exact: true })).toBeVisible();
+  await expect(window.getByRole('cell', { name: 'Anulada', exact: true })).toBeVisible();
 });
 
 test('ministros: se crean en la PC y quedan disponibles en las partidas tras reiniciar', async () => {
@@ -158,23 +158,23 @@ test('ministros: se crean en la PC y quedan disponibles en las partidas tras rei
   await window.getByRole('button', { name: 'Configuración' }).click();
   await window.getByRole('button', { name: 'Agregar ministro' }).click();
 
-  await window.getByRole('button', { name: '+ Agregar ministro' }).click();
+  await window.getByRole('button', { name: '+ Agregar', exact: true }).click();
   await field(window, 'Título').fill('Mons.');
   await field(window, 'Nombre').fill('Bartolome');
   await field(window, 'Apellido paterno').fill('Local');
   await field(window, 'Apellido materno').fill('Prueba');
   await window.getByRole('button', { name: 'Guardar cambios' }).click();
-  await expect(window.getByRole('cell', { name: 'Bartolome' })).toBeVisible();
+  await expect(window.getByRole('cell', { name: 'Bartolome', exact: true })).toBeVisible();
 
   await app?.close();
   window = await launchAndLogin();
   await window.getByRole('button', { name: 'Configuración' }).click();
   await window.getByRole('button', { name: 'Agregar ministro' }).click();
-  await expect(window.getByRole('cell', { name: 'Bartolome' })).toBeVisible();
-  await expect(window.getByRole('cell', { name: 'Braulio' })).toBeVisible();
+  await expect(window.getByRole('cell', { name: 'Bartolome', exact: true })).toBeVisible();
+  await expect(window.getByRole('cell', { name: 'Braulio', exact: true })).toBeVisible();
 
-  const row = window.getByRole('row', { name: /Bartolome/ });
-  await row.getByRole('button', { name: 'Editar' }).click();
+  await window.getByRole('checkbox', { name: 'Seleccionar ministro Bartolome Local' }).click();
+  await window.getByRole('button', { name: 'Editar', exact: true }).click();
   await expect(field(window, 'Título')).toHaveValue('Mons.');
 
   await window.getByRole('button', { name: 'Cancelar', exact: true }).click();
@@ -229,9 +229,9 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
   // La partida física puede traer solo la edad: se registra una de las dos.
   await window.getByRole('checkbox', { name: 'Prefiere edad del esposo' }).check();
   await window.getByRole('spinbutton', { name: 'Edad del esposo' }).fill('30');
-  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' }).selectOption('29');
-  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: mes' }).selectOption('02');
   await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: año' }).selectOption('1996');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: mes' }).selectOption('02');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' }).selectOption('29');
   await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
   await window.getByRole('textbox', { name: 'Anotaciones', exact: true }).fill('Nota de prueba');
 
@@ -317,8 +317,10 @@ test('celebrante: se crea desde la partida, sin perder lo escrito, y queda selec
   // También queda disponible en la lista de ministros.
   await window.getByRole('button', { name: 'Configuración' }).click();
   await window.getByRole('button', { name: 'Agregar ministro' }).click();
-  await expect(window.getByRole('cell', { name: 'Eulogio' })).toBeVisible();
-  await expect(window.getByRole('cell', { name: 'Manuel' })).toHaveCount(0);
+  await expect(window.getByRole('cell', { name: 'Eulogio', exact: true })).toBeVisible();
+
+  // Solo se ven los ministros de la parroquia activa: Manuel es de Parroquia 2.
+  await expect(window.getByRole('cell', { name: 'Manuel', exact: true })).toHaveCount(0);
 });
 
 test('constancias: el logo registrado en esta PC sale en las tres, con los datos de la partida', async () => {
@@ -355,9 +357,9 @@ test('constancias: el logo registrado en esta PC sale en las tres, con los datos
   await field(window, 'Nombres').fill('Nestor');
   await field(window, 'Apellido paterno').fill('Quispe');
   await field(window, 'Apellido materno').fill('Machaca');
-  await window.getByRole('combobox', { name: 'Fecha de nacimiento: día' }).selectOption('25');
-  await window.getByRole('combobox', { name: 'Fecha de nacimiento: mes' }).selectOption('02');
   await window.getByRole('combobox', { name: 'Fecha de nacimiento: año' }).selectOption('1979');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento: mes' }).selectOption('02');
+  await window.getByRole('combobox', { name: 'Fecha de nacimiento: día' }).selectOption('25');
   await save(window);
 
   let page = await printLatest('601');

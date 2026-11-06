@@ -44,12 +44,12 @@ export function SyncPage() {
               <dt className="font-semibold">Estado</dt>
               <dd>{MODE_LABELS[status.modo]}</dd>
               <dt className="font-semibold">Última sincronización</dt>
-              <dd>{formatLastSync(status.ultimaSync)}</dd>
+              <dd>{formatLastSync(status.ultima_sync)}</dd>
               <dt className="font-semibold">Cambios sin subir</dt>
               <dd data-testid="sync-pendientes">{status.pendientes}</dd>
             </dl>
-            <button type="button" className={BUTTON} disabled={status.enCurso} onClick={syncNow}>
-              {status.enCurso ? 'Sincronizando…' : 'Sincronizar ahora'}
+            <button type="button" className={BUTTON} disabled={status.en_curso} onClick={syncNow}>
+              {status.en_curso ? 'Sincronizando…' : 'Sincronizar ahora'}
             </button>
           </section>
 

@@ -4,10 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ServiceError, type Session } from '../../electron/main/common';
-import { open_local_database, type LocalDatabase } from '../../electron/main/database/local_database';
-import { save_reference_data } from '../../electron/main/records/parishes';
+import type { Session } from '../../electron/main/models/session';
+import { ServiceError } from '../../electron/main/utils/errors';
+import { open_local_database, type LocalDatabase } from '../../electron/main/db/database';
+import { save_reference_data } from '../../electron/main/sync/sync';
 import type { LocalResponse } from '../../electron/shared';
+import type { Baptism, Marriage, Minister, SearchPage } from '../../shared/models';
+import { baptism, marriage, minister, type BaptismValues } from './helpers/records';
 
 // La pantalla habla con la base local por un único canal IPC. Estas pruebas llaman a ese canal
 // como lo haría la pantalla, y revisan la forma de cada respuesta.
@@ -30,30 +33,36 @@ vi.mock('electron', () => ({
   safeStorage: {},
 }));
 
-vi.mock('../../electron/main/database/local_store', () => ({
+vi.mock('../../electron/main/db/app_database', () => ({
   get_database: () => state.db,
 }));
 
-vi.mock('../../electron/main/session/session', async () => {
-  const { ServiceError } = await import('../../electron/main/common');
-  const sync_now = vi.fn(async () => undefined);
-  state.sync_now = sync_now;
+vi.mock('../../electron/main/models/session', async () => {
+  const { ServiceError } = await import('../../electron/main/utils/errors');
   return {
     require_session: () => {
       if (!state.session) throw new ServiceError('Sesión no válida.', 401);
       return state.session;
     },
-    login: vi.fn(async () => ({ token: 't', usuario: { id: 1 } })),
-    logout: vi.fn(),
+    end_session: vi.fn(),
+  };
+});
+
+vi.mock('../../electron/main/sync/auto_sync', () => {
+  const sync_now = vi.fn(async () => undefined);
+  state.sync_now = sync_now;
+  return {
     sync_now: sync_now,
     get_sync_status: () => ({ pendientes: 0, modo: 'en-linea' }),
     resolve_sync_conflict: vi.fn(async () => undefined),
     dismiss_sync_notice: vi.fn(),
+    stop_auto_sync: vi.fn(),
+    reset_sync_status: vi.fn(),
   };
 });
 
-const { register_local_ipc } = await import('../../electron/main/ipc');
-register_local_ipc();
+const { register_routes } = await import('../../electron/main/app');
+register_routes();
 
 const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
 const parish2: Session = { user_id: 2, role: 'usuario_parroquia', parish_id: 2, token: 't' };
@@ -72,13 +81,16 @@ async function data<T = Record<string, unknown>>(method: string, payload?: unkno
   return response.data as T;
 }
 
-const header = { fechaSacramento: '2020-02-02', numeroLibro: '1', numeroFolio: '2', numeroRegistro: '3' };
-const person = { nombre: 'Ana', apellidoPaterno: 'Rojas', apellidoMaterno: 'Paz' };
+// La partida de Ana Rojas Paz, libro 1, folio 2, número 3, tal como la manda el formulario.
+const REGISTRO = { fecha_emision: '2020-02-02', libro: '1', folio: '2', numero: '3' };
+const ANA = { nombres: 'Ana', apellido_paterno: 'Rojas', apellido_materno: 'Paz' };
+const partida = (tipo: 'bautismo' | 'confirmacion', values: BaptismValues = {}) =>
+  baptism(tipo, { ...values, sacramento: { ...REGISTRO, ...values.sacramento }, persona: { ...ANA, ...values.persona } });
 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'prelatura-ipc-'));
   db = open_local_database(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
-  const user = (id: number, parroquia_id: number | null, rol: string) => ({
+  const user = (id: number, parroquia_id: number | null, rol: 'admin' | 'usuario_parroquia') => ({
     id,
     parroquia_id,
     username: `user${id}`,
@@ -115,8 +127,8 @@ describe('canal IPC de la base local', () => {
 
   it('sin sesión, las operaciones de datos responden 401', async () => {
     state.session = null;
-    for (const method of ['baptisms.search', 'marriages.search', 'ministers.search', 'parishes.list', 'statistics.get']) {
-      expect(await call(method, { parroquiaId: 1 })).toEqual({ ok: false, message: 'Sesión no válida.', status: 401 });
+    for (const method of ['sacraments.search', 'sacraments.get', 'ministers.search', 'parishes.list', 'statistics.get']) {
+      expect(await call(method, { tipo: 'bautismo', parroquia_id: 1 })).toEqual({ ok: false, message: 'Sesión no válida.', status: 401 });
     }
   });
 
@@ -134,121 +146,134 @@ describe('canal IPC de la base local', () => {
     expect(await call('parishes.list')).toEqual({ ok: false, message: 'La base local no está disponible.', status: 503 });
   });
 
-  it('bautismos: crear, buscar, ver, editar y anular con la forma que espera la pantalla', async () => {
-    const { id } = await data<{ id: number }>('baptisms.create', { values: { ...header, ...person, fechaBautizo: '2020-01-01', padrino: 'Luis' } });
+  it('bautismos: crear, buscar, ver, editar y anular con el mismo model', async () => {
+    const { id } = await data<{ id: number }>('sacraments.create', partida('bautismo', { sacramento: { fecha_evento: '2020-01-01' }, padrino_1: 'Luis' }));
     expect(id).toBeGreaterThan(0);
 
-    const found = await data<{ baptisms: { id: number; nombre: string }[]; totalPages: number }>('baptisms.search', { nombre: 'Ana' });
-    expect(found.totalPages).toBe(1);
-    expect(found.baptisms.map((row) => row.id)).toEqual([id]);
+    const found = await data<SearchPage<Baptism>>('sacraments.search', { tipo: 'bautismo', nombres: 'Ana' });
+    expect(found.total_paginas).toBe(1);
+    expect(found.resultados.map((record) => record.sacramento.id)).toEqual([id]);
 
-    const { baptism } = await data<{ baptism: Record<string, unknown> }>('baptisms.get', { id });
-    expect(baptism).toMatchObject({ nombre: 'Ana', padrino: 'Luis', fecha_bautizo: '2020-01-01', correcciones: [] });
+    const record = await data<Baptism>('sacraments.get', { id });
+    expect(record).toMatchObject({
+      sacramento: { id, tipo: 'bautismo', fecha_evento: '2020-01-01', parroquia: { nombre: 'Parroquia 1' } },
+      persona: { nombres: 'Ana', cambios: [] },
+      padrino_1: 'Luis',
+    });
+    // La búsqueda trae la misma partida completa que la ficha.
+    expect(found.resultados[0]).toEqual(record);
 
-    expect(await data('baptisms.update', { id, values: { ...header, ...person, padrino: 'Pedro' } })).toEqual({ success: true });
-    expect((await data<{ baptism: { padrino: string } }>('baptisms.get', { id })).baptism.padrino).toBe('Pedro');
+    // Lo que se lee se puede volver a guardar tal cual, cambiando solo lo que se edita.
+    expect(await data('sacraments.update', { ...record, padrino_1: 'Pedro' })).toEqual({ success: true });
+    expect((await data<Baptism>('sacraments.get', { id })).padrino_1).toBe('Pedro');
 
-    expect(await data('baptisms.annul', { id, motivo: 'Duplicada' })).toEqual({ success: true });
-    expect((await data<{ baptism: { estado: string } }>('baptisms.get', { id })).baptism.estado).toBe('anulado');
+    expect(await data('sacraments.annul', { id, motivo_anulacion: 'Duplicada' })).toEqual({ success: true });
+    expect((await data<Baptism>('sacraments.get', { id })).sacramento.estado).toBe('anulado');
   });
 
-  it('confirmaciones: usan su propia tabla y su propio nombre de fecha', async () => {
-    const { id } = await data<{ id: number }>('confirmations.create', { values: { ...header, ...person, fechaConfirmacion: '2021-05-05' } });
+  it('confirmaciones: usan su propia tabla', async () => {
+    const { id } = await data<{ id: number }>('sacraments.create', partida('confirmacion', { sacramento: { fecha_evento: '2021-05-05' } }));
 
-    const { confirmation } = await data<{ confirmation: Record<string, unknown> }>('confirmations.get', { id });
-    expect(confirmation.fecha_confirmacion).toBe('2021-05-05');
+    expect((await data<Baptism>('sacraments.get', { id })).sacramento).toMatchObject({ tipo: 'confirmacion', fecha_evento: '2021-05-05' });
 
-    expect((await data<{ confirmations: unknown[] }>('confirmations.search', {})).confirmations).toHaveLength(1);
-    expect((await data<{ baptisms: unknown[] }>('baptisms.search', {})).baptisms).toHaveLength(0);
+    expect((await data<SearchPage<Baptism>>('sacraments.search', { tipo: 'confirmacion' })).resultados).toHaveLength(1);
+    expect((await data<SearchPage<Baptism>>('sacraments.search', { tipo: 'bautismo' })).resultados).toHaveLength(0);
 
-    // Una confirmación no se puede abrir como bautismo.
-    expect(await call('baptisms.get', { id })).toEqual({ ok: false, message: 'Partida no encontrada.', status: 404 });
-    expect(await call('baptisms.annul', { id, motivo: 'x' })).toMatchObject({ ok: false, status: 404 });
+    // Una confirmación no se puede guardar como bautismo.
+    expect(await call('sacraments.update', partida('bautismo', { sacramento: { id } }))).toEqual({ ok: false, message: 'Partida no encontrada.', status: 404 });
 
-    expect(await data('confirmations.update', { id, values: { ...header, ...person, fechaConfirmacion: '2021-06-06' } })).toEqual({ success: true });
-    expect(await data('confirmations.annul', { id, motivo: 'Error' })).toEqual({ success: true });
+    expect(await data('sacraments.update', partida('confirmacion', { sacramento: { id, fecha_evento: '2021-06-06' } }))).toEqual({ success: true });
+    expect(await data('sacraments.annul', { id, motivo_anulacion: 'Error' })).toEqual({ success: true });
   });
 
   it('matrimonios: crear, buscar por cualquiera de los cónyuges, ver, editar y anular', async () => {
-    const values = {
-      ...header,
-      esposo: { nombre: 'Juan', apellidoPaterno: 'Quispe', apellidoMaterno: 'Mamani' },
-      esposa: { nombre: 'Rosa', apellidoPaterno: 'Flores', apellidoMaterno: 'Huaman' },
-      lugarMatrimonio: 'Templo',
-    };
-    const { id } = await data<{ id: number }>('marriages.create', { values });
+    const values = marriage({
+      sacramento: REGISTRO,
+      conyuge_1: { nombres: 'Juan', apellido_paterno: 'Quispe', apellido_materno: 'Mamani' },
+      conyuge_2: { nombres: 'Rosa', apellido_paterno: 'Flores', apellido_materno: 'Huaman' },
+      lugar: 'Templo',
+    });
+    const { id } = await data<{ id: number }>('sacraments.create', values);
 
-    expect((await data<{ marriages: { id: number }[] }>('marriages.search', { nombre: 'Rosa' })).marriages.map((row) => row.id)).toEqual([id]);
-    expect((await data<{ marriages: unknown[] }>('marriages.search', { apellidoPaterno: 'Quispe' })).marriages).toHaveLength(1);
+    const byWife = await data<SearchPage<Marriage>>('sacraments.search', { tipo: 'matrimonio', nombres: 'Rosa' });
+    expect(byWife.resultados.map((record) => record.sacramento.id)).toEqual([id]);
+    expect((await data<SearchPage<Marriage>>('sacraments.search', { tipo: 'matrimonio', apellido_paterno: 'Quispe' })).resultados).toHaveLength(1);
 
-    const { marriage } = await data<{ marriage: Record<string, unknown> }>('marriages.get', { id });
-    expect(marriage).toMatchObject({ esposo_nombre: 'Juan', esposa_nombre: 'Rosa', lugar_matrimonio: 'Templo' });
+    const record = await data<Marriage>('sacraments.get', { id });
+    expect(record).toMatchObject({ conyuge_1: { nombres: 'Juan' }, conyuge_2: { nombres: 'Rosa' }, lugar: 'Templo' });
 
-    expect(await data('marriages.update', { id, values: { ...values, testigo1: 'Testigo' } })).toEqual({ success: true });
-    expect((await data<{ marriage: { testigo_1: string } }>('marriages.get', { id })).marriage.testigo_1).toBe('Testigo');
-    expect(await data('marriages.annul', { id, motivo: 'Error' })).toEqual({ success: true });
+    expect(await data('sacraments.update', { ...record, testigo_1: 'Testigo' })).toEqual({ success: true });
+    expect((await data<Marriage>('sacraments.get', { id })).testigo_1).toBe('Testigo');
+    expect(await data('sacraments.annul', { id, motivo_anulacion: 'Error' })).toEqual({ success: true });
+  });
+
+  it('un tipo desconocido se rechaza', async () => {
+    expect(await call('sacraments.search', { tipo: 'otro' })).toEqual({ ok: false, message: 'Tipo de sacramento inválido.', status: 400 });
+    expect(await call('sacraments.create', { sacramento: { tipo: 'otro' } })).toEqual({ ok: false, message: 'Tipo de sacramento inválido.', status: 400 });
+    expect(await call('sacraments.create', {})).toEqual({ ok: false, message: 'Tipo de sacramento inválido.', status: 400 });
   });
 
   it('un id que no es un entero positivo responde "no encontrado"', async () => {
     for (const id of [0, -1, 1.5, '1', null, undefined]) {
-      expect(await call('baptisms.get', { id })).toEqual({ ok: false, message: 'Partida no encontrada.', status: 404 });
-      expect(await call('ministers.update', { id, values: {} })).toEqual({ ok: false, message: 'Ministro no encontrado.', status: 404 });
+      expect(await call('sacraments.get', { id })).toEqual({ ok: false, message: 'Partida no encontrada.', status: 404 });
+      expect(await call('sacraments.update', partida('bautismo', { sacramento: { id: id as number } }))).toEqual({ ok: false, message: 'Partida no encontrada.', status: 404 });
+      expect(await call('ministers.update', minister({ id: id as number }))).toEqual({ ok: false, message: 'Ministro no encontrado.', status: 404 });
     }
   });
 
   it('ministros: crear, buscar, editar y deshabilitar', async () => {
-    const { id } = await data<{ id: number }>('ministers.create', { values: { titulo: 'Pbro.', nombre: 'Luis', apellidoPaterno: 'Paz', apellidoMaterno: 'Vega' } });
+    const { id } = await data<{ id: number }>('ministers.create', minister({ titulo: 'Pbro.', nombre: 'Luis', apellido_paterno: 'Paz', apellido_materno: 'Vega' }));
 
-    const found = await data<{ priests: { id: number; activo: number }[]; totalPages: number }>('ministers.search', { nombre: 'Luis' });
-    expect(found.priests.map((row) => row.id)).toEqual([id]);
+    const found = await data<SearchPage<Minister>>('ministers.search', { nombres: 'Luis' });
+    expect(found.resultados).toMatchObject([{ id, titulo: 'Pbro.', parroquia: { nombre: 'Parroquia 1' } }]);
 
-    expect(await data('ministers.update', { id, values: { nombre: 'Luis', apellidoPaterno: 'Paz', apellidoMaterno: 'Soto' } })).toEqual({ success: true });
+    expect(await data('ministers.update', { ...found.resultados[0], apellido_materno: 'Soto' })).toEqual({ success: true });
     expect(await data('ministers.toggleActive', { id })).toEqual({ success: true });
-    expect((await data<{ priests: { activo: number }[] }>('ministers.search', {})).priests[0].activo).toBe(0);
+    expect((await data<SearchPage<Minister>>('ministers.search', {})).resultados[0]).toMatchObject({ apellido_materno: 'Soto', activo: 0 });
   });
 
   it('un usuario no puede modificar partidas ni ministros de otra parroquia', async () => {
-    const { id } = await data<{ id: number }>('baptisms.create', { values: { ...header, ...person } });
-    const minister = await data<{ id: number }>('ministers.create', { values: { nombre: 'Luis', apellidoPaterno: 'Paz', apellidoMaterno: 'Vega' } });
+    const { id } = await data<{ id: number }>('sacraments.create', partida('bautismo'));
+    const created = await data<{ id: number }>('ministers.create', minister({ nombre: 'Luis', apellido_paterno: 'Paz', apellido_materno: 'Vega' }));
 
     state.session = parish2;
-    expect(await call('baptisms.update', { id, values: { ...header, ...person } })).toMatchObject({ ok: false, status: 403 });
-    expect(await call('baptisms.annul', { id, motivo: 'x' })).toMatchObject({ ok: false, status: 403 });
-    expect(await call('ministers.toggleActive', { id: minister.id })).toMatchObject({ ok: false, status: 403 });
-    expect(await call('parishes.saveLogo', { id: 1, logo: null })).toMatchObject({ ok: false, status: 403 });
+    expect(await call('sacraments.update', partida('bautismo', { sacramento: { id } }))).toMatchObject({ ok: false, status: 403 });
+    expect(await call('sacraments.annul', { id, motivo_anulacion: 'x' })).toMatchObject({ ok: false, status: 403 });
+    expect(await call('ministers.toggleActive', { id: created.id })).toMatchObject({ ok: false, status: 403 });
+    expect(await call('parishes.saveLogo', { parroquia_id: 1, logo: null })).toMatchObject({ ok: false, status: 403 });
   });
 
   it('un admin tiene que elegir la parroquia al crear', async () => {
     state.session = admin;
-    expect(await call('baptisms.create', { values: { ...header, ...person } })).toEqual({ ok: false, message: 'Debe especificar la parroquia.', status: 400 });
+    expect(await call('sacraments.create', partida('bautismo'))).toEqual({ ok: false, message: 'Debe especificar la parroquia.', status: 400 });
 
-    const { id } = await data<{ id: number }>('baptisms.create', { values: { ...header, ...person }, parroquiaId: 2 });
-    const { baptism } = await data<{ baptism: { parroquia_id: number } }>('baptisms.get', { id });
-    expect(baptism.parroquia_id).toBe(2);
+    const { id } = await data<{ id: number }>('sacraments.create', partida('bautismo', { sacramento: { parroquia_id: 2 } }));
+    expect((await data<Baptism>('sacraments.get', { id })).sacramento.parroquia_id).toBe(2);
   });
 
   it('parroquias, logo, índice, estadísticas y duplicados', async () => {
-    expect(await data('parishes.list')).toEqual({ parishes: [{ id: 1, nombre: 'Parroquia 1' }, { id: 2, nombre: 'Parroquia 2' }] });
+    expect(await data('parishes.list')).toEqual({ parroquias: [{ id: 1, nombre: 'Parroquia 1' }, { id: 2, nombre: 'Parroquia 2' }] });
 
     const logo = 'data:image/png;base64,iVBORw0KGgo=';
-    expect(await data('parishes.saveLogo', { id: 1, logo })).toEqual({ success: true });
-    expect(await data('parishes.logo', { id: 1 })).toEqual({ logo });
+    expect(await data('parishes.saveLogo', { parroquia_id: 1, logo })).toEqual({ success: true });
+    expect(await data('parishes.logo', { parroquia_id: 1 })).toEqual({ logo });
 
-    await data('baptisms.create', { values: { ...header, ...person, fechaBautizo: '2020-03-03' } });
+    await data('sacraments.create', partida('bautismo', { sacramento: { fecha_evento: '2020-03-03' } }));
 
-    expect(await data('sacramentIndex.books', { tipo: 'bautismo', parroquiaId: 1 })).toEqual({ libros: ['1'] });
-    const index = await data<{ entries: { nombres: string }[] }>('sacramentIndex.entries', { tipo: 'bautismo', parroquiaId: 1, libro: null });
-    expect(index.entries.map((entry) => entry.nombres)).toEqual(['Ana']);
+    expect(await data('sacramentIndex.books', { tipo: 'bautismo', parroquia_id: 1 })).toEqual({ libros: ['1'] });
+    const index = await data<{ entradas: { nombres: string }[] }>('sacramentIndex.entries', { tipo: 'bautismo', parroquia_id: 1, libro: null });
+    expect(index.entradas).toEqual([{ ...ANA, libro: '1', folio: '2', numero: '3' }]);
 
-    const stats = await data<{ anio: number; totales: { bautismo: { anio: number } } }>('statistics.get', { parroquiaId: 1, anio: 2020 });
+    const stats = await data<{ anio: number; totales: { bautismo: { anio: number } } }>('statistics.get', { parroquia_id: 1, anio: 2020 });
     expect(stats.anio).toBe(2020);
     expect(stats.totales.bautismo.anio).toBe(1);
 
-    const duplicates = await data<{ matches: { nivel: string }[]; total: number }>('sacraments.findDuplicates', {
+    const duplicates = await data<{ matches: { nivel: string; nombre_completo: string }[]; total: number }>('sacraments.findDuplicates', {
       tipo: 'bautismo',
-      personas: [{ nombre: 'Ana', apellidoPaterno: 'Rojas', apellidoMaterno: 'Paz' }],
+      personas: [{ para: '', ...ANA }],
     });
     expect(duplicates.total).toBe(1);
+    expect(duplicates.matches[0].nombre_completo).toBe('Ana Rojas Paz');
   });
 
   it('sesión y sincronización', async () => {
@@ -256,7 +281,7 @@ describe('canal IPC de la base local', () => {
     expect(await data('sync.status')).toEqual({ pendientes: 0, modo: 'en-linea' });
     expect(await data('sync.run')).toEqual({ pendientes: 0, modo: 'en-linea' });
     expect(state.sync_now).toHaveBeenCalled();
-    expect(await data('sync.resolve', { entidad: 'bautismo', clientId: 'x', choice: 'local' })).toEqual({ pendientes: 0, modo: 'en-linea' });
+    expect(await data('sync.resolve', { entidad: 'bautismo', client_id: 'x', eleccion: 'local' })).toEqual({ pendientes: 0, modo: 'en-linea' });
     expect(await data('sync.dismissNotice')).toEqual({ success: true });
 
     state.session = null;

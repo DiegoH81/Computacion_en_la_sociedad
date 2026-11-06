@@ -4,9 +4,9 @@ import { DashboardPage } from '../pages/DashboardPage';
 import { SelectParishPage } from '../pages/SelectParishPage';
 import { PriestsPage } from '../pages/PriestsPage';
 import { MarriagesPage } from '../pages/MarriagesPage';
-import { BaptismsPage } from '../pages/BaptismsPage';
-import { ConfirmationsPage } from '../pages/ConfirmationsPage';
+import { PersonSacramentPage } from '../pages/PersonSacramentPage';
 import { UsersPage } from '../pages/UsersPage';
+import { ParishesPage } from '../pages/ParishesPage';
 import { SettingsPage } from '../pages/SettingsPage'
 import { SyncPage } from '../pages/SyncPage';
 import { StatisticsPage } from '../pages/StatisticsPage';
@@ -80,7 +80,7 @@ export function AppRoutes() {
         path="/bautismos"
         element={
           <ProtectedRoute>
-            <BaptismsPage />
+            <PersonSacramentPage tipo="bautismo" />
           </ProtectedRoute>
         }
       />
@@ -89,7 +89,7 @@ export function AppRoutes() {
         path="/confirmaciones"
         element={
           <ProtectedRoute>
-            <ConfirmationsPage />
+            <PersonSacramentPage tipo="confirmacion" />
           </ProtectedRoute>
         }
       />
@@ -99,6 +99,15 @@ export function AppRoutes() {
         element={
           <ProtectedRoute requireAdmin>
             <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/parroquias"
+        element={
+          <ProtectedRoute requireAdmin>
+            <ParishesPage />
           </ProtectedRoute>
         }
       />

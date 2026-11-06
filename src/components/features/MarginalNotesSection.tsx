@@ -1,10 +1,5 @@
 import type { RefObject } from 'react';
-import {
-  recordedLabel,
-  type CorrectionDraft,
-  type CorrectionOption,
-  type RecordedCorrection,
-} from '../../lib/personCorrections';
+import type { CorrectionDraft, CorrectionOption, RecordedChange } from '../../lib/personCorrections';
 import { FORM_CONTROL_CLASS, FormInput } from '../ui/FormInput';
 import { FormPanel } from '../ui/FormPanel';
 import { StackedFormField } from '../ui/StackedFormField';
@@ -16,7 +11,7 @@ interface MarginalNotesSectionProps {
   options: CorrectionOption[];
   corrections: CorrectionDraft[];
   onCorrectionsChange: (corrections: CorrectionDraft[]) => void;
-  recorded?: RecordedCorrection[];
+  recorded?: RecordedChange[];
 }
 
 export function MarginalNotesSection({
@@ -33,7 +28,7 @@ export function MarginalNotesSection({
 
   function addRow() {
     if (!nextFree) return;
-    onCorrectionsChange([...corrections, { id: crypto.randomUUID(), field: nextFree.key, valorNuevo: '' }]);
+    onCorrectionsChange([...corrections, { id: crypto.randomUUID(), field: nextFree.key, valor_nuevo: '' }]);
   }
 
   function updateRow(id: string, changes: Partial<CorrectionDraft>) {
@@ -108,7 +103,7 @@ export function MarginalNotesSection({
                     <FormInput value={current?.currentValue ?? ''} readOnly />
                   </StackedFormField>
                   <StackedFormField label="Campo nuevo">
-                    <FormInput value={row.valorNuevo} onChange={(e) => updateRow(row.id, { valorNuevo: e.target.value })} />
+                    <FormInput value={row.valor_nuevo} onChange={(e) => updateRow(row.id, { valor_nuevo: e.target.value })} />
                   </StackedFormField>
                 </div>
               </div>
@@ -119,11 +114,11 @@ export function MarginalNotesSection({
             <div>
               <h4 className="mb-1 text-xs font-bold text-slate-800">Cambios ya registrados</h4>
               <ul className="flex flex-col gap-1 text-sm text-slate-800">
-                {recorded.map((change, index) => (
+                {recorded.map(({ label, change }, index) => (
                   <li key={index} className="rounded bg-white px-3 py-1">
-                    {recordedLabel(change)}: {change.valor_anterior ?? '(vacío)'} → {change.valor_nuevo ?? '(vacío)'}
+                    {label}: {change.valor_anterior ?? '(vacío)'} → {change.valor_nuevo ?? '(vacío)'}
                     <span className="ml-2 text-xs text-slate-500">
-                      {new Date(change.fecha_cambio).toLocaleDateString('es-PE')}
+                      {change.fecha_cambio ? new Date(change.fecha_cambio).toLocaleDateString('es-PE') : ''}
                     </span>
                   </li>
                 ))}

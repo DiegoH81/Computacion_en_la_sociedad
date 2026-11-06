@@ -9,13 +9,17 @@ interface FormDialogProps {
   errorMessage?: string | null;
   /** Aviso que debe seguir a la vista mientras se recorre el formulario. */
   notice?: ReactNode;
+  /** Ancho de la ventana: las partidas usan large; ministros, usuarios y parroquias, uno menor. */
+  size?: 'large' | 'medium' | 'small';
   children: ReactNode;
 }
+
+const WIDTHS = { large: 'max-w-5xl', medium: 'max-w-3xl', small: 'max-w-xl' };
 
 const HEADER_BUTTON = 'rounded-md px-4 py-1 text-xs font-bold uppercase text-white hover:opacity-90 disabled:opacity-50';
 
 /** Ventana de los formularios de partidas: difumina el fondo y deja las acciones siempre a la vista. */
-export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, notice, children }: FormDialogProps) {
+export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, notice, size = 'large', children }: FormDialogProps) {
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
 
   return (
@@ -24,7 +28,7 @@ export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, n
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[92vh] w-full max-w-5xl flex-col gap-3 rounded-2xl bg-app p-5 shadow-2xl"
+        className={`flex max-h-[92vh] w-full ${WIDTHS[size]} flex-col gap-3 rounded-2xl bg-app p-5 shadow-2xl`}
       >
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black px-5 py-2">
           <h2 className="font-bold uppercase text-white">{title}</h2>

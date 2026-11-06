@@ -4,18 +4,21 @@ import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { open_local_database, type LocalDatabase } from '../../electron/main/database/local_database';
-import { REBUILT_NOTICE, device_id, local_paths, open_or_detect, recover_local_database, upload_key_copy, type KeyStore } from '../../electron/main/database/recovery';
-import { ServiceError, type Session } from '../../electron/main/common';
-import { create_verifier, matches_verifier, save_credential, verify_offline } from '../../electron/main/session/credentials';
-import { get_marriage } from '../../electron/main/records/marriages';
-import { create_minister, update_minister } from '../../electron/main/records/ministers';
-import { save_reference_data, type ReferenceData } from '../../electron/main/records/parishes';
-import type { RemoteOptions, RemoteRequest } from '../../electron/main/sync/remote';
-import { create_person_sacrament, get_person_sacrament, search_person_sacraments, update_person_sacrament, type PersonSacramentInput as SinglePersonInput } from '../../electron/main/records/baptisms_and_confirmations';
-import { pull_changes, push_pending, read_queue_summary, resolve_conflict, run_sync } from '../../electron/main/sync/sync_engine';
-import { get_sync_value, set_sync_value } from '../../electron/main/sync/sync_queue';
-import { read_local_record, type RecordData } from '../../electron/main/sync/sync_records';
+import { open_local_database, type LocalDatabase, device_id, local_paths, open_or_detect, type KeyStore } from '../../electron/main/db/database';
+import { REBUILT_NOTICE, recover_local_database, upload_key_copy } from '../../electron/main/sync/recovery';
+import type { Session } from '../../electron/main/models/session';
+import { ServiceError } from '../../electron/main/utils/errors';
+import { create_verifier, matches_verifier } from '../../electron/main/utils/crypto';
+import { save_credential, verify_offline } from '../../electron/main/controllers/login';
+import { create_person_sacrament, read_marriage, read_person_sacrament, search_sacraments, update_person_sacrament } from '../../electron/main/controllers/sacraments';
+import { baptism, change, minister, type BaptismValues } from './helpers/records';
+import { create_minister, update_minister } from '../../electron/main/controllers/ministers';
+import { save_reference_data, pull_changes, push_pending, read_queue_summary, resolve_conflict, run_sync } from '../../electron/main/sync/sync';
+import type { RecordData } from '../../shared/sync';
+import type { ReferenceData, RemoteOptions, RemoteRequest } from '../../electron/main/sync/online';
+import { get_sync_value, set_sync_value } from '../../electron/main/sync/queue';
+import { read_local_record } from '../../electron/main/sync/records';
+import { PUSH_BATCH_SIZE } from '../../electron/main/utils/config';
 
 const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
 
@@ -28,16 +31,13 @@ const reference: ReferenceData = {
   ],
 };
 
-const input = (overrides: Partial<SinglePersonInput> = {}): SinglePersonInput => ({
-  fechaSacramento: '2020-01-01',
-  numeroLibro: '1',
-  numeroFolio: '2',
-  numeroRegistro: '3',
-  nombre: 'Diago',
-  apellidoPaterno: 'Guido',
-  apellidoMaterno: 'Alvaro',
-  ...overrides,
-});
+// Un bautismo de Diago Guido Alvaro, libro 1, folio 2, número 3.
+const input = (values: BaptismValues = {}) =>
+  baptism('bautismo', {
+    ...values,
+    sacramento: { fecha_emision: '2020-01-01', libro: '1', folio: '2', numero: '3', ...values.sacramento },
+    persona: { nombres: 'Diago', apellido_paterno: 'Guido', apellido_materno: 'Alvaro', ...values.persona },
+  });
 
 const remotePartida = (overrides: Partial<RecordData> = {}): RecordData => ({
   tipo: 'bautismo',
@@ -104,7 +104,7 @@ afterEach(() => {
 
 describe('subir la cola', () => {
   it('envía la partida completa, la quita de la cola y adopta la versión del servidor', async () => {
-    const id = create_person_sacrament(db, 'bautismo', parish1, input({ celebranteId: 1, padrino: 'Pedro' }), undefined);
+    const id = create_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { ministro_id: 1 }, padrino_1: 'Pedro' }));
     const { request, calls } = fakeRemote(acceptAll(1));
 
     await push_pending(db, request, 'token');
@@ -118,9 +118,9 @@ describe('subir la cola', () => {
   });
 
   it('incluye las correcciones, y varias ediciones se envían como una sola', async () => {
-    const id = create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
-    update_person_sacrament(db, 'bautismo', parish1, id, input({ correcciones: [{ campo: 'nombres', valorNuevo: 'Diego' }] }));
-    update_person_sacrament(db, 'bautismo', parish1, id, input({ nombre: 'Diego', correcciones: [{ campo: 'nombres', valorNuevo: 'Diogo' }] }));
+    const id = create_person_sacrament(db, 'bautismo', parish1, input());
+    update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { cambios: [change('nombres', 'Diego')] } }));
+    update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { nombres: 'Diego', cambios: [change('nombres', 'Diogo')] } }));
     const { request, calls } = fakeRemote(acceptAll());
 
     await push_pending(db, request, 'token');
@@ -132,8 +132,8 @@ describe('subir la cola', () => {
   });
 
   it('sube los ministros antes que las partidas', async () => {
-    create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
-    create_minister(db, parish1, { nombre: 'Luis', apellidoPaterno: 'Ramos', apellidoMaterno: 'Paz' }, undefined);
+    create_person_sacrament(db, 'bautismo', parish1, input());
+    create_minister(db, parish1, minister({ nombre: 'Luis', apellido_paterno: 'Ramos', apellido_materno: 'Paz' }));
     const { request, calls } = fakeRemote(acceptAll());
 
     await push_pending(db, request, 'token');
@@ -142,7 +142,7 @@ describe('subir la cola', () => {
   });
 
   it('un corte no pierde nada y el reenvío usa el mismo cola_id', async () => {
-    create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, input());
     const cut = fakeRemote(offline);
 
     await expect(push_pending(db, cut.request, 'token')).rejects.toThrow();
@@ -157,9 +157,9 @@ describe('subir la cola', () => {
   });
 
   it('si se edita mientras viaja, la edición sigue pendiente sobre la versión aceptada', async () => {
-    const id = create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
+    const id = create_person_sacrament(db, 'bautismo', parish1, input());
     const { request } = fakeRemote((_path, options) => {
-      update_person_sacrament(db, 'bautismo', parish1, id, input({ nombre: 'Editado en vuelo' }));
+      update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { nombres: 'Editado en vuelo' } }));
       return acceptAll(5)(_path, options);
     });
 
@@ -170,8 +170,8 @@ describe('subir la cola', () => {
   });
 
   it('un conflicto queda marcado, no bloquea a los demás y no se reintenta', async () => {
-    const primero = create_person_sacrament(db, 'bautismo', parish1, input({ numeroRegistro: '1' }), undefined);
-    create_person_sacrament(db, 'bautismo', parish1, input({ numeroRegistro: '2' }), undefined);
+    const primero = create_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { numero: '1' } }));
+    create_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { numero: '2' } }));
     const primeraPartida = db.prepare('SELECT client_id FROM sacramentos WHERE id = ?').pluck().get(primero);
 
     const { request } = fakeRemote((_path, options) => ({
@@ -194,7 +194,7 @@ describe('subir la cola', () => {
   });
 
   it('un rechazo queda marcado con su motivo y se reintenta', async () => {
-    create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, input());
     const { request } = fakeRemote((_path, options) => ({
       resultados: pushBody(options).map((c) => ({ entidad: c.entidad, client_id: c.client_id, estado: 'rechazado', motivo: 'Sin permiso' })),
     }));
@@ -207,13 +207,13 @@ describe('subir la cola', () => {
     expect(queue()).toEqual([]);
   });
 
-  it('envía en lotes de 20', async () => {
-    for (let i = 0; i < 21; i += 1) create_person_sacrament(db, 'bautismo', parish1, input({ numeroRegistro: String(i) }), undefined);
+  it('envía en lotes de PUSH_BATCH_SIZE', async () => {
+    for (let i = 0; i <= PUSH_BATCH_SIZE; i += 1) create_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { numero: String(i) } }));
     const { request, calls } = fakeRemote(acceptAll());
 
     await push_pending(db, request, 'token');
 
-    expect(calls.map((call) => pushBody(call.options).length)).toEqual([20, 1]);
+    expect(calls.map((call) => pushBody(call.options).length)).toEqual([PUSH_BATCH_SIZE, 1]);
   });
 });
 
@@ -229,7 +229,7 @@ describe('descargar cambios', () => {
     expect(get_sync_value(db, 'cursor')).toBe('10');
     const row = db.prepare('SELECT version, parroquia_id FROM sacramentos WHERE client_id = ?').get('remota-1');
     expect(row).toEqual({ version: 4, parroquia_id: 1 });
-    expect(search_person_sacraments(db, 'bautismo', { nombre: 'Ana' }).rows).toHaveLength(1);
+    expect(search_sacraments(db, 'bautismo', { nombres: 'Ana' }).resultados).toHaveLength(1);
   });
 
   it('actualiza con la versión exacta del servidor, aunque coincida con la de la persona', async () => {
@@ -250,15 +250,15 @@ describe('descargar cambios', () => {
     expect(db.prepare('SELECT libro, version FROM sacramentos').get()).toEqual({ libro: 'Nuevo', version: 5 });
     expect(queue()).toEqual([]);
     // La corrección también llega: se encuentra por el nombre anterior.
-    expect(search_person_sacraments(db, 'bautismo', { nombre: 'Ana' }).rows).toHaveLength(1);
-    expect(search_person_sacraments(db, 'bautismo', { nombre: 'Anita' }).rows).toHaveLength(1);
+    expect(search_sacraments(db, 'bautismo', { nombres: 'Ana' }).resultados).toHaveLength(1);
+    expect(search_sacraments(db, 'bautismo', { nombres: 'Anita' }).resultados).toHaveLength(1);
   });
 
   it('no pisa una partida con cambios sin subir', async () => {
     const first = fakeRemote(() => page([remotePartida()], 1));
     await pull_changes(db, first.request, 'token');
     const id = db.prepare('SELECT id FROM sacramentos').pluck().get() as number;
-    update_person_sacrament(db, 'bautismo', parish1, id, input({ nombre: 'Local' }));
+    update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { nombres: 'Local' } }));
 
     const second = fakeRemote(() => page([remotePartida({ version: 9, libro: 'Servidor' })], 2));
     await pull_changes(db, second.request, 'token');
@@ -280,7 +280,7 @@ describe('descargar cambios', () => {
     await pull_changes(db, request, 'token');
 
     const id = db.prepare('SELECT id FROM sacramentos').pluck().get() as number;
-    expect(get_marriage(db, id)).toMatchObject({ esposo_nombre: 'Ana', esposa_nombre: 'Maria', lugar_matrimonio: 'Puno', testigo_1: 'Luz' });
+    expect(read_marriage(db, id)).toMatchObject({ conyuge_1: { nombres: 'Ana' }, conyuge_2: { nombres: 'Maria' }, lugar: 'Puno', testigo_1: 'Luz' });
   });
 
   it('si la página trae un ministro desconocido, refresca la referencia y reintenta', async () => {
@@ -337,7 +337,7 @@ describe('datos de referencia', () => {
     expect(db.prepare('SELECT nombre, version FROM ministros').get()).toEqual({ nombre: 'Manolo', version: 4 });
 
     const id = db.prepare('SELECT id FROM ministros').pluck().get() as number;
-    update_minister(db, parish1, id, { nombre: 'Local', apellidoPaterno: 'T', apellidoMaterno: 'R' });
+    update_minister(db, parish1, minister({ id, nombre: 'Local', apellido_paterno: 'T', apellido_materno: 'R' }));
 
     save_reference_data(db, { ...reference, ministros: [{ ...reference.ministros[0], nombre: 'Servidor', version: 5 }] });
     expect(db.prepare('SELECT nombre FROM ministros').pluck().get()).toBe('Local');
@@ -369,9 +369,9 @@ describe('datos de referencia', () => {
 
 describe('conflictos', () => {
   async function conflicted() {
-    const id = create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
+    const id = create_person_sacrament(db, 'bautismo', parish1, input());
     const clientId = db.prepare('SELECT client_id FROM sacramentos WHERE id = ?').pluck().get(id) as string;
-    update_person_sacrament(db, 'bautismo', parish1, id, input({ nombre: 'Diego local' }));
+    update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { nombres: 'Diego local' } }));
     db.prepare(`UPDATE sync_cola SET estado = 'conflicto', motivo = 'x'`).run();
     const server = { ...read_local_record(db, clientId), version: 7, libro: 'Del servidor', personas: [{ ...read_local_record(db, clientId).personas[0], nombres: 'Diego servidor' }], cambios: [] };
     return { id, clientId, server };
@@ -383,7 +383,7 @@ describe('conflictos', () => {
 
     await resolve_conflict(db, request, 'token', 'bautismo', clientId, 'servidor');
 
-    expect(get_person_sacrament(db, 'bautismo', id)).toMatchObject({ numero_libro: 'Del servidor', nombre: 'Diego servidor' });
+    expect(read_person_sacrament(db, 'bautismo', id)).toMatchObject({ sacramento: { libro: 'Del servidor' }, persona: { nombres: 'Diego servidor' } });
     expect(queue()).toEqual([]);
     expect(db.prepare('SELECT COUNT(*) FROM cambios_persona').pluck().get()).toBe(0);
     expect(db.prepare('SELECT version FROM sacramentos').pluck().get()).toBe(7);
@@ -395,14 +395,14 @@ describe('conflictos', () => {
 
     await resolve_conflict(db, request, 'token', 'bautismo', clientId, 'local');
 
-    expect(get_person_sacrament(db, 'bautismo', id)).toMatchObject({ nombre: 'Diego local' });
+    expect(read_person_sacrament(db, 'bautismo', id).persona.nombres).toBe('Diego local');
     expect(queue()[0]).toMatchObject({ estado: 'pendiente', version_base: 7, motivo: null });
   });
 });
 
 describe('sincronización completa', () => {
   it('descarga referencia, sube y baja, y anota la hora', async () => {
-    create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
+    create_person_sacrament(db, 'bautismo', parish1, input());
     const { request, calls } = fakeRemote((requestPath, options) => {
       if (requestPath === '/api/reference') return reference;
       if (requestPath === '/api/sync/push') return acceptAll()(requestPath, options);
@@ -418,7 +418,7 @@ describe('sincronización completa', () => {
   });
 
   it('un corte al sincronizar no deja la base local a medias', async () => {
-    const id = create_person_sacrament(db, 'bautismo', parish1, input(), undefined);
+    const id = create_person_sacrament(db, 'bautismo', parish1, input());
     const { request } = fakeRemote((requestPath) => {
       if (requestPath === '/api/reference') return reference;
       return offline();
@@ -426,7 +426,7 @@ describe('sincronización completa', () => {
 
     await expect(run_sync(db, request, 'token')).rejects.toThrow();
 
-    expect(get_person_sacrament(db, 'bautismo', id)).toMatchObject({ nombre: 'Diago' });
+    expect(read_person_sacrament(db, 'bautismo', id).persona.nombres).toBe('Diago');
     expect(queue()).toHaveLength(1);
     expect(get_sync_value(db, 'ultima_sync')).toBeNull();
   });
@@ -446,7 +446,7 @@ describe('login sin internet', () => {
 
     expect(await verify_offline(db, 'parroco1', 'clave-larga')).toEqual({
       ok: true,
-      usuario: { id: 1, rol: 'usuario_parroquia', parroquiaId: 1, parroquiaNombre: 'Parroquia 1', nombreCompleto: 'Uno P M' },
+      usuario: { id: 1, rol: 'usuario_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1', nombre_completo: 'Uno P M' },
     });
   });
 
@@ -489,7 +489,7 @@ describe('recuperación de la base local', () => {
   function seedDatabase(paths: ReturnType<typeof local_paths>, key: string) {
     const original = open_local_database(paths.database, key);
     save_reference_data(original, reference);
-    create_person_sacrament(original, 'bautismo', parish1, input({ nombre: 'Sin subir' }), undefined);
+    create_person_sacrament(original, 'bautismo', parish1, input({ persona: { nombres: 'Sin subir' } }));
     original.close();
   }
 
@@ -546,7 +546,7 @@ describe('recuperación de la base local', () => {
 
     expect(usedKey).toBe(key);
     expect(keys.store[paths.key]).toBe(key);
-    expect(search_person_sacraments(recovered, 'bautismo', { nombre: 'Sin subir' }).rows).toHaveLength(1);
+    expect(search_sacraments(recovered, 'bautismo', { nombres: 'Sin subir' }).resultados).toHaveLength(1);
     expect(recovered.prepare('SELECT COUNT(*) FROM sync_cola').pluck().get()).toBe(1);
     recovered.close();
   });
@@ -563,7 +563,7 @@ describe('recuperación de la base local', () => {
     expect(keys.store[paths.key]).toBe(key);
     expect(readdirSync(paths.set_aside_folder).filter((name) => name.endsWith('.db'))).toHaveLength(1);
     expect(existsSync(paths.temp_database)).toBe(false);
-    expect(search_person_sacraments(rebuilt, 'bautismo', { nombre: 'Ana' }).rows).toHaveLength(1);
+    expect(search_sacraments(rebuilt, 'bautismo', { nombres: 'Ana' }).resultados).toHaveLength(1);
     expect(get_sync_value(rebuilt, 'aviso')).toBe(REBUILT_NOTICE);
     rebuilt.close();
   });
@@ -574,7 +574,7 @@ describe('recuperación de la base local', () => {
 
     const { db: rebuilt } = await recover_local_database(paths, memoryKeys(), fakeRemote(rebuildHandler(randomBytes(32).toString('hex'))).request, 'token');
 
-    expect(search_person_sacraments(rebuilt, 'bautismo', { nombre: 'Ana' }).rows).toHaveLength(1);
+    expect(search_sacraments(rebuilt, 'bautismo', { nombres: 'Ana' }).resultados).toHaveLength(1);
     rebuilt.close();
   });
 
@@ -597,7 +597,7 @@ describe('recuperación de la base local', () => {
 
     // El archivo original sigue en su sitio y se abre con su clave.
     const untouched = open_local_database(paths.database, key);
-    expect(search_person_sacraments(untouched, 'bautismo', { nombre: 'Sin subir' }).rows).toHaveLength(1);
+    expect(search_sacraments(untouched, 'bautismo', { nombres: 'Sin subir' }).resultados).toHaveLength(1);
     untouched.close();
     expect(keys.store[paths.key]).toBeUndefined();
 

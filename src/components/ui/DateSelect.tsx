@@ -1,56 +1,75 @@
 import { useState } from 'react';
+import { PARTIAL_DATE_PATTERN } from '../../lib/dates';
 import { FORM_CONTROL_CLASS } from './FormInput';
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
 const FIRST_YEAR = 1800;
 
 interface DateSelectProps {
-  /** YYYY-MM-DD, o vacío mientras la fecha no esté completa. */
+  /** "AAAA", "AAAA-MM" o "AAAA-MM-DD"; vacío si no hay fecha. */
   value: string;
   onChange: (value: string) => void;
   ariaLabel: string;
 }
 
 function daysInMonth(month: string, year: string): number {
-  if (!month) return 31;
-  // Sin año se admite el 29 de febrero: 2000 fue bisiesto.
-  return new Date(Number(year || 2000), Number(month), 0).getDate();
+  return new Date(Number(year), Number(month), 0).getDate();
 }
 
+/**
+ * Fecha en tres listas. El libro no siempre trae el día, o ni el mes: se puede guardar solo el
+ * año, o el año y el mes. Por eso el mes se habilita después del año y el día después del mes:
+ * así no se arma una fecha sin sentido, como un día sin mes.
+ */
 export function DateSelect({ value, onChange, ariaLabel }: DateSelectProps) {
-  const [initialYear = '', initialMonth = '', initialDay = ''] = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-') : [];
+  const [, initialYear = '', initialMonth = '', initialDay = ''] = PARTIAL_DATE_PATTERN.exec(value) ?? [];
   const [day, setDay] = useState(initialDay);
   const [month, setMonth] = useState(initialMonth);
   const [year, setYear] = useState(initialYear);
 
   function change(next: { day?: string; month?: string; year?: string }) {
-    const newMonth = next.month ?? month;
     const newYear = next.year ?? year;
-    let newDay = next.day ?? day;
-    if (Number(newDay) > daysInMonth(newMonth, newYear)) newDay = '';
+    // Sin año no hay mes, y sin mes no hay día.
+    const newMonth = newYear ? (next.month ?? month) : '';
+    let newDay = newMonth ? (next.day ?? day) : '';
+    if (newDay && Number(newDay) > daysInMonth(newMonth, newYear)) newDay = '';
 
     setDay(newDay);
     setMonth(newMonth);
     setYear(newYear);
-    onChange(newDay && newMonth && newYear ? `${newYear}-${newMonth}-${newDay}` : '');
+    onChange([newYear, newMonth, newDay].filter(Boolean).join('-'));
   }
 
-  const isIncomplete = Boolean(day || month || year) && !(day && month && year);
-  const select = `min-w-0 flex-1 px-1 py-1.5 ${FORM_CONTROL_CLASS} ${isIncomplete ? 'border-solid-red' : ''}`;
+  const select = `min-w-0 flex-1 px-1 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${FORM_CONTROL_CLASS}`;
   const pad = (number: number) => String(number).padStart(2, '0');
   const currentYear = new Date().getFullYear();
 
   return (
-    <div className="flex w-full gap-1" title={isIncomplete ? 'Fecha incompleta: no se guardará' : undefined}>
-      <select aria-label={`${ariaLabel}: día`} value={day} onChange={(e) => change({ day: e.target.value })} className={select}>
+    <div className="flex w-full gap-1">
+      <select
+        aria-label={`${ariaLabel}: día`}
+        value={day}
+        onChange={(e) => change({ day: e.target.value })}
+        disabled={!month}
+        title={month ? undefined : 'Elija primero el mes'}
+        className={select}
+      >
         <option value="">Día</option>
-        {Array.from({ length: daysInMonth(month, year) }, (_, index) => (
-          <option key={index} value={pad(index + 1)}>
-            {index + 1}
-          </option>
-        ))}
+        {month &&
+          Array.from({ length: daysInMonth(month, year) }, (_, index) => (
+            <option key={index} value={pad(index + 1)}>
+              {index + 1}
+            </option>
+          ))}
       </select>
-      <select aria-label={`${ariaLabel}: mes`} value={month} onChange={(e) => change({ month: e.target.value })} className={select}>
+      <select
+        aria-label={`${ariaLabel}: mes`}
+        value={month}
+        onChange={(e) => change({ month: e.target.value })}
+        disabled={!year}
+        title={year ? undefined : 'Elija primero el año'}
+        className={select}
+      >
         <option value="">Mes</option>
         {MONTHS.map((name, index) => (
           <option key={name} value={pad(index + 1)}>

@@ -1,10 +1,31 @@
 import type { ReactNode } from 'react';
 
-/** Rótulo sobre un control compuesto, como la fecha en tres listas o el buscador de celebrante. */
-export function StackedFormField({ label, children }: { label: string; children: ReactNode }) {
+interface StackedFormFieldProps {
+  label: string;
+  /**
+   * Para un control hecho de varios, como la fecha en tres listas. Un <label> apunta solo al
+   * primer control de adentro (el día, que puede estar deshabilitado): un grupo nombra a todos.
+   */
+  isGroup?: boolean;
+  children: ReactNode;
+}
+
+/** Rótulo sobre un control, como el buscador de celebrante o la fecha en tres listas. */
+export function StackedFormField({ label, isGroup = false, children }: StackedFormFieldProps) {
+  const text = <span className="mb-1 block text-xs font-bold text-slate-800">{label}</span>;
+
+  if (isGroup) {
+    return (
+      <div role="group" aria-label={label} className="block">
+        {text}
+        {children}
+      </div>
+    );
+  }
+
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-bold text-slate-800">{label}</span>
+      {text}
       {children}
     </label>
   );

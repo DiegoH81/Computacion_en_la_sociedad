@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { DuplicateMatch } from '../../services/DuplicateService';
+import type { DuplicateMatch } from '../../../shared/models';
 
 const COLLAPSED_ROWS = 3;
 
@@ -27,10 +27,10 @@ function MatchRow({ match }: { match: DuplicateMatch }) {
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold text-slate-900">
           {match.para && <span className="mr-1 font-medium text-slate-500">{match.para}:</span>}
-          {match.nombreCompleto}
+          {match.nombre_completo}
         </p>
         <p className="truncate text-xs text-slate-600">
-          {match.parroquia} · Libro {match.libro} · Folio {match.folio} · N.° {match.numero}
+          {match.parroquia_nombre} · Libro {match.libro} · Folio {match.folio} · N.° {match.numero}
           <span className="text-slate-500"> · Coincide en {match.coincide.join(', ')}</span>
         </p>
       </div>
@@ -79,7 +79,7 @@ export function DuplicateWarning({ sacramento, matches, total }: DuplicateWarnin
 
       <ul className="mt-1 min-h-0 divide-y divide-slate-100 overflow-y-auto pr-1">
         {visible.map((match) => (
-          <MatchRow key={`${match.para}-${match.sacramentoId}`} match={match} />
+          <MatchRow key={`${match.para}-${match.sacramento_id}`} match={match} />
         ))}
       </ul>
 

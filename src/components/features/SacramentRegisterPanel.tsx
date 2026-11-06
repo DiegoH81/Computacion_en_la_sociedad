@@ -1,28 +1,11 @@
-import type { RecordedCorrection } from '../../lib/personCorrections';
+import type { Sacrament } from '../../../shared/models';
 import { Field } from '../ui/Field';
 import { FormPanel } from '../ui/FormPanel';
 
-export interface SacramentRegisterData {
-  fechaSacramento: string;
-  numeroLibro: string;
-  numeroFolio: string;
-  numeroRegistro: string;
-}
-
-export interface SacramentRecordInfo {
-  sacramentoId: number;
-  parroquiaId: number;
-  parroquiaNombre: string;
-  creadoEn: string;
-  modificadoEn: string;
-  correcciones: RecordedCorrection[];
-}
-
 interface SacramentRegisterPanelProps {
-  values: SacramentRegisterData;
-  onChange: (values: Partial<SacramentRegisterData>) => void;
+  sacramento: Sacrament;
+  onChange: (changes: Partial<Sacrament>) => void;
   parroquiaNombre: string;
-  recordInfo?: SacramentRecordInfo;
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -38,7 +21,8 @@ function RecordDate({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function SacramentRegisterPanel({ values, onChange, parroquiaNombre, recordInfo }: SacramentRegisterPanelProps) {
+/** Dónde está la partida en el libro: fecha del registro, libro, folio y número. */
+export function SacramentRegisterPanel({ sacramento, onChange, parroquiaNombre }: SacramentRegisterPanelProps) {
   return (
     <FormPanel>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -47,17 +31,17 @@ export function SacramentRegisterPanel({ values, onChange, parroquiaNombre, reco
           variant="panelTitle"
           label="Fecha del sacramento"
           type="date"
-          value={values.fechaSacramento}
-          onChange={(v) => onChange({ fechaSacramento: v })}
+          value={sacramento.fecha_emision}
+          onChange={(v) => onChange({ fecha_emision: v })}
         />
         <div className="grid grid-cols-3 gap-2">
-          <Field variant="panelTitle" label="N° de libro" value={values.numeroLibro} onChange={(v) => onChange({ numeroLibro: v })} />
-          <Field variant="panelTitle" label="N° de folio" value={values.numeroFolio} onChange={(v) => onChange({ numeroFolio: v })} />
-          <Field variant="panelTitle" label="N° de registro" value={values.numeroRegistro} onChange={(v) => onChange({ numeroRegistro: v })} />
+          <Field variant="panelTitle" label="N° de libro" value={sacramento.libro} onChange={(v) => onChange({ libro: v })} />
+          <Field variant="panelTitle" label="N° de folio" value={sacramento.folio} onChange={(v) => onChange({ folio: v })} />
+          <Field variant="panelTitle" label="N° de registro" value={sacramento.numero} onChange={(v) => onChange({ numero: v })} />
         </div>
         <div className="flex flex-col justify-end gap-1">
-          <RecordDate label="Creado en:" value={formatTimestamp(recordInfo?.creadoEn)} />
-          <RecordDate label="Última modificación:" value={formatTimestamp(recordInfo?.modificadoEn)} />
+          <RecordDate label="Creado en:" value={formatTimestamp(sacramento.created_at)} />
+          <RecordDate label="Última modificación:" value={formatTimestamp(sacramento.updated_at)} />
         </div>
       </div>
     </FormPanel>

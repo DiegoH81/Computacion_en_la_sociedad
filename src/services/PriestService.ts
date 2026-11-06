@@ -1,47 +1,21 @@
+import type { Minister, SearchFilters, SearchPage } from '../../shared/models';
 import { localRequest } from '../lib/localClient';
 
-export interface Priest {
-  id: number;
-  titulo: string | null;
-  nombre: string;
-  apellido_paterno: string;
-  apellido_materno: string;
-  parroquia_id: number;
-  parroquia_nombre: string;
-  activo: number;
-}
-
-export interface SearchPriestsParams {
-  nombre?: string;
-  apellidoPaterno?: string;
-  apellidoMaterno?: string;
-  sortBy: 'nombre' | 'apellido_paterno' | 'apellido_materno';
-  sortDirection: 'asc' | 'desc';
-  page: number;
-  parroquiaId?: number;
-}
-
-export interface PriestFormValues {
-  titulo: string;
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-}
-
+/** Ministros (celebrantes). Se manda y recibe el model Minister de shared/models.ts. */
 export const PriestService = {
-  search(params: SearchPriestsParams): Promise<{ priests: Priest[]; totalPages: number }> {
-    return localRequest('ministers.search', params);
+  search(filters: SearchFilters): Promise<SearchPage<Minister>> {
+    return localRequest('ministers.search', filters);
   },
 
-  create(values: PriestFormValues, parroquiaId: number | undefined): Promise<{ id: number }> {
-    return localRequest('ministers.create', { values, parroquiaId });
+  create(minister: Minister): Promise<{ id: number }> {
+    return localRequest('ministers.create', minister);
   },
 
-  update(priestId: number, values: PriestFormValues): Promise<{ success: true }> {
-    return localRequest('ministers.update', { id: priestId, values });
+  update(minister: Minister): Promise<{ success: true }> {
+    return localRequest('ministers.update', minister);
   },
 
-  toggleActive(priestId: number): Promise<{ success: true }> {
-    return localRequest('ministers.toggleActive', { id: priestId });
+  toggleActive(id: number): Promise<{ success: true }> {
+    return localRequest('ministers.toggleActive', { id });
   },
 };

@@ -1,64 +1,43 @@
-import { todayLongDate } from '../../lib/dates';
+import type { Marriage } from '../../../shared/models';
+import { formatLongDate, todayLongDate } from '../../lib/dates';
+import { birthValue, celebrantName, fullName, printText } from '../../lib/printFields';
 import { BlankDateLine, CertificateLogo, DottedField, SerialNumber, SignatureLine } from '../print/CertificateParts';
 
-export interface MarriagePrintSpouse {
-  apellidos: string;
-  nombres: string;
-  lugarNacimiento: string;
-  /** Fecha larga o, si la partida solo trae la edad, "30 años". */
-  fechaNacimiento: string;
-  dni: string;
-  parroquiaBautismo: string;
-  fechaBautismo: string;
-  padre: string;
-  madre: string;
-}
+type Spouse = 'conyuge_1' | 'conyuge_2';
 
-export interface MarriagePrintData {
-  logo: string | null;
-  parroquiaNombre: string;
-  ubicacion: string;
-  numeroLibro: string;
-  numeroFolio: string;
-  numeroRegistro: string;
-  esposo: MarriagePrintSpouse;
-  esposa: MarriagePrintSpouse;
-  fechaMatrimonio: string;
-  celebrante: string;
-  lugarMatrimonio: string;
-  testigos: string[];
-  notasMarginales: string;
-}
-
-const ROWS: { label: string; key: keyof MarriagePrintSpouse }[] = [
-  { label: 'Apellidos', key: 'apellidos' },
-  { label: 'Nombres', key: 'nombres' },
-  { label: 'Lugar de Nacimiento', key: 'lugarNacimiento' },
-  { label: 'Fecha de Nacimiento', key: 'fechaNacimiento' },
-  { label: 'Documento de identidad', key: 'dni' },
-  { label: 'Parroquia de Bautismo', key: 'parroquiaBautismo' },
-  { label: 'Fecha de Bautismo', key: 'fechaBautismo' },
-  { label: 'Padre', key: 'padre' },
-  { label: 'Madre', key: 'madre' },
+/** Cada fila de la tabla de los cónyuges: qué dato se imprime de cada uno. */
+const ROWS: { label: string; value: (record: Marriage, spouse: Spouse) => string }[] = [
+  { label: 'Apellidos', value: (m, s) => fullName(m[s].apellido_paterno, m[s].apellido_materno) },
+  { label: 'Nombres', value: (m, s) => m[s].nombres },
+  { label: 'Lugar de Nacimiento', value: (m, s) => printText(m[s].lugar_nacimiento) },
+  // Fecha larga o, si la partida solo trae la edad, "30 años".
+  { label: 'Fecha de Nacimiento', value: (m, s) => birthValue(m[s].fecha_nacimiento, m[s].edad) },
+  { label: 'Documento de identidad', value: (m, s) => printText(m[s].dni) },
+  { label: 'Parroquia de Bautismo', value: (m, s) => printText(m[`${s}_bautismo_parroquia` as const]) },
+  { label: 'Fecha de Bautismo', value: (m, s) => formatLongDate(printText(m[`${s}_bautismo_fecha` as const])) },
+  { label: 'Padre', value: (m, s) => printText(m[s].padre) },
+  { label: 'Madre', value: (m, s) => printText(m[s].madre) },
 ];
 
 const CELL = 'border border-black px-[2mm] py-[1.2mm] align-middle';
 const HEAD = `a4-table-head ${CELL} bg-[#a8a8a8] text-center font-bold`;
 
-export function MarriagePrintView({ data }: { data: MarriagePrintData }) {
+export function MarriagePrintView({ record, logo }: { record: Marriage; logo: string | null }) {
+  const partida = record.sacramento;
+  const testigos = [record.testigo_1, record.testigo_2, record.testigo_3, record.testigo_4];
   const celebrationRows = [
-    { label: 'Fecha del Matrimonio:', value: data.fechaMatrimonio },
-    { label: 'Ministro celebrante:', value: data.celebrante },
-    { label: 'Lugar del Matrimonio:', value: data.lugarMatrimonio },
+    { label: 'Fecha del Matrimonio:', value: formatLongDate(printText(partida.fecha_evento)) },
+    { label: 'Ministro celebrante:', value: celebrantName(partida.ministro) },
+    { label: 'Lugar del Matrimonio:', value: printText(record.lugar) },
     // La partida no registra padrinos de matrimonio: se completa a mano.
     { label: 'Padrinos:', value: '' },
-    { label: 'Testigos:', value: data.testigos.filter(Boolean).join(', ') },
+    { label: 'Testigos:', value: testigos.filter(Boolean).join(', ') },
   ];
 
   return (
     <div className="font-sans text-[9.5pt] text-black">
       <header className="grid grid-cols-[40mm_1fr] gap-[4mm]">
-        <CertificateLogo logo={data.logo} />
+        <CertificateLogo logo={logo} />
         <div className="flex flex-col">
           <div className="text-right">
             <SerialNumber />
@@ -69,14 +48,14 @@ export function MarriagePrintView({ data }: { data: MarriagePrintData }) {
           <div className="mt-auto flex flex-col gap-[1.5mm]">
             <DottedField
               label="Parroquia:"
-              value={data.parroquiaNombre}
+              value={printText(partida.parroquia?.nombre)}
               labelClassName="text-[13pt] font-bold"
               valueClassName="text-[10pt] font-bold uppercase"
             />
             <div className="grid grid-cols-3 gap-[3mm]">
-              <DottedField label="Libro:" value={data.numeroLibro} valueClassName="text-center font-bold" />
-              <DottedField label="Folio:" value={data.numeroFolio} valueClassName="text-center font-bold" />
-              <DottedField label="Número:" value={data.numeroRegistro} valueClassName="text-center font-bold" />
+              <DottedField label="Libro:" value={partida.libro} valueClassName="text-center font-bold" />
+              <DottedField label="Folio:" value={partida.folio} valueClassName="text-center font-bold" />
+              <DottedField label="Número:" value={partida.numero} valueClassName="text-center font-bold" />
             </div>
           </div>
         </div>
@@ -96,11 +75,11 @@ export function MarriagePrintView({ data }: { data: MarriagePrintData }) {
           </tr>
         </thead>
         <tbody>
-          {ROWS.map(({ label, key }) => (
-            <tr key={key}>
-              <td className={`${CELL} font-semibold uppercase`}>{data.esposo[key]}</td>
+          {ROWS.map(({ label, value }) => (
+            <tr key={label}>
+              <td className={`${CELL} font-semibold uppercase`}>{value(record, 'conyuge_1')}</td>
               <td className={`${CELL} text-center`}>{label}</td>
-              <td className={`${CELL} font-semibold uppercase`}>{data.esposa[key]}</td>
+              <td className={`${CELL} font-semibold uppercase`}>{value(record, 'conyuge_2')}</td>
             </tr>
           ))}
         </tbody>
@@ -123,7 +102,7 @@ export function MarriagePrintView({ data }: { data: MarriagePrintData }) {
               {index === 0 && (
                 <td rowSpan={celebrationRows.length} className={`${CELL} align-top`}>
                   <p>Anotaciones marginales</p>
-                  <p className="mt-[1mm] text-[9pt] leading-snug break-words whitespace-pre-wrap">{data.notasMarginales}</p>
+                  <p className="mt-[1mm] text-[9pt] leading-snug break-words whitespace-pre-wrap">{printText(partida.anotaciones)}</p>
                 </td>
               )}
             </tr>
@@ -139,7 +118,7 @@ export function MarriagePrintView({ data }: { data: MarriagePrintData }) {
           <BlankDateLine className="mt-[2mm] text-[9pt]" />
         </div>
         <p className="text-right">
-          {data.ubicacion ? `${data.ubicacion}, ` : ''}
+          {partida.parroquia?.ubicacion ? `${partida.parroquia.ubicacion}, ` : ''}
           {todayLongDate()}
         </p>
       </div>

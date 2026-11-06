@@ -31,13 +31,13 @@ export async function handleLogin(
     useSessionStore.getState().setSession({
       token: response.token,
       usuarioId: response.usuario.id,
-      usuarioNombre: response.usuario.nombreCompleto,
+      usuarioNombre: response.usuario.nombre_completo,
       rol: response.usuario.rol,
-      parroquiaId: response.usuario.parroquiaId,
+      parroquiaId: response.usuario.parroquia_id,
       // Para un admin sin parroquia fija, no hay parroquia activa todavía;
       // se resuelve en SelectParishPage (flujo obligatorio, Fase 1).
-      parroquiaActivaId: response.usuario.parroquiaId ?? 0,
-      parroquiaActivaNombre: response.usuario.parroquiaNombre ?? '',
+      parroquiaActivaId: response.usuario.parroquia_id ?? 0,
+      parroquiaActivaNombre: response.usuario.parroquia_nombre ?? '',
     });
 
     // Regla pendiente de Fase 4: admin siempre pasa primero por selección de parroquia.

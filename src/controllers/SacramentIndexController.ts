@@ -1,8 +1,6 @@
-import {
-  SacramentIndexService,
-  type SacramentIndexEntry,
-  type SacramentType,
-} from '../services/SacramentIndexService';
+import type { IndexEntry } from '../../shared/models';
+import type { SacramentType } from '../../shared/sync';
+import { SacramentIndexService } from '../services/SacramentIndexService';
 import { ApiError } from '../lib/apiClient';
 import { useSessionStore } from '../store/sessionStore';
 
@@ -37,9 +35,9 @@ export function loadIndexBooks(tipo: SacramentType): Promise<Result<string[]>> {
 export function loadIndexEntries(
   tipo: SacramentType,
   libro: string | null,
-): Promise<Result<SacramentIndexEntry[]>> {
+): Promise<Result<IndexEntry[]>> {
   return withActiveParish('Error al cargar el índice.', async (parroquiaId) => {
-    const { entries } = await SacramentIndexService.getEntries(tipo, parroquiaId, libro);
-    return entries;
+    const { entradas } = await SacramentIndexService.getEntries(tipo, parroquiaId, libro);
+    return entradas;
   });
 }

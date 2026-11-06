@@ -1,10 +1,16 @@
-export type SpouseKey = 'esposo' | 'esposa';
+import type { NameColumn, Person, PersonChange } from '../../shared/models';
 
-/** Fila del subformulario de notas marginales. `field` es la clave de una CorrectionOption. */
+/** En un matrimonio, a qué cónyuge corresponde una corrección. */
+export type SpouseKey = 'conyuge_1' | 'conyuge_2';
+
+/**
+ * Fila del subformulario de notas marginales. `field` es la clave de una CorrectionOption:
+ * el nombre de la columna ("nombres") o, en un matrimonio, "conyuge_1.nombres".
+ */
 export interface CorrectionDraft {
   id: string;
   field: string;
-  valorNuevo: string;
+  valor_nuevo: string;
 }
 
 export interface CorrectionOption {
@@ -13,74 +19,49 @@ export interface CorrectionOption {
   currentValue: string;
 }
 
-export interface PersonCorrection {
-  persona?: SpouseKey;
-  campo: string;
-  valorNuevo: string;
+/** Una corrección ya registrada, con el texto para mostrarla. */
+export interface RecordedChange {
+  label: string;
+  change: PersonChange;
 }
 
-/** Corrección ya guardada en cambios_persona. */
-export interface RecordedCorrection {
-  persona?: SpouseKey;
-  campo: string;
-  valor_anterior: string | null;
-  valor_nuevo: string | null;
-  fecha_cambio: string;
-}
-
-interface PersonNames {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-}
-
-const FIELD_LABELS: Record<string, string> = {
+const FIELD_LABELS: Record<NameColumn, string> = {
   nombres: 'Nombres',
   apellido_paterno: 'Apellido paterno',
   apellido_materno: 'Apellido materno',
 };
 
+const NAME_COLUMNS = Object.keys(FIELD_LABELS) as NameColumn[];
+
 const SPOUSE_SUFFIX: Record<SpouseKey, string> = {
-  esposo: 'del esposo',
-  esposa: 'de la esposa',
+  conyuge_1: 'del esposo',
+  conyuge_2: 'de la esposa',
 };
 
-function namesOf(person: PersonNames): [string, string][] {
-  return [
-    ['nombres', person.nombre],
-    ['apellido_paterno', person.apellidoPaterno],
-    ['apellido_materno', person.apellidoMaterno],
-  ];
+function labelOf(column: NameColumn, spouse?: SpouseKey): string {
+  return spouse ? `${FIELD_LABELS[column]} ${SPOUSE_SUFFIX[spouse]}` : FIELD_LABELS[column];
 }
 
-export function singlePersonOptions(person: PersonNames): CorrectionOption[] {
-  return namesOf(person).map(([campo, currentValue]) => ({ key: campo, label: FIELD_LABELS[campo], currentValue }));
+/** Los datos que se pueden corregir de una persona, con su valor actual. */
+export function personOptions(person: Person, spouse?: SpouseKey): CorrectionOption[] {
+  return NAME_COLUMNS.map((column) => ({
+    key: spouse ? `${spouse}.${column}` : column,
+    label: labelOf(column, spouse),
+    currentValue: person[column],
+  }));
 }
 
-export function spouseOptions(esposo: PersonNames, esposa: PersonNames): CorrectionOption[] {
-  const spouses: [SpouseKey, PersonNames][] = [
-    ['esposo', esposo],
-    ['esposa', esposa],
-  ];
-  return spouses.flatMap(([persona, person]) =>
-    namesOf(person).map(([campo, currentValue]) => ({
-      key: `${persona}.${campo}`,
-      label: `${FIELD_LABELS[campo]} ${SPOUSE_SUFFIX[persona]}`,
-      currentValue,
-    })),
-  );
+/** Las correcciones nuevas de una persona, a partir de las filas del subformulario. */
+export function newChanges(drafts: CorrectionDraft[], spouse?: SpouseKey): PersonChange[] {
+  const prefix = spouse ? `${spouse}.` : '';
+  return drafts
+    .filter((draft) => draft.field.startsWith(prefix) && (spouse || !draft.field.includes('.')))
+    .map((draft) => ({ campo_cambio: draft.field.slice(prefix.length) as NameColumn, valor_nuevo: draft.valor_nuevo }));
 }
 
-export function draftsToBackend(drafts: CorrectionDraft[]): PersonCorrection[] {
-  return drafts.map(({ field, valorNuevo }) => {
-    const [first, second] = field.split('.');
-    return second
-      ? { persona: first as SpouseKey, campo: second, valorNuevo }
-      : { campo: first, valorNuevo };
-  });
-}
-
-export function recordedLabel({ persona, campo }: RecordedCorrection): string {
-  const label = FIELD_LABELS[campo] ?? campo;
-  return persona ? `${label} ${SPOUSE_SUFFIX[persona]}` : label;
+/** Las correcciones ya registradas de una persona, para mostrarlas. */
+export function recordedChanges(person: Person, spouse?: SpouseKey): RecordedChange[] {
+  return person.cambios
+    .filter((change) => change.id !== undefined)
+    .map((change) => ({ label: labelOf(change.campo_cambio, spouse), change }));
 }

@@ -1,25 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
-import { PersonSearchFilters } from '../components/features/PersonSearchFilters';
-import { PriestTable } from '../components/features/PriestTable';
+import { ManagementPanel, ActiveStatus } from '../components/features/ManagementPanel';
 import { PriestFormModal } from '../components/features/PriestFormModal';
+import type { Minister, NameColumn, SearchFilters } from '../../shared/models';
 import { useSessionStore } from '../store/sessionStore';
-import {
-  searchPriests,
-  createPriest,
-  updatePriest,
-  togglePriestActive,
-  type PriestRowUI,
-} from '../controllers/PriestController';
+import { searchPriests, createPriest, updatePriest, togglePriestActive } from '../controllers/PriestController';
 
-type SortField = 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
-
-interface Filters {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-}
+type Filters = Pick<SearchFilters, NameColumn>;
 
 export function PriestsPage() {
   const navigate = useNavigate();
@@ -29,52 +17,59 @@ export function PriestsPage() {
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
 
-  const [priests, setPriests] = useState<PriestRowUI[]>([]);
+  const [priests, setPriests] = useState<Minister[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [filters, setFilters] = useState<Filters>({
-    nombre: '',
-    apellidoPaterno: '',
-    apellidoMaterno: '',
-  });
-  const [sortBy, setSortBy] = useState<SortField>('nombre');
+  const [filters, setFilters] = useState<Filters>({});
+  const [sortBy, setSortBy] = useState<NameColumn>('nombres');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  // Se incrementa tras guardar o deshabilitar para volver a pedir la lista.
+  const [reloadCounter, setReloadCounter] = useState(0);
   const [modalState, setModalState] = useState<
     | { mode: 'closed' }
     | { mode: 'create' }
-    | { mode: 'edit'; priest: PriestRowUI }
+    | { mode: 'edit'; priest: Minister }
   >({ mode: 'closed' });
 
-  async function loadPriests() {
-    setIsLoading(true);
-    setErrorMessage(null);
+  // Una sola fuente de carga: cualquier cambio de filtros, página, orden, parroquia activa o el
+  // contador de recarga vuelve a pedir la lista. Así paginar u ordenar no pierde los filtros activos.
+  // Solo se ven los ministros de la parroquia activa.
+  useEffect(() => {
+    let cancelled = false;
 
-    const result = await searchPriests({
-      nombre: filters.nombre || undefined,
-      apellidoPaterno: filters.apellidoPaterno || undefined,
-      apellidoMaterno: filters.apellidoMaterno || undefined,
-      sortBy,
-      sortDirection,
-      page: currentPage,
-    });
+    async function load() {
+      setIsLoading(true);
+      setErrorMessage(null);
 
-    setIsLoading(false);
+      const result = await searchPriests({
+        ...filters,
+        parroquia_id: parroquiaActivaId ?? undefined,
+        orden: sortBy,
+        direccion: sortDirection,
+        pagina: currentPage,
+      });
 
-    if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al buscar ministros.');
-      return;
+      // Si mientras tanto cambió algún filtro, esta respuesta ya está vieja.
+      if (cancelled) return;
+
+      setIsLoading(false);
+
+      if (!result.success) {
+        setErrorMessage(result.errorMessage ?? 'Error al buscar ministros.');
+        return;
+      }
+
+      setPriests(result.priests ?? []);
+      setTotalPages(result.totalPages ?? 1);
     }
 
-    setPriests(result.priests ?? []);
-    setTotalPages(result.totalPages ?? 1);
-  }
-
-  useEffect(() => {
-    loadPriests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, sortBy, sortDirection, parroquiaActivaId]);
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters, currentPage, sortBy, sortDirection, parroquiaActivaId, reloadCounter]);
 
   function canManage(priestParroquiaId: number): boolean {
     if (rol === 'admin') return true;
@@ -86,43 +81,18 @@ export function PriestsPage() {
   function handleSearch(newFilters: Filters) {
     setFilters(newFilters);
     setCurrentPage(1);
-    // loadPriests se dispara manualmente aquí porque newFilters aún no
-    // está reflejado en el estado `filters` al momento de esta llamada.
-    searchPriests({
-      nombre: newFilters.nombre || undefined,
-      apellidoPaterno: newFilters.apellidoPaterno || undefined,
-      apellidoMaterno: newFilters.apellidoMaterno || undefined,
-      sortBy,
-      sortDirection,
-      page: 1,
-    }).then((result) => {
-      if (result.success) {
-        setPriests(result.priests ?? []);
-        setTotalPages(result.totalPages ?? 1);
-      } else {
-        setErrorMessage(result.errorMessage ?? 'Error al buscar ministros.');
-      }
-    });
   }
 
   function handleClear() {
-    setFilters({ nombre: '', apellidoPaterno: '', apellidoMaterno: '' });
+    setFilters({});
     setCurrentPage(1);
-    loadPriests();
   }
 
-  async function handleSave(values: {
-    titulo: string;
-    nombre: string;
-    apellidoPaterno: string;
-    apellidoMaterno: string;
-  }) {
+  async function handleSave(minister: Minister) {
     setIsLoading(true);
+    setErrorMessage(null);
 
-    const result =
-      modalState.mode === 'edit'
-        ? await updatePriest(modalState.priest.id, values)
-        : await createPriest(values);
+    const result = modalState.mode === 'edit' ? await updatePriest(minister) : await createPriest(minister);
 
     setIsLoading(false);
 
@@ -132,7 +102,7 @@ export function PriestsPage() {
     }
 
     setModalState({ mode: 'closed' });
-    loadPriests();
+    setReloadCounter((count) => count + 1);
   }
 
   async function handleToggleActive(priestId: number) {
@@ -141,7 +111,7 @@ export function PriestsPage() {
       setErrorMessage(result.errorMessage ?? 'Error al cambiar el estado.');
       return;
     }
-    loadPriests();
+    setReloadCounter((count) => count + 1);
   }
 
   return (
@@ -151,69 +121,64 @@ export function PriestsPage() {
       usuarioNombre={usuarioNombre ?? ''}
       onBack={() => navigate('/dashboard')}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-slate-800">Ministros</h1>
-          {canAddPriest && (
-            <button
-              type="button"
-              onClick={() => setModalState({ mode: 'create' })}
-              className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-            >
-              + Agregar ministro
-            </button>
-          )}
-        </div>
-
-        {errorMessage && (
-          <p role="alert" className="rounded-md bg-red-50 px-4 py-2 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <PersonSearchFilters
-          onSearch={handleSearch}
-          onClear={handleClear}
-          sortBy={sortBy}
-          sortDirection={sortDirection}
-          onSortChange={(field, direction) => {
-            setSortBy(field as SortField);
+      <ManagementPanel<Minister>
+        title="Buscar ministro"
+        errorMessage={modalState.mode === 'closed' ? errorMessage : null}
+        rows={priests}
+        getRowId={(priest) => priest.id as number}
+        getRowLabel={(priest) => `ministro ${priest.nombre} ${priest.apellido_paterno}`}
+        columns={[
+          { header: 'Título', render: (priest) => priest.titulo },
+          { header: 'Nombre', render: (priest) => priest.nombre, isMain: true },
+          { header: 'Apellido paterno', render: (priest) => priest.apellido_paterno },
+          { header: 'Apellido materno', render: (priest) => priest.apellido_materno },
+          { header: 'Estado', render: (priest) => <ActiveStatus isActive={priest.activo === 1} /> },
+        ]}
+        emptyText="No se encontraron ministros."
+        isLoading={isLoading}
+        search={{
+          firstLabel: 'Nombre',
+          sortBy,
+          sortDirection,
+          onSortChange: (field, direction) => {
+            setSortBy(field);
             setSortDirection(direction);
-          }}
-          isLoading={isLoading}
-        />
-
-        <PriestTable
-          priests={priests}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          onEdit={(priestId) => {
-            const priest = priests.find((p) => p.id === priestId);
-            if (priest) setModalState({ mode: 'edit', priest });
-          }}
-          onToggleActive={handleToggleActive}
-          canManage={canManage}
-          isLoading={isLoading}
-        />
-      </div>
+          },
+          onSearch: handleSearch,
+          onClear: handleClear,
+          currentPage,
+          totalPages,
+          onPageChange: setCurrentPage,
+        }}
+        onAdd={canAddPriest ? () => setModalState({ mode: 'create' }) : undefined}
+        isSelectable={(priest) => canManage(priest.parroquia_id as number)}
+        actions={[
+          {
+            label: () => 'Editar',
+            color: 'bg-darker-app',
+            isEnabled: () => true,
+            onClick: (priest) => setModalState({ mode: 'edit', priest }),
+          },
+          {
+            label: (priest) => (priest?.activo === 0 ? 'Habilitar' : 'Deshabilitar'),
+            color: 'bg-solid-red',
+            isEnabled: () => true,
+            onClick: (priest) => handleToggleActive(priest.id as number),
+          },
+        ]}
+      />
 
       {modalState.mode !== 'closed' && (
         <PriestFormModal
           mode={modalState.mode}
-          initialValues={
-            modalState.mode === 'edit'
-              ? {
-                  titulo: modalState.priest.titulo,
-                  nombre: modalState.priest.nombre,
-                  apellidoPaterno: modalState.priest.apellidoPaterno,
-                  apellidoMaterno: modalState.priest.apellidoMaterno,
-                }
-              : undefined
-          }
+          initialValues={modalState.mode === 'edit' ? modalState.priest : undefined}
           onSave={handleSave}
-          onCancel={() => setModalState({ mode: 'closed' })}
+          onCancel={() => {
+            setErrorMessage(null);
+            setModalState({ mode: 'closed' });
+          }}
           isLoading={isLoading}
+          errorMessage={errorMessage}
         />
       )}
     </MainMenuLayout>

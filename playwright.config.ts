@@ -8,4 +8,5 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   globalSetup: './tests/e2e/global-setup.ts',
+  tsconfig: './tsconfig.node.json',
 });

@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OFFLINE_TOKEN } from '../../electron/shared';
-import { ServiceError } from '../../electron/main/common';
-import { open_local_database, type LocalDatabase } from '../../electron/main/database/local_database';
-import { create_person_sacrament } from '../../electron/main/records/baptisms_and_confirmations';
-import type { RemoteOptions } from '../../electron/main/sync/remote';
+import { ServiceError } from '../../electron/main/utils/errors';
+import { open_local_database, type LocalDatabase } from '../../electron/main/db/database';
+import { create_person_sacrament } from '../../electron/main/controllers/sacraments';
+import { baptism } from './helpers/records';
+import type { RemoteOptions } from '../../electron/main/sync/online';
 
 // La sesión con un servidor falso: login con y sin internet, token vencido y sincronización.
 
@@ -21,16 +22,16 @@ const state = vi.hoisted(() => ({
   offline: false,
 }));
 
-vi.mock('../../electron/main/database/local_store', () => ({
+// current_key: null hace que no se suba la copia de la clave.
+vi.mock('../../electron/main/db/app_database', () => ({
   get_database: () => state.db,
   database_needs_recovery: () => false,
-  recover_database: vi.fn(),
-  upload_current_key_copy: vi.fn(async () => undefined),
+  current_key: () => null,
 }));
 
-vi.mock('../../electron/main/sync/remote', async (original) => {
-  const real = await original<typeof import('../../electron/main/sync/remote')>();
-  const { ServiceError } = await import('../../electron/main/common');
+vi.mock('../../electron/main/sync/online', async (original) => {
+  const real = await original<typeof import('../../electron/main/sync/online')>();
+  const { ServiceError } = await import('../../electron/main/utils/errors');
   return {
     ...real,
     remote_request: async (url: string, options: RemoteOptions = {}) => {
@@ -43,7 +44,12 @@ vi.mock('../../electron/main/sync/remote', async (original) => {
   };
 });
 
-const session = await import('../../electron/main/session/session');
+// La sesión quedó repartida en tres módulos: el login, la sincronización automática y quién inició sesión.
+const session = {
+  ...(await import('../../electron/main/controllers/login')),
+  ...(await import('../../electron/main/sync/auto_sync')),
+  ...(await import('../../electron/main/models/session')),
+};
 
 const PASSWORD = 'clave-correcta';
 let valid_tokens = new Set<string>();
@@ -70,7 +76,7 @@ function default_routes(): Record<string, Route> {
       valid_tokens.add(token);
       return {
         token,
-        usuario: { id: 1, nombreCompleto: 'Ana Rojas Paz', rol: 'usuario_parroquia', parroquiaId: 1, parroquiaNombre: 'Parroquia 1' },
+        usuario: { id: 1, nombre_completo: 'Ana Rojas Paz', rol: 'usuario_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1' },
       };
     },
     '/api/reference': (options) => {
@@ -118,7 +124,7 @@ describe('sesión', () => {
     const response = await session.login({ username: 'ana', password: PASSWORD });
 
     expect(response.token).toBe('token-1');
-    expect(response.usuario.nombreCompleto).toBe('Ana Rojas Paz');
+    expect(response.usuario.nombre_completo).toBe('Ana Rojas Paz');
     expect(session.require_session()).toEqual({ user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 'token-1' });
     expect(db.prepare('SELECT COUNT(*) FROM credenciales_locales WHERE usuario_id = 1').pluck().get()).toBe(1);
     expect(paths()).toEqual(['/api/auth/login', '/api/reference', '/api/reference', '/api/sync/pull']);
@@ -165,10 +171,10 @@ describe('sesión', () => {
     state.offline = true;
     await session.login({ username: 'ana', password: PASSWORD });
 
-    create_person_sacrament(db, 'bautismo', session.require_session(), {
-      fechaSacramento: '2020-01-01', numeroLibro: '1', numeroFolio: '1', numeroRegistro: '1',
-      nombre: 'Luis', apellidoPaterno: 'Paz', apellidoMaterno: 'Vega',
-    });
+    create_person_sacrament(db, 'bautismo', session.require_session(), baptism('bautismo', {
+      sacramento: { fecha_emision: '2020-01-01', libro: '1', folio: '1', numero: '1' },
+      persona: { nombres: 'Luis', apellido_paterno: 'Paz', apellido_materno: 'Vega' },
+    }));
     await session.sync_now();
     expect(pending()).toBe(1);
     expect(session.get_sync_status().modo).toBe('sin-conexion');
@@ -226,19 +232,19 @@ describe('sesión', () => {
 
     const first = session.sync_now();
     const second = session.sync_now();
-    expect(session.get_sync_status().enCurso).toBe(true);
+    expect(session.get_sync_status().en_curso).toBe(true);
     await Promise.all([first, second]);
 
     expect(paths().filter((item) => item === '/api/reference')).toHaveLength(1);
-    expect(session.get_sync_status().enCurso).toBe(false);
+    expect(session.get_sync_status().en_curso).toBe(false);
   });
 
   it('cerrar sesión no sincroniza y conserva lo pendiente', async () => {
     await session.login({ username: 'ana', password: PASSWORD });
-    create_person_sacrament(db, 'bautismo', session.require_session(), {
-      fechaSacramento: '2020-01-01', numeroLibro: '1', numeroFolio: '1', numeroRegistro: '1',
-      nombre: 'Luis', apellidoPaterno: 'Paz', apellidoMaterno: 'Vega',
-    });
+    create_person_sacrament(db, 'bautismo', session.require_session(), baptism('bautismo', {
+      sacramento: { fecha_emision: '2020-01-01', libro: '1', folio: '1', numero: '1' },
+      persona: { nombres: 'Luis', apellido_paterno: 'Paz', apellido_materno: 'Vega' },
+    }));
     state.calls = [];
 
     session.logout();
@@ -252,19 +258,19 @@ describe('sesión', () => {
 
   it('al cerrar la app sube lo pendiente, sin esperar más del límite', async () => {
     await session.login({ username: 'ana', password: PASSWORD });
-    create_person_sacrament(db, 'bautismo', session.require_session(), {
-      fechaSacramento: '2020-01-01', numeroLibro: '1', numeroFolio: '1', numeroRegistro: '1',
-      nombre: 'Luis', apellidoPaterno: 'Paz', apellidoMaterno: 'Vega',
-    });
+    create_person_sacrament(db, 'bautismo', session.require_session(), baptism('bautismo', {
+      sacramento: { fecha_emision: '2020-01-01', libro: '1', folio: '1', numero: '1' },
+      persona: { nombres: 'Luis', apellido_paterno: 'Paz', apellido_materno: 'Vega' },
+    }));
 
     await session.sync_before_quit(5_000);
     expect(pending()).toBe(0);
 
     // Un servidor que nunca responde no retiene el cierre.
-    create_person_sacrament(db, 'bautismo', session.require_session(), {
-      fechaSacramento: '2020-01-01', numeroLibro: '1', numeroFolio: '1', numeroRegistro: '2',
-      nombre: 'Rosa', apellidoPaterno: 'Paz', apellidoMaterno: 'Vega',
-    });
+    create_person_sacrament(db, 'bautismo', session.require_session(), baptism('bautismo', {
+      sacramento: { fecha_emision: '2020-01-01', libro: '1', folio: '1', numero: '2' },
+      persona: { nombres: 'Rosa', apellido_paterno: 'Paz', apellido_materno: 'Vega' },
+    }));
     let answer = () => undefined as void;
     state.routes['/api/reference'] = () => new Promise((resolve) => { answer = () => resolve(REFERENCE); });
     const start = Date.now();

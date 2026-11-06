@@ -70,6 +70,9 @@ export function SettingsPage() {
             {rol === 'admin' && (
               <SettingsButton label="Agregar usuario" onClick={() => navigate('/usuarios')} />
             )}
+            {rol === 'admin' && (
+              <SettingsButton label="Parroquias" onClick={() => navigate('/parroquias')} />
+            )}
           </div>
         </div>
       </div>
