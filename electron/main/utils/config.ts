@@ -1,5 +1,3 @@
-export const WORKER_URL = process.env.PRELATURA_API_URL ?? import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
-
 export const REQUEST_TIMEOUT_MS = 30_000;
 export const LOGIN_TIMEOUT_MS = 10_000;
 
