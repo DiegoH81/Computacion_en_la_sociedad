@@ -1,6 +1,5 @@
-//   open_local_database   abre el archivo y aplica las migraciones que faltan
-//   open_or_detect        al iniciar la app: abre la base, la crea si es la primera vez, o avisa
-//                         que hay que recuperarla (eso necesita internet: ver sync/recovery.ts)
+//   open_local_database   opens fila and applies migrations
+//   open_or_detect        
 
 import Database from 'better-sqlite3-multiple-ciphers';
 import { randomUUID } from 'node:crypto';
