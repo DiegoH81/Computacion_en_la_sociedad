@@ -11,6 +11,10 @@ interface FormDialogProps {
   notice?: ReactNode;
   /** Ancho de la ventana: las partidas usan large; ministros, usuarios y parroquias, uno menor. */
   size?: 'large' | 'medium' | 'small';
+  /** El texto del botón de guardar, ej. "Pedir corrección". */
+  saveLabel?: string;
+  /** Falso cuando no hay nada que se pueda guardar (por ejemplo, una partida bloqueada). */
+  canSave?: boolean;
   children: ReactNode;
 }
 
@@ -19,7 +23,18 @@ const WIDTHS = { large: 'max-w-5xl', medium: 'max-w-3xl', small: 'max-w-xl' };
 const HEADER_BUTTON = 'rounded-md px-4 py-1 text-xs font-bold uppercase text-white hover:opacity-90 disabled:opacity-50';
 
 /** Ventana de los formularios de partidas: difumina el fondo y deja las acciones siempre a la vista. */
-export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, notice, size = 'large', children }: FormDialogProps) {
+export function FormDialog({
+  title,
+  onSave,
+  onCancel,
+  isLoading,
+  errorMessage,
+  notice,
+  size = 'large',
+  saveLabel = 'Guardar cambios',
+  canSave = true,
+  children,
+}: FormDialogProps) {
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
 
   return (
@@ -33,8 +48,8 @@ export function FormDialog({ title, onSave, onCancel, isLoading, errorMessage, n
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black px-5 py-2">
           <h2 className="font-bold uppercase text-white">{title}</h2>
           <div className="flex gap-2">
-            <button type="button" onClick={onSave} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-green`}>
-              {isLoading ? 'Guardando...' : 'Guardar cambios'}
+            <button type="button" onClick={onSave} disabled={isLoading || !canSave} className={`${HEADER_BUTTON} bg-solid-green`}>
+              {isLoading ? 'Guardando...' : saveLabel}
             </button>
             <button type="button" onClick={() => setIsConfirmingCancel(true)} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-red`}>
               Cancelar

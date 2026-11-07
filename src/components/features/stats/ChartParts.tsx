@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { SACRAMENT_SERIES } from '../../../lib/statisticsConfig';
 import type { TooltipState } from './useChartTooltip';
 
-// El texto crece con la pantalla: este ancho deja entrar "Confirmaciones" también en las grandes.
 const TOOLTIP_WIDTH = 320;
 
 export function ChartTooltip({ tooltip }: { tooltip: TooltipState | null }) {

@@ -8,6 +8,7 @@ interface Parish {
 interface ParishSelectorProps {
   parishes: Parish[];
   currentParishId: number | null;
+  ownParishId?: number | null; // parroquia del usuario: se muestra primero y resaltada
   onSelect: (parishId: number) => void;
   isLoading: boolean;
 }
@@ -15,10 +16,14 @@ interface ParishSelectorProps {
 export function ParishSelector({
   parishes,
   currentParishId,
+  ownParishId = null,
   onSelect,
   isLoading,
 }: ParishSelectorProps) {
   const [selectedId, setSelectedId] = useState<number | null>(currentParishId);
+
+  const ownParish = parishes.find((parish) => parish.id === ownParishId) ?? null;
+  const otherParishes = parishes.filter((parish) => parish.id !== ownParishId);
 
   function handleConfirm() {
     if (selectedId !== null) {
@@ -41,12 +46,28 @@ export function ParishSelector({
         <option value="" disabled>
           Parroquias disponibles
         </option>
-        {parishes.map((parish) => (
+        {ownParish && (
+          <option value={ownParish.id} className="bg-emerald-100 font-semibold text-emerald-900">
+            ★ {ownParish.nombre} (mi parroquia)
+          </option>
+        )}
+        {otherParishes.map((parish) => (
           <option key={parish.id} value={parish.id}>
             {parish.nombre}
           </option>
         ))}
       </select>
+
+      {ownParish && (
+        <button
+          type="button"
+          onClick={() => setSelectedId(ownParish.id)}
+          disabled={isLoading || selectedId === ownParish.id}
+          className="w-fit text-left text-xs font-medium text-emerald-800 hover:underline disabled:no-underline disabled:opacity-70"
+        >
+          ★ Mi parroquia: {ownParish.nombre}
+        </button>
+      )}
 
       <button
         type="button"

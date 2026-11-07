@@ -1,4 +1,4 @@
-import type { NameColumn, Person, PersonChange } from '../../shared/models';
+import type { NameColumn, Person, PersonChange, SacramentRecord } from '../../shared/models';
 
 /** En un matrimonio, a qué cónyuge corresponde una corrección. */
 export type SpouseKey = 'conyuge_1' | 'conyuge_2';
@@ -64,4 +64,27 @@ export function recordedChanges(person: Person, spouse?: SpouseKey): RecordedCha
   return person.cambios
     .filter((change) => change.id !== undefined)
     .map((change) => ({ label: labelOf(change.campo_cambio, spouse), change }));
+}
+
+/** Las personas de una partida: una en bautismo y confirmación, dos en matrimonio. */
+export function recordPeople(record: SacramentRecord): Person[] {
+  if ('persona' in record) return [record.persona];
+  return [record.conyuge_1, record.conyuge_2];
+}
+
+/** Lo que la tabla muestra de las anotaciones marginales de una partida. */
+export interface MarginalNoteSummary {
+  hasText: boolean;
+  corrections: number;
+  /** Datos que pidió cambiar un usuario y esperan al administrador. */
+  pending: number;
+}
+
+export function marginalNoteSummary(record: SacramentRecord): MarginalNoteSummary {
+  const changes = recordPeople(record).flatMap((person) => person.cambios);
+  return {
+    hasText: Boolean(record.sacramento.anotaciones?.trim()),
+    corrections: changes.filter((change) => change.estado === 'aprobado' || change.estado === undefined).length,
+    pending: (record.sacramento.solicitudes ?? []).filter((request) => request.estado === 'pendiente').length,
+  };
 }

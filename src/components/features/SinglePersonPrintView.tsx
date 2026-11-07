@@ -28,7 +28,7 @@ export function SinglePersonPrintView({ record, logo }: SinglePersonPrintViewPro
     ...(tipo === 'bautismo'
       ? [
           { label: 'Lugar de nacimiento', value: printText(persona.lugar_nacimiento) },
-          { label: 'Fecha de nacimiento', value: birthValue(persona.fecha_nacimiento, persona.edad) },
+          { label: 'Fecha de nacimiento', value: birthValue(persona.fecha_nacimiento, persona.fecha_aproximada) },
         ]
       : []),
     { label: `Fecha de ${sacramento}`, value: formatLongDate(printText(partida.fecha_evento)) },

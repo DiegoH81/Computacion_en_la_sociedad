@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
+import { PasswordInput } from '../ui/PasswordInput';
 
 interface LoginFormProps {
   onSubmit: (username: string, password: string) => void;
@@ -43,15 +44,14 @@ export function LoginForm({ onSubmit, isLoading, errorMessage }: LoginFormProps)
         <label htmlFor={`${fieldId}-password`} className={LABEL}>
           Contraseña
         </label>
-        <input
+        <PasswordInput
           id={`${fieldId}-password`}
-          type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Contraseña"
           autoComplete="current-password"
           required
-          className={INPUT}
+          inputClassName={INPUT}
         />
       </div>
 

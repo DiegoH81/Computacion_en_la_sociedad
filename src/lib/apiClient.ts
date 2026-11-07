@@ -1,4 +1,25 @@
-const WORKER_BASE_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
+const FALLBACK_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
+
+let serverUrl: Promise<string> | null = null;
+
+/**
+ * La dirección del Worker. Se la pide a Electron, que la lee de configuracion.json (así la pantalla
+ * y la sincronización usan la misma); fuera de Electron, como en las pruebas, usa la compilada.
+ */
+function workerBaseUrl(): Promise<string> {
+  if (!serverUrl) {
+    serverUrl = (async () => {
+      try {
+        const response = await window.electronAPI?.localRequest('app.server');
+        const servidor = response?.ok ? (response.data as { servidor?: unknown })?.servidor : undefined;
+        return typeof servidor === 'string' ? servidor : FALLBACK_URL;
+      } catch {
+        return FALLBACK_URL;
+      }
+    })();
+  }
+  return serverUrl;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -34,7 +55,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   let response: Response;
   try {
-    response = await fetch(`${WORKER_BASE_URL}${path}`, {
+    response = await fetch(`${await workerBaseUrl()}${path}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,

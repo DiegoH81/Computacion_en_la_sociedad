@@ -1,5 +1,5 @@
 import type { Marriage, Person } from '../../../shared/models';
-import { BirthDateOrAge } from '../ui/BirthDateOrAge';
+import { BirthDateOrApproximate } from '../ui/BirthDateOrApproximate';
 import { DateSelect } from '../ui/DateSelect';
 import { FormInput } from '../ui/FormInput';
 import { MirroredColumnTitles, MirroredFormRow } from '../ui/MirroredFormRow';
@@ -16,12 +16,13 @@ function updatePerson(props: SpousesProps, spouse: 'conyuge_1' | 'conyuge_2', ch
   props.onChange({ ...props.marriage, [spouse]: { ...props.marriage[spouse], ...changes } });
 }
 
-function TextRow(props: SpousesProps & { label: string; field: TextField }) {
-  const { label, field, marriage } = props;
+function TextRow(props: SpousesProps & { label: string; field: TextField; required?: boolean }) {
+  const { label, field, marriage, required = false } = props;
 
   return (
     <MirroredFormRow
       label={label}
+      required={required}
       left={
         <FormInput
           aria-label={`${label} del esposo`}
@@ -47,26 +48,27 @@ export function MarriagePersonFields(props: SpousesProps) {
     <div className="flex flex-col gap-2">
       <MirroredColumnTitles left="Esposo" right="Esposa" />
       <TextRow {...props} label="DNI" field="dni" />
-      <TextRow {...props} label="Nombres" field="nombres" />
-      <TextRow {...props} label="Apellido paterno" field="apellido_paterno" />
-      <TextRow {...props} label="Apellido materno" field="apellido_materno" />
-      <TextRow {...props} label="Lugar de nacimiento" field="lugar_nacimiento" />
+      <TextRow {...props} label="Nombres" field="nombres" required />
+      <TextRow {...props} label="Apellido paterno" field="apellido_paterno" required />
+      <TextRow {...props} label="Apellido materno" field="apellido_materno" required />
+      <TextRow {...props} label="Lugar de nacimiento" field="lugar_nacimiento" required />
       <MirroredFormRow
         label="Fecha de nacimiento"
+        required
         left={
-          <BirthDateOrAge
+          <BirthDateOrApproximate
             personLabel="del esposo"
             fecha={marriage.conyuge_1.fecha_nacimiento}
-            edad={marriage.conyuge_1.edad}
-            onChange={({ fecha, edad }) => updatePerson(props, 'conyuge_1', { fecha_nacimiento: fecha, edad })}
+            fechaAproximada={marriage.conyuge_1.fecha_aproximada}
+            onChange={({ fecha, fechaAproximada }) => updatePerson(props, 'conyuge_1', { fecha_nacimiento: fecha, fecha_aproximada: fechaAproximada })}
           />
         }
         right={
-          <BirthDateOrAge
+          <BirthDateOrApproximate
             personLabel="de la esposa"
             fecha={marriage.conyuge_2.fecha_nacimiento}
-            edad={marriage.conyuge_2.edad}
-            onChange={({ fecha, edad }) => updatePerson(props, 'conyuge_2', { fecha_nacimiento: fecha, edad })}
+            fechaAproximada={marriage.conyuge_2.fecha_aproximada}
+            onChange={({ fecha, fechaAproximada }) => updatePerson(props, 'conyuge_2', { fecha_nacimiento: fecha, fecha_aproximada: fechaAproximada })}
           />
         }
       />
@@ -112,8 +114,8 @@ export function MarriageFamilyFields(props: SpousesProps) {
   return (
     <div className="flex flex-col gap-2">
       <MirroredColumnTitles left="Esposo" right="Esposa" />
-      <TextRow {...props} label="Padre" field="padre" />
-      <TextRow {...props} label="Madre" field="madre" />
+      <TextRow {...props} label="Padre" field="padre" required />
+      <TextRow {...props} label="Madre" field="madre" required />
     </div>
   );
 }

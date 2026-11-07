@@ -36,7 +36,7 @@ export function AgeCharts({ bands, ages }: { bands: string[]; ages: Statistics['
   return (
     <ChartCard
       title="Edad al recibir el sacramento"
-      subtitle={`Según la fecha de nacimiento o la edad registrada. En matrimonio cuenta a los dos cónyuges.${notes.length > 0 ? ` Sin dato de edad: ${notes.join(', ')}.` : ''}`}
+      subtitle={`Según la fecha de nacimiento (las fechas aproximadas no se cuentan). En matrimonio cuenta a los dos cónyuges.${notes.length > 0 ? ` Sin dato de edad: ${notes.join(', ')}.` : ''}`}
       table={{
         headers: ['Edad', ...SACRAMENT_SERIES.map((series) => series.label)],
         rows: bands.map((band, index) => [band, ...SACRAMENT_SERIES.map((series) => ages[series.key].bandas[index])]),
@@ -83,9 +83,15 @@ export function MinisterChart({ ministers, year }: { ministers: Statistics['mini
       {ministers.length === 0 ? (
         <p className="text-sm text-slate-600">Ninguna partida de este año tiene celebrante registrado.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="flex flex-col gap-3">
           {ministers.map((minister) => (
-            <BarRow key={minister.nombre} label={minister.nombre} value={minister.total} max={max} color="#2F6E72" labelClassName="w-52" />
+            <li key={minister.nombre} className="grid grid-cols-[minmax(0,1fr)_2rem] items-center gap-x-2 gap-y-1 text-sm">
+              <span className="col-span-2 break-words text-slate-800">{minister.nombre}</span>
+              <div className="h-2.5 rounded-r bg-lighter-green">
+                <div className="h-full rounded-r bg-table-panel" style={{ width: `${(minister.total / max) * 100}%` }} />
+              </div>
+              <span className="text-right font-semibold text-slate-900 tabular-nums">{minister.total}</span>
+            </li>
           ))}
         </ul>
       )}

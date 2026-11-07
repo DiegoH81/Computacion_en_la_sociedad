@@ -12,6 +12,7 @@ export function SelectParishPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const token = useSessionStore((state) => state.token);
+  const parroquiaId = useSessionStore((state) => state.parroquiaId);
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const setParroquiaActiva = useSessionStore((state) => state.setParroquiaActiva);
 
@@ -46,6 +47,7 @@ export function SelectParishPage() {
         <ParishSelector
           parishes={parishes}
           currentParishId={parroquiaActivaId || null}
+          ownParishId={parroquiaId}
           onSelect={handleSelect}
           isLoading={isLoading}
         />

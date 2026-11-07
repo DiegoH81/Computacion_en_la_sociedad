@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { FormInput } from './FormInput';
+import { RequiredMark } from './RequiredMark';
 
 interface FieldProps {
   label: string;
@@ -8,21 +9,28 @@ interface FieldProps {
   type?: string;
   /** panel y panelTitle: para los bloques claros de los formularios de partidas. */
   variant?: 'default' | 'panel' | 'panelTitle';
+  /** Muestra el asterisco de campo obligatorio. */
+  required?: boolean;
 }
 
-export function Field({ label, value, onChange, type = 'text', variant = 'default' }: FieldProps) {
+export function Field({ label, value, onChange, type = 'text', variant = 'default', required = false }: FieldProps) {
   const id = useId();
 
   if (variant !== 'default') {
     return (
       <div>
-        <label htmlFor={id} className={`mb-1 block text-xs font-bold text-slate-800 ${variant === 'panelTitle' ? 'uppercase' : ''}`}>
-          {label}
-        </label>
+        {/* El asterisco va fuera del label: así el nombre del campo sigue siendo solo el rótulo. */}
+        <div className="mb-1 flex text-xs font-bold text-slate-800">
+          <label htmlFor={id} className={variant === 'panelTitle' ? 'uppercase' : ''}>
+            {label}
+          </label>
+          {required && <RequiredMark />}
+        </div>
         <FormInput
           id={id}
           type={type}
           value={value}
+          aria-required={required || undefined}
           readOnly={!onChange}
           onChange={onChange && ((e) => onChange(e.target.value))}
         />

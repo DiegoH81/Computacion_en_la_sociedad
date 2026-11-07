@@ -1,36 +1,47 @@
 import { useId, useState } from 'react';
 import type { User } from '../../../shared/models';
+import type { Role } from '../../../shared/sync';
+import { ROLE_LABELS } from '../../lib/permissions';
 import { FormDialog } from '../ui/FormDialog';
 import { FormPanel } from '../ui/FormPanel';
 import { FormInput, FORM_CONTROL_CLASS } from '../ui/FormInput';
 import { Field } from '../ui/Field';
+import { PasswordInput } from '../ui/PasswordInput';
 
 const EMPTY_USER: User = {
   username: '',
-  rol: 'usuario_parroquia',
+  rol: 'usuario',
   parroquia_id: null,
   nombre: '',
   apellido_paterno: '',
   apellido_materno: '',
 };
 
+const ROLE_HELP: Record<Role, string> = {
+  admin_general: 'Gestiona parroquias y cuentas, y consulta todas las parroquias. No registra ni modifica partidas.',
+  admin_parroquia: 'Registra y corrige las partidas de su parroquia, aprueba los cambios pedidos y crea usuarios. El principal de la parroquia también gestiona a los demás administradores.',
+  usuario: 'Registra partidas. En una ya guardada, pide los cambios y un administrador de la parroquia los aprueba.',
+};
+
 interface UserFormModalProps {
   mode: 'create' | 'edit';
   parishes: Array<{ id: number; nombre: string }>;
-  /** La cuenta que se edita, tal como llegó del Worker. */
+  /** La cuenta que se edita, tal como llegó de Electron. */
   initialValues?: User;
-  /** Solo el administrador principal puede crear otros administradores. */
-  canCreateAdmin?: boolean;
+  /** Quién crea la cuenta: el admin general elige rol y parroquia; el de parroquia solo crea usuarios de la suya. */
+  actorRole: Role;
+  /** La parroquia de quien crea, si es el administrador de una parroquia. */
+  actorParishName?: string;
+  /** Solo el administrador general principal puede crear otros administradores generales. */
+  canCreateGeneralAdmin?: boolean;
+  /** El principal de una parroquia también crea administradores de ella; los demás, solo usuarios. */
+  canCreateParishAdmin?: boolean;
   /** confirmPassword solo sirve para validar: no es parte de la cuenta. */
   onSave: (user: User, confirmPassword: string) => void;
   onCancel: () => void;
   isLoading: boolean;
   errorMessage: string | null;
 }
-
-// Valor reservado del <select> para la opción "crear parroquia nueva".
-// No colisiona con ids reales, que son números.
-const NEW_PARISH_OPTION = '__new__';
 
 const LABEL = 'mb-1 block text-xs font-bold text-slate-800';
 const SELECT = `w-full px-3 py-1.5 ${FORM_CONTROL_CLASS}`;
@@ -39,7 +50,10 @@ export function UserFormModal({
   mode,
   parishes,
   initialValues,
-  canCreateAdmin = false,
+  actorRole,
+  actorParishName = '',
+  canCreateGeneralAdmin = false,
+  canCreateParishAdmin = false,
   onSave,
   onCancel,
   isLoading,
@@ -50,24 +64,22 @@ export function UserFormModal({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [parishSelection, setParishSelection] = useState<string>('');
-  const [newParishName, setNewParishName] = useState('');
 
   const parishSelectId = useId();
   const roleSelectId = useId();
-  const isCreating = parishSelection === NEW_PARISH_OPTION;
-  const isAdminAccount = user.rol === 'admin';
+  const isGeneralAdminAccount = user.rol === 'admin_general';
+  const isGeneralActor = actorRole === 'admin_general';
+  const choosesRole = mode === 'create' && (isGeneralActor || canCreateParishAdmin);
+
+  const roles: Role[] = isGeneralActor && canCreateGeneralAdmin ? ['usuario', 'admin_parroquia', 'admin_general'] : ['usuario', 'admin_parroquia'];
 
   function handleSave() {
-    // Al crear se elige una parroquia existente (parroquia_id) o se escribe una nueva (parroquia_nueva).
-    // Un administrador no es de ninguna parroquia.
+    // Al crear: el admin general elige la parroquia; para el de parroquia la pone Electron (la suya).
+    // Un administrador general no es de ninguna parroquia.
     const parish =
-      mode === 'edit'
+      mode === 'edit' || actorRole !== 'admin_general'
         ? {}
-        : isAdminAccount
-          ? { parroquia_id: null }
-          : isCreating
-            ? { parroquia_id: null, parroquia_nueva: newParishName }
-            : { parroquia_id: parishSelection ? Number(parishSelection) : null };
+        : { parroquia_id: isGeneralAdminAccount || !parishSelection ? null : Number(parishSelection) };
 
     onSave({ ...user, ...parish, password }, confirmPassword);
   }
@@ -105,7 +117,7 @@ export function UserFormModal({
             <ReadOnlyField label="Nombre de usuario" value={user.username} />
           )}
 
-          {mode === 'create' && canCreateAdmin && (
+          {choosesRole ? (
             <div>
               <label htmlFor={roleSelectId} className={LABEL}>
                 Tipo de cuenta
@@ -113,21 +125,22 @@ export function UserFormModal({
               <select
                 id={roleSelectId}
                 value={user.rol}
-                onChange={(e) => update({ rol: e.target.value as User['rol'] })}
+                onChange={(e) => update({ rol: e.target.value as Role })}
                 className={SELECT}
               >
-                <option value="usuario_parroquia">Usuario de parroquia</option>
-                <option value="admin">Administrador</option>
+                {roles.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                  </option>
+                ))}
               </select>
-              {isAdminAccount && (
-                <p className="mt-1 text-xs text-slate-600">
-                  Un administrador ve todas las parroquias y gestiona cuentas y parroquias.
-                </p>
-              )}
+              <p className="mt-1 text-xs text-slate-600">{ROLE_HELP[user.rol]}</p>
             </div>
+          ) : (
+            <ReadOnlyField label="Tipo de cuenta" value={ROLE_LABELS[user.rol]} />
           )}
 
-          {mode === 'create' && isAdminAccount ? null : mode === 'create' ? (
+          {mode === 'create' && actorRole === 'admin_general' && !isGeneralAdminAccount && (
             <div>
               <label htmlFor={parishSelectId} className={LABEL}>
                 Parroquia
@@ -146,20 +159,15 @@ export function UserFormModal({
                     {parish.nombre}
                   </option>
                 ))}
-                <option value={NEW_PARISH_OPTION}>+ Crear parroquia nueva…</option>
               </select>
-
-              {isCreating && (
-                <div className="mt-2">
-                  <Field variant="panel" label="Nombre de la parroquia nueva" value={newParishName} onChange={setNewParishName} />
-                </div>
-              )}
+              <p className="mt-1 text-xs text-slate-600">Una parroquia nueva se crea en Configuración → Parroquias.</p>
             </div>
-          ) : (
-            <ReadOnlyField
-              label="Parroquia"
-              value={isAdminAccount ? 'Administrador (todas)' : (user.parroquia_nombre ?? '—')}
-            />
+          )}
+
+          {mode === 'create' && actorRole !== 'admin_general' && <ReadOnlyField label="Parroquia" value={actorParishName} />}
+
+          {mode === 'edit' && (
+            <ReadOnlyField label="Parroquia" value={isGeneralAdminAccount ? 'Todas (administrador general)' : (user.parroquia_nombre ?? '—')} />
           )}
 
           <PasswordField
@@ -180,7 +188,7 @@ export function UserFormModal({
 
 // Campos auxiliares privados: solo tienen sentido dentro de este formulario.
 // `Field` genérico (ui/) no sirve para estos dos casos: uno está deshabilitado
-// y el otro necesita type="password" con autocomplete de contraseña nueva.
+// y el otro es una contraseña nueva (con el botón para verla).
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   const id = useId();
@@ -211,12 +219,12 @@ function PasswordField({
       <label htmlFor={id} className={LABEL}>
         {label}
       </label>
-      <FormInput
+      <PasswordInput
         id={id}
-        type="password"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete="new-password"
+        inputClassName={`w-full px-3 py-1.5 ${FORM_CONTROL_CLASS}`}
       />
     </div>
   );

@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LogoutButton } from './LogoutButton';
+import { usePermissions } from '../../lib/permissions';
+import { useCanSeeStatistics } from '../../lib/statisticsAccess';
 import {
   BaptismIcon,
   ConfirmationIcon,
@@ -43,12 +45,24 @@ const OPTIONS: { label: string; path: string; icon: ReactNode }[] = [
     path: '/estadisticas',
     icon: <StatisticsIcon className={ICON_STYLES} />,
   },
+  {
+    label: 'Cambios por aprobar',
+    path: '/cambios',
+    icon: <ParishIcon className={ICON_STYLES} />,
+  },
 ];
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const canSeeStatistics = useCanSeeStatistics();
+  const { canAdminister } = usePermissions();
+  const visibleOptions = OPTIONS.filter((option) => {
+    if (option.path === '/estadisticas') return canSeeStatistics;
+    if (option.path === '/cambios') return canAdminister;
+    return true;
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -91,7 +105,7 @@ export function AppSidebar() {
           </div>
 
           <ul className="min-h-0 w-full flex-1 divide-y divide-white/70 overflow-y-auto">
-            {OPTIONS.map(({ label, path, icon }) => {
+            {visibleOptions.map(({ label, path, icon }) => {
               const isCurrent = pathname === path;
 
               return (

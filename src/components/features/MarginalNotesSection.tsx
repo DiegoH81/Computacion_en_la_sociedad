@@ -12,7 +12,11 @@ interface MarginalNotesSectionProps {
   corrections: CorrectionDraft[];
   onCorrectionsChange: (corrections: CorrectionDraft[]) => void;
   recorded?: RecordedChange[];
+  /** No se pueden agregar correcciones (la partida tiene una pendiente de revisar). */
+  correctionsLocked?: boolean;
 }
+
+const STATE_LABELS = { pendiente: 'por aprobar', aprobado: '', rechazado: 'rechazada' } as const;
 
 export function MarginalNotesSection({
   sectionRef,
@@ -22,6 +26,7 @@ export function MarginalNotesSection({
   corrections,
   onCorrectionsChange,
   recorded = [],
+  correctionsLocked = false,
 }: MarginalNotesSectionProps) {
   const usedByOthers = (id: string) => corrections.filter((row) => row.id !== id).map((row) => row.field);
   const nextFree = options.find((option) => !corrections.some((row) => row.field === option.key));
@@ -45,6 +50,7 @@ export function MarginalNotesSection({
           <textarea
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
+            readOnly={correctionsLocked}
             rows={4}
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-teal-600"
           />
@@ -56,7 +62,7 @@ export function MarginalNotesSection({
           <button
             type="button"
             onClick={addRow}
-            disabled={!nextFree}
+            disabled={!nextFree || correctionsLocked}
             className="rounded-lg bg-solid-blue px-4 py-1 text-xs font-bold uppercase text-white hover:opacity-90 disabled:opacity-50"
           >
             Añadir campo a modificar
@@ -117,6 +123,11 @@ export function MarginalNotesSection({
                 {recorded.map(({ label, change }, index) => (
                   <li key={index} className="rounded bg-white px-3 py-1">
                     {label}: {change.valor_anterior ?? '(vacío)'} → {change.valor_nuevo ?? '(vacío)'}
+                    {change.estado && STATE_LABELS[change.estado] && (
+                      <span className={`ml-2 text-xs font-semibold ${change.estado === 'pendiente' ? 'text-pending-ink' : 'text-slate-500'}`}>
+                        ({STATE_LABELS[change.estado]})
+                      </span>
+                    )}
                     <span className="ml-2 text-xs text-slate-500">
                       {change.fecha_cambio ? new Date(change.fecha_cambio).toLocaleDateString('es-PE') : ''}
                     </span>

@@ -1,5 +1,6 @@
 // src/pages/DashboardPage.tsx
 
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogoutButton } from '../components/features/LogoutButton';
 import { SyncStatusBadge } from '../components/features/SyncStatusBadge';
@@ -15,6 +16,9 @@ import {
   StatisticsIcon,
   UserIcon,
 } from '../components/ui/MenuIcons';
+import { usePermissions } from '../lib/permissions';
+import { useCanSeeStatistics } from '../lib/statisticsAccess';
+import { RequestService } from '../services/RequestService';
 import { useSessionStore } from '../store/sessionStore';
 
 const ICON_STYLES = 'h-24 w-24';
@@ -23,6 +27,23 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
+  const canSeeStatistics = useCanSeeStatistics();
+  const { canAdminister } = usePermissions();
+  const [pendingChanges, setPendingChanges] = useState(0);
+
+  // Un administrador de la parroquia ve al entrar si hay cambios pedidos esperando su aprobación.
+  useEffect(() => {
+    if (!canAdminister) return;
+    let cancelled = false;
+    RequestService.pending()
+      .then((response) => {
+        if (!cancelled) setPendingChanges(response.pendientes.length);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [canAdminister]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-app">
@@ -62,6 +83,17 @@ export function DashboardPage() {
         </header>
 
         <main className="mx-auto w-full max-w-5xl px-8 pb-6">
+          {canAdminister && pendingChanges > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate('/cambios')}
+              className="mb-4 flex w-full items-center justify-between rounded-2xl bg-pending-soft px-6 py-3 text-left text-lg font-bold text-pending-ink shadow-sm hover:brightness-95"
+            >
+              {pendingChanges === 1 ? 'Hay 1 partida con cambios por aprobar' : `Hay ${pendingChanges} partidas con cambios por aprobar`}
+              <span className="text-sm uppercase">Revisar</span>
+            </button>
+          )}
+
           <p className="mb-6 w-fit rounded-2xl bg-white px-6 py-3 text-xl font-bold text-black uppercase shadow-sm">
             ¿Qué gestión desea realizar el día de hoy?
           </p>
@@ -87,11 +119,13 @@ export function DashboardPage() {
               label="Índice y partida de matrimonio"
               onClick={() => navigate('/matrimonios')}
             />
-            <MenuActionButton
-              icon={<StatisticsIcon className={ICON_STYLES} />}
-              label="Estadísticas"
-              onClick={() => navigate('/estadisticas')}
-            />
+            {canSeeStatistics && (
+              <MenuActionButton
+                icon={<StatisticsIcon className={ICON_STYLES} />}
+                label="Estadísticas"
+                onClick={() => navigate('/estadisticas')}
+              />
+            )}
           </div>
         </main>
       </div>

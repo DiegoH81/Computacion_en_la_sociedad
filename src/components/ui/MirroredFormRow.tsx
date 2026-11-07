@@ -4,14 +4,18 @@ interface MirroredFormRowProps {
   label: string;
   left: ReactNode;
   right: ReactNode;
+  required?: boolean;
 }
 
 /** Fila con un mismo dato para dos personas: el rótulo al centro y un control a cada lado. */
-export function MirroredFormRow({ label, left, right }: MirroredFormRowProps) {
+export function MirroredFormRow({ label, left, right, required = false }: MirroredFormRowProps) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_11rem_minmax(0,1fr)] items-start gap-3">
       <div className="min-w-0">{left}</div>
-      <div className="rounded-md bg-table-panel px-2 py-1.5 text-center text-sm font-semibold text-white">{label}</div>
+      <div className="rounded-md bg-table-panel px-2 py-1.5 text-center text-sm font-semibold text-white">
+        {label}
+        {required && <span aria-hidden="true" className="ml-0.5 text-red-200">*</span>}
+      </div>
       <div className="min-w-0">{right}</div>
     </div>
   );

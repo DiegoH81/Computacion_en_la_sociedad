@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DateSelect } from './DateSelect';
 import { FormInput } from './FormInput';
+import { RequiredMark } from './RequiredMark';
 
 interface BirthDateOrApproximateProps {
   fecha: string | null;
@@ -10,6 +11,7 @@ interface BirthDateOrApproximateProps {
   label?: string;
   /** Distingue a la persona si hay dos en el formulario, ej. "del esposo". */
   personLabel?: string;
+  required?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface BirthDateOrApproximateProps {
  * "22 AG 1978", "27 años al día de la boda"... Por eso la aproximada es texto libre.
  * Se registra una de las dos.
  */
-export function BirthDateOrApproximate({ fecha, fechaAproximada, onChange, label, personLabel = '' }: BirthDateOrApproximateProps) {
+export function BirthDateOrApproximate({ fecha, fechaAproximada, onChange, label, personLabel = '', required = false }: BirthDateOrApproximateProps) {
   const [prefersApproximate, setPrefersApproximate] = useState(fechaAproximada !== null && !fecha);
   const named = (text: string) => `${text} ${personLabel}`.trim();
 
@@ -43,7 +45,10 @@ export function BirthDateOrApproximate({ fecha, fechaAproximada, onChange, label
     <div className="flex flex-col gap-1">
       {label && (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-slate-800">{label}</span>
+          <span className="text-xs font-bold text-slate-800">
+            {label}
+            {required && <RequiredMark />}
+          </span>
           {toggle}
         </div>
       )}

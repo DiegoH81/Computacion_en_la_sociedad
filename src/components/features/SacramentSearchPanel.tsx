@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { NameColumn, SacramentRecord } from '../../../shared/models';
+import { MarginalNoteBadge } from './MarginalNoteBadge';
 import { StatusBadge } from './ManagementPanel';
 import {
   NameSearchForm,
@@ -46,6 +47,12 @@ interface SacramentSearchPanelProps<T extends SacramentRecord> {
   /** Falso cuando se consulta una parroquia ajena: solo se puede buscar y ver. */
   canWrite: boolean;
   canManage: (parroquiaId: number) => boolean;
+  /** Solo el administrador de la parroquia anula partidas. */
+  canAnnul: boolean;
+  /** "Editar", o "Pedir cambio" para un usuario (ayudante). */
+  editLabel?: string;
+  /** Ver el historial de la partida: solo los administradores. */
+  onHistory?: (id: number) => void;
   onAdd: () => void;
   onEdit: (id: number) => void;
   onPrint: (id: number) => void;
@@ -69,6 +76,9 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
   onClear,
   canWrite,
   canManage,
+  canAnnul,
+  editLabel = 'Editar',
+  onHistory,
   onAdd,
   onEdit,
   onPrint,
@@ -108,6 +118,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                       {column.header}
                     </th>
                   ))}
+                  <th className={PANEL_HEADER_CELL}>Notas</th>
                   <th className={PANEL_HEADER_CELL}>Estado</th>
                 </tr>
               </thead>
@@ -149,6 +160,9 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                         </td>
                       ))}
                       <td className={PANEL_CELL}>
+                        <MarginalNoteBadge record={row} />
+                      </td>
+                      <td className={PANEL_CELL}>
                         <StatusBadge label={isAnnulled ? 'Anulada' : 'Vigente'} tone={isAnnulled ? 'alert' : 'on'} />
                       </td>
                     </tr>
@@ -175,7 +189,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
               title={selectedRow ? undefined : 'Seleccione una partida'}
               className={`${PANEL_ACTION_BUTTON} bg-darker-app`}
             >
-              Editar
+              {editLabel}
             </button>
             <button
               type="button"
@@ -186,15 +200,28 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
             >
               Imprimir
             </button>
-            <button
-              type="button"
-              disabled={selectedRow?.estado !== 'vigente'}
-              onClick={() => selectedRow && onAnnul(selectedRow.id as number)}
-              title={selectedRow?.estado === 'vigente' ? undefined : 'Seleccione una partida vigente'}
-              className={`${PANEL_ACTION_BUTTON} bg-solid-red`}
-            >
-              Anular
-            </button>
+            {onHistory && (
+              <button
+                type="button"
+                disabled={!selectedRow}
+                onClick={() => selectedRow && onHistory(selectedRow.id as number)}
+                title={selectedRow ? undefined : 'Seleccione una partida'}
+                className={`${PANEL_ACTION_BUTTON} bg-icon-button`}
+              >
+                Historial
+              </button>
+            )}
+            {canAnnul && (
+              <button
+                type="button"
+                disabled={selectedRow?.estado !== 'vigente'}
+                onClick={() => selectedRow && onAnnul(selectedRow.id as number)}
+                title={selectedRow?.estado === 'vigente' ? undefined : 'Seleccione una partida vigente'}
+                className={`${PANEL_ACTION_BUTTON} bg-solid-red`}
+              >
+                Anular
+              </button>
+            )}
           </div>
 
           <button type="button" onClick={onPrintIndex} className={`${PANEL_ACTION_BUTTON} bg-solid-purple`}>

@@ -11,8 +11,6 @@ interface PriestSelectorProps {
   onSearch: (query: string) => void;
   options: Minister[];
   isLoading: boolean;
-  /** Parroquia de la partida que se edita. Por defecto, la activa. */
-  parroquiaId?: number;
 }
 
 export function PriestSelector({
@@ -21,7 +19,6 @@ export function PriestSelector({
   onSearch,
   options,
   isLoading,
-  parroquiaId,
 }: PriestSelectorProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -46,7 +43,7 @@ export function PriestSelector({
   async function handleCreate(values: Minister) {
     setIsSaving(true);
     setCreateError(null);
-    const result = await createPriest(values, parroquiaId);
+    const result = await createPriest(values);
     setIsSaving(false);
 
     if (result.id === undefined) {

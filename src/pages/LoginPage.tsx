@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { InitialPackageLoader } from '../components/features/InitialPackageLoader';
 import { LoginForm } from '../components/features/LoginForm';
 import { DecorativeWave } from '../components/ui/DecorativeWave';
 import { CrestIcon } from '../components/ui/MenuIcons';
@@ -36,7 +37,7 @@ export function LoginPage() {
         </div>
 
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-dark-app">Sistema de Prelatura</h1>
+          <h1 className="text-2xl font-bold text-dark-app">Registro Sacramental</h1>
           <p className="text-slate-600">Ingrese sus datos para continuar</p>
         </div>
 
@@ -45,6 +46,8 @@ export function LoginPage() {
           isLoading={isLoading}
           errorMessage={errorMessage}
         />
+
+        <InitialPackageLoader />
       </main>
     </div>
   );
