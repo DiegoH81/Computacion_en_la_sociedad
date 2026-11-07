@@ -1,13 +1,9 @@
 import type { NameColumn, Person, PersonChange } from '../../../shared/models';
+import { PERSON_COLUMNS, type PersonColumn } from '../../../shared/record_fields';
 import type { LocalDatabase } from '../db/database';
 import { ServiceError } from '../utils/errors';
 import { clean_text } from '../utils/helpers';
 import type { Session } from './session';
-
-// From UI data
-export const PERSON_COLUMNS = ['dni', 'nombres', 'apellido_paterno', 'apellido_materno', 'fecha_nacimiento', 'edad', 'lugar_nacimiento', 'padre', 'madre'] as const;
-
-type PersonColumn = (typeof PERSON_COLUMNS)[number];
 
 export type Correction = Pick<PersonChange, 'campo_cambio' | 'valor_anterior' | 'valor_nuevo'>;
 
@@ -18,18 +14,6 @@ const CORRECTABLE_FIELDS: { column: NameColumn; label: string }[] =
 	{ column: 'apellido_materno', label: 'Apellido materno' },
 ];
 
-function read_age(value: unknown): number | null
-{
-	if (value === undefined || value === null || value === '')
-		return null;
-
-	const age = Number(value);
-	if (!Number.isInteger(age) || age < 0 || age > 150)
-		throw new ServiceError('La edad debe ser un número entre 0 y 150.', 400);
-
-	return age;
-}
-
 // Clean person Data
 function clean_person(person: Person): Pick<Person, PersonColumn>
 {
@@ -39,7 +23,7 @@ function clean_person(person: Person): Pick<Person, PersonColumn>
 		apellido_paterno: clean_text(person.apellido_paterno) ?? '',
 		apellido_materno: clean_text(person.apellido_materno) ?? '',
 		fecha_nacimiento: clean_text(person.fecha_nacimiento),
-		edad: read_age(person.edad),
+		fecha_aproximada: clean_text(person.fecha_aproximada),
 		lugar_nacimiento: clean_text(person.lugar_nacimiento),
 		padre: clean_text(person.padre),
 		madre: clean_text(person.madre),
@@ -60,7 +44,7 @@ export function insert_person(db: LocalDatabase, parish_id: number, person: Pers
 	const result = db
 		.prepare(
 			`INSERT INTO personas
-				(client_id, parroquia_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, edad, lugar_nacimiento, padre, madre)
+				(client_id, parroquia_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, fecha_aproximada, lugar_nacimiento, padre, madre)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		)
 		.run(
@@ -71,7 +55,7 @@ export function insert_person(db: LocalDatabase, parish_id: number, person: Pers
 			row.apellido_paterno,
 			row.apellido_materno,
 			row.fecha_nacimiento,
-			row.edad,
+			row.fecha_aproximada,
 			row.lugar_nacimiento,
 			row.padre,
 			row.madre,
@@ -134,19 +118,32 @@ export function apply_corrections(person: Person): { person: Person; corrections
 export function save_corrections(db: LocalDatabase, session: Session, person_id: number, sacrament_id: number, corrections: Correction[]): void
 {
 	const insert = db.prepare(
-		`INSERT INTO cambios_persona (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cambios_persona
+			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, estado, revisado_por_usuario_id, revisado_en)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?)`,
 	);
+	const now = new Date().toISOString();
 
 	for (const correction of corrections)
-		insert.run(crypto.randomUUID(), person_id, sacrament_id, session.user_id, correction.campo_cambio, correction.valor_anterior, correction.valor_nuevo);
+	{
+		insert.run(
+			crypto.randomUUID(),
+			person_id,
+			sacrament_id,
+			session.user_id,
+			correction.campo_cambio,
+			correction.valor_anterior,
+			correction.valor_nuevo,
+			session.user_id,
+			now,
+		);
+	}
 }
-
 
 export function name_condition(table_alias: string, column: NameColumn): string
 {
 	return `(${table_alias}.${column} LIKE ? OR EXISTS (
 		SELECT 1 FROM cambios_persona cp
-		WHERE cp.persona_id = ${table_alias}.id AND cp.campo_cambio = '${column}' AND cp.valor_anterior LIKE ?
+		WHERE cp.persona_id = ${table_alias}.id AND cp.campo_cambio = '${column}' AND cp.estado = 'aprobado' AND cp.valor_anterior LIKE ?
 	))`;
 }
