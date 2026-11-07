@@ -11,7 +11,7 @@ test('la aplicación arranca y muestra el título principal', async () => {
 
   const window = await electronApp.firstWindow();
 
-  await expect(window.getByText('Sistema de Prelatura')).toBeVisible();
+  await expect(window.getByText('Registro Sacramental')).toBeVisible();
 
   await electronApp.close();
   rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

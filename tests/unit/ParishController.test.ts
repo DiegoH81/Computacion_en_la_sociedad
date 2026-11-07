@@ -25,7 +25,7 @@ describe('ParishController', () => {
       token: 'token-de-prueba',
       usuarioId: 1,
       usuarioNombre: 'Admin',
-      rol: 'admin',
+      rol: 'admin_general',
       parroquiaId: null,
       parroquiaActivaId: 1,
       parroquiaActivaNombre: 'Parroquia 1',

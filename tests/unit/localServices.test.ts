@@ -15,9 +15,11 @@ import { save_reference_data } from '../../electron/main/sync/sync';
 import { get_index_entries, list_index_books } from '../../electron/main/controllers/sacrament_index';
 import { baptism, change, marriage, minister, type BaptismValues, type MarriageValues } from './helpers/records';
 
-const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
-const parish2: Session = { user_id: 2, role: 'usuario_parroquia', parish_id: 2, token: 't' };
-const admin: Session = { user_id: 3, role: 'admin', parish_id: null, token: 't' };
+const parish1: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 't' };
+const parish2: Session = { user_id: 2, role: 'admin_parroquia', parish_id: 2, token: 't' };
+const admin: Session = { user_id: 3, role: 'admin_general', parish_id: null, token: 't' };
+// Un ayudante de la parroquia 1: registra partidas y pide correcciones.
+const helper1: Session = { user_id: 4, role: 'usuario', parish_id: 1, token: 't' };
 
 let dir: string;
 let db: LocalDatabase;
@@ -51,7 +53,7 @@ const count = (table: string) => db.prepare(`SELECT COUNT(*) FROM ${table}`).plu
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'prelatura-services-'));
   db = open_local_database(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
-  const user = (id: number, parroquia_id: number | null, rol: 'admin' | 'usuario_parroquia') => ({
+  const user = (id: number, parroquia_id: number | null, rol: 'admin_general' | 'admin_parroquia' | 'usuario') => ({
     id,
     parroquia_id,
     username: `user${id}`,
@@ -67,7 +69,7 @@ beforeEach(() => {
       { id: 2, nombre: 'Parroquia 2', ubicacion: null, activa: 1 },
     ],
     ministros: [{ id: 1, client_id: 'ministro-1', parroquia_id: 1, titulo: null, nombre: 'Manuel', apellido_paterno: 'Torres', apellido_materno: 'Rios', activo: 1, version: 1 }],
-    usuarios: [user(1, 1, 'usuario_parroquia'), user(2, 2, 'usuario_parroquia'), user(3, null, 'admin')],
+    usuarios: [user(1, 1, 'admin_parroquia'), user(2, 2, 'admin_parroquia'), user(3, null, 'admin_general'), user(4, 1, 'usuario')],
   });
 });
 
@@ -80,7 +82,7 @@ describe('crear partidas', () => {
   it('reparte los datos entre personas, sacramentos y bautismos', () => {
     const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({
       sacramento: { fecha_evento: '2010-07-01', ministro_id: 1, anotaciones: 'Nota' },
-      persona: { dni: '12345678', edad: 30 },
+      persona: { dni: '12345678', fecha_aproximada: '(27 AÑOS AL DIA DE BODA)' },
       padrino_1: 'Pedro',
       padrino_2: 'Ana',
     }));
@@ -98,7 +100,7 @@ describe('crear partidas', () => {
         anotaciones: 'Nota',
         estado: 'vigente',
       },
-      persona: { dni: '12345678', nombres: 'Diago', edad: 30, fecha_nacimiento: null, cambios: [] },
+      persona: { dni: '12345678', nombres: 'Diago', fecha_aproximada: '(27 AÑOS AL DIA DE BODA)', fecha_nacimiento: null, cambios: [] },
       padrino_1: 'Pedro',
       padrino_2: 'Ana',
     });
@@ -111,20 +113,44 @@ describe('crear partidas', () => {
     expect(count('personas')).toBe(2);
   });
 
-  it('un usuario de parroquia ignora la parroquia enviada; un admin debe indicarla', () => {
+  it('se registra siempre en la parroquia del usuario; el administrador general no registra', () => {
     const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { parroquia_id: 2 } }));
     expect(read(id).sacramento.parroquia_id).toBe(1);
 
-    expect(() => create_person_sacrament(db, 'bautismo', admin, baptismInput())).toThrow(/parroquia/);
-    const adminId = create_person_sacrament(db, 'bautismo', admin, baptismInput({ sacramento: { parroquia_id: 2 } }));
-    expect(read(adminId).sacramento.parroquia_id).toBe(2);
+    expect(() => create_person_sacrament(db, 'bautismo', admin, baptismInput({ sacramento: { parroquia_id: 2 } }))).toThrow(/solo consulta/);
+    expect(count('sacramentos')).toBe(1);
   });
 
-  it('valida los datos requeridos y la edad', () => {
-    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { nombres: '  ' } }))).toThrow(/requeridos/);
+  it('valida los datos requeridos; la fecha aproximada es texto libre', () => {
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { nombres: '  ' } }))).toThrow(/Faltan datos: nombres/);
     expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { libro: '' } }))).toThrow(/libro/);
-    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { edad: 1.5 } }))).toThrow(/edad/);
-    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { edad: 200 } }))).toThrow(/edad/);
+    const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { fecha_aproximada: '  22 AG 1978  ' } }));
+    expect(read(id).persona.fecha_aproximada).toBe('22 AG 1978');
+  });
+
+  it('al registrar exige todos los datos de la persona menos el DNI, y el celebrante', () => {
+    const empty = { lugar_nacimiento: null, padre: '  ', madre: null, fecha_nacimiento: null, fecha_aproximada: null };
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: empty }))).toThrow(
+      'Faltan datos: fecha de nacimiento (o fecha aproximada), lugar de nacimiento, padre, madre.',
+    );
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { ministro_id: null } }))).toThrow(/celebrante/);
+    expect(() => create_marriage(db, parish1, marriageInput({ conyuge_1: { madre: null } }))).toThrow('Faltan datos del esposo: madre.');
+
+    // Sin DNI, y con solo la fecha aproximada, se puede registrar.
+    expect(create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { dni: null, fecha_aproximada: '(27 AÑOS)' } }))).toBeGreaterThan(0);
+    expect(count('sacramentos')).toBe(1);
+  });
+
+  it('una partida vieja sin algunos datos se puede editar, pero no se borra lo que tenía', () => {
+    const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput());
+    // Como una importada del sistema anterior: sin padre ni celebrante.
+    db.prepare('UPDATE personas SET padre = NULL').run();
+    db.prepare('UPDATE sacramentos SET ministro_id = NULL').run();
+
+    update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id, ministro_id: null }, persona: { padre: null }, padrino_1: 'Pedro' }));
+    expect(read(id)).toMatchObject({ padrino_1: 'Pedro', persona: { padre: null } });
+
+    expect(() => update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id, ministro_id: null }, persona: { padre: null, madre: '' } }))).toThrow('Faltan datos: madre.');
   });
 
   it('si algo falla no deja la persona ni el sacramento a medias', () => {
@@ -165,11 +191,11 @@ describe('corregir partidas', () => {
   });
 
   it('editar el formulario directamente cambia el dato sin registrar una corrección', () => {
-    const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { edad: 30 } }));
+    const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { fecha_aproximada: '30 años' } }));
 
-    update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id }, persona: { nombres: 'Diego', edad: 31 } }));
+    update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id }, persona: { nombres: 'Diego', fecha_aproximada: '31 años' } }));
 
-    expect(read(id).persona).toMatchObject({ nombres: 'Diego', edad: 31 });
+    expect(read(id).persona).toMatchObject({ nombres: 'Diego', fecha_aproximada: '31 años' });
     expect(count('cambios_persona')).toBe(0);
   });
 
@@ -249,15 +275,13 @@ describe('corregir partidas', () => {
     expect(read_person_sacrament(db, 'confirmacion', confirmationId).persona.nombres).toBe('Diago');
   });
 
-  it('no permite modificar partidas de otra parroquia, pero sí un admin', () => {
+  it('no permite modificar partidas de otra parroquia, ni al administrador general', () => {
     const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput());
 
     expect(() => update_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { id }, persona: { nombres: 'Otro' } }))).toThrow(/otra parroquia/);
     expect(() => annul_sacrament(db, parish2, id, 'motivo')).toThrow(/otra parroquia/);
+    expect(() => update_person_sacrament(db, 'bautismo', admin, baptismInput({ sacramento: { id }, persona: { nombres: 'Diego' } }))).toThrow(/solo consulta/);
     expect(read(id)).toMatchObject({ sacramento: { estado: 'vigente' }, persona: { nombres: 'Diago' } });
-
-    update_person_sacrament(db, 'bautismo', admin, baptismInput({ sacramento: { id }, persona: { nombres: 'Diego' } }));
-    expect(read(id).persona.nombres).toBe('Diego');
   });
 
   it('no confunde un bautismo con otro tipo de sacramento', () => {
@@ -303,7 +327,8 @@ describe('búsqueda', () => {
 
   it('con parroquia_id solo trae las partidas de esa parroquia, completas', () => {
     create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { nombres: 'Rosa' } }));
-    create_person_sacrament(db, 'bautismo', parish2, baptismInput());
+    const luis = create_minister(db, parish2, minister({ nombre: 'Luis', apellido_paterno: 'Ramos', apellido_materno: 'Paz' }));
+    create_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { ministro_id: luis } }));
 
     expect(search({ parroquia_id: 2 })).toMatchObject([{ sacramento: { libro: '2', parroquia: { nombre: 'Parroquia 2' } }, persona: { nombres: 'Diago' } }]);
     expect(names({ parroquia_id: 1 })).toEqual(['Rosa']);
@@ -349,7 +374,7 @@ describe('matrimonios', () => {
   });
 
   it('exige ambos nombres y respeta la parroquia', () => {
-    expect(() => create_marriage(db, parish1, marriageInput({ conyuge_2: { nombres: '' } }))).toThrow(/ambos cónyuges/);
+    expect(() => create_marriage(db, parish1, marriageInput({ conyuge_2: { nombres: '' } }))).toThrow('Faltan datos de la esposa: nombres.');
 
     const id = create_marriage(db, parish1, marriageInput());
     expect(() => annul_sacrament(db, parish2, id, 'motivo')).toThrow(/otra parroquia/);
@@ -431,12 +456,11 @@ describe('logo de la parroquia', () => {
     expect(read_parish_logo(dir, 1)).toBeNull();
   });
 
-  it('un usuario solo cambia el de su parroquia; un admin, cualquiera', () => {
+  it('solo el párroco cambia el de su parroquia', () => {
     expect(() => save_parish_logo(dir, parish1, 2, LOGO)).toThrow(/propia parroquia/);
+    expect(() => save_parish_logo(dir, admin, 2, LOGO)).toThrow(/solo consulta/);
+    expect(() => save_parish_logo(dir, helper1, 1, LOGO)).toThrow(/administrador de la parroquia/);
     expect(read_parish_logo(dir, 2)).toBeNull();
-
-    save_parish_logo(dir, admin, 2, LOGO);
-    expect(read_parish_logo(dir, 2)).toBe(LOGO);
   });
 
   it('rechaza lo que no sea una imagen permitida o sea demasiado grande', () => {
@@ -468,16 +492,18 @@ describe('celebrantes por parroquia', () => {
 
   it('una partida no acepta un celebrante de otra parroquia', () => {
     expect(() => create_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { ministro_id: 1 } }))).toThrow(/parroquia de la partida/);
-    expect(() => create_marriage(db, admin, marriageInput({ sacramento: { ministro_id: 1, parroquia_id: 2 } }))).toThrow(/parroquia de la partida/);
+    expect(() => create_marriage(db, parish2, marriageInput({ sacramento: { ministro_id: 1 } }))).toThrow(/parroquia de la partida/);
     expect(count('sacramentos')).toBe(0);
 
-    const id = create_person_sacrament(db, 'bautismo', parish2, baptismInput());
+    const luis = create_minister(db, parish2, minister({ nombre: 'Luis', apellido_paterno: 'Ramos', apellido_materno: 'Paz' }));
+    const id = create_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { ministro_id: luis } }));
     expect(() => update_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { id, ministro_id: 1 } }))).toThrow(/parroquia de la partida/);
-    expect(read(id).sacramento.ministro_id).toBeNull();
+    expect(read(id).sacramento.ministro_id).toBe(luis);
   });
 
   it('una partida ya registrada con un celebrante de otra parroquia se puede seguir editando', () => {
-    const id = create_person_sacrament(db, 'bautismo', parish2, baptismInput());
+    const luis = create_minister(db, parish2, minister({ nombre: 'Luis', apellido_paterno: 'Ramos', apellido_materno: 'Paz' }));
+    const id = create_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { ministro_id: luis } }));
     db.prepare('UPDATE sacramentos SET ministro_id = 1 WHERE id = ?').run(id);
 
     update_person_sacrament(db, 'bautismo', parish2, baptismInput({ sacramento: { id, ministro_id: 1 }, padrino_1: 'Pedro' }));
@@ -518,11 +544,15 @@ describe('ministros', () => {
     expect(ministerNames({ nombres: 'Zzz' })).toEqual([]);
   });
 
-  it('solo se modifican los de la propia parroquia, salvo un admin', () => {
+  it('solo el párroco modifica los de su parroquia; un usuario los registra pero no los edita', () => {
     expect(() => update_minister(db, parish2, { ...input, id: 1 })).toThrow(/otra parroquia/);
-    expect(() => toggle_minister_active(db, parish2, 1)).toThrow(/otra parroquia/);
+    expect(() => toggle_minister_active(db, admin, 1)).toThrow(/solo consulta/);
+    expect(() => toggle_minister_active(db, helper1, 1)).toThrow(/administrador de la parroquia/);
 
-    toggle_minister_active(db, admin, 1);
+    const created = create_minister(db, helper1, input);
+    expect(db.prepare('SELECT parroquia_id FROM ministros WHERE id = ?').pluck().get(created)).toBe(1);
+
+    toggle_minister_active(db, parish1, 1);
     expect(db.prepare('SELECT activo, version FROM ministros WHERE id = 1').get()).toEqual({ activo: 0, version: 2 });
   });
 

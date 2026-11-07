@@ -27,7 +27,7 @@ test('la app crea la base local cifrada y la reabre con la clave guardada', asyn
 
     const second = await launch();
     const window = await second.firstWindow();
-    await expect(window.getByText('Sistema de Prelatura')).toBeVisible();
+    await expect(window.getByText('Registro Sacramental')).toBeVisible();
     const key = await second.evaluate(
       ({ safeStorage }, encrypted) => safeStorage.decryptString(Buffer.from(encrypted, 'base64')),
       keyBefore.toString('base64'),

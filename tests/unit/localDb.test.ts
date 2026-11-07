@@ -120,6 +120,45 @@ describe('migraciones', () => {
     expect(conn.pragma('foreign_keys', { simple: true })).toBe(1);
   });
 
+  it('al pasar a la fecha aproximada conserva las edades como texto', () => {
+    // La versión 4 es la última que tenía la columna edad.
+    const conn = open(KEY, LOCAL_MIGRATIONS.slice(0, 4));
+    seed(conn);
+    const id = insertPersona(conn, 'Diego');
+    conn.prepare('UPDATE personas SET edad = 27 WHERE id = ?').run(id);
+    conn.close();
+
+    const migrated = open();
+    expect(migrated.prepare('SELECT fecha_aproximada FROM personas WHERE id = ?').pluck().get(id)).toBe('27 años');
+    expect(migrated.prepare(`SELECT count(*) FROM pragma_table_info('personas') WHERE name = 'edad'`).pluck().get()).toBe(0);
+  });
+
+  it('lo que esperaba aprobación con el sistema anterior pasa a solicitudes de cambio', () => {
+    // La base justo antes de la migración que crea las solicitudes de cambio.
+    const requestsMigration = LOCAL_MIGRATIONS.findIndex((sql) => sql.includes('CREATE TABLE solicitudes_cambio'));
+    const conn = open(KEY, LOCAL_MIGRATIONS.slice(0, requestsMigration));
+    seed(conn);
+    conn.exec(`INSERT INTO usuarios (id, client_id, username, rol, parroquia_id, nombre, apellido_paterno, apellido_materno) VALUES (4, 'servidor-4', 'ayudante', 'usuario', 1, 'Ana', 'Paz', 'Rey')`);
+    const personaId = insertPersona(conn, 'Diago');
+    conn.exec(`
+      INSERT INTO sacramentos (id, client_id, tipo, parroquia_id, libro, folio, numero, fecha_emision, anotaciones, anotaciones_propuestas)
+      VALUES (1, 'partida-1', 'bautismo', 1, '1', '1', '1', '2020-01-01', 'Nota vieja', 'Nota nueva');
+      INSERT INTO bautismos (sacramento_id, persona_id) VALUES (1, ${personaId});
+      INSERT INTO cambios_persona (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, estado, fecha_cambio)
+      VALUES ('cambio-1', ${personaId}, 1, 4, 'nombres', 'Diago', 'Diego', 'pendiente', '2026-11-01T10:00:00.000Z');
+    `);
+    conn.close();
+
+    const migrated = open();
+    expect(migrated.prepare('SELECT client_id, parte, campo, tipo, valor_anterior, valor_nuevo, usuario_id, estado FROM solicitudes_cambio ORDER BY id').all()).toEqual([
+      { client_id: 'cambio-1', parte: 'persona', campo: 'nombres', tipo: 'nota_marginal', valor_anterior: 'Diago', valor_nuevo: 'Diego', usuario_id: 4, estado: 'pendiente' },
+      { client_id: 'partida-1-nota', parte: 'sacramento', campo: 'anotaciones', tipo: 'digitacion', valor_anterior: 'Nota vieja', valor_nuevo: 'Nota nueva', usuario_id: 4, estado: 'pendiente' },
+    ]);
+    expect(migrated.prepare('SELECT count(*) FROM cambios_persona').pluck().get()).toBe(0);
+    expect(migrated.prepare(`SELECT count(*) FROM pragma_table_info('sacramentos') WHERE name = 'anotaciones_propuestas'`).pluck().get()).toBe(0);
+    expect(migrated.pragma('foreign_key_check')).toEqual([]);
+  });
+
   it('no abre una base creada por una versión más nueva de la app', () => {
     open(KEY, ['CREATE TABLE a (id INTEGER)', 'CREATE TABLE b (id INTEGER)']).close();
     db = null;
@@ -139,15 +178,14 @@ describe('modelo', () => {
     expect(nombres).toEqual(['Diogo', 'Diego']);
   });
 
-  it('guarda edad o fecha de nacimiento de forma independiente', () => {
+  it('guarda fecha aproximada (texto libre) o fecha de nacimiento de forma independiente', () => {
     const conn = open();
     seed(conn);
     const id = insertPersona(conn, 'Diego');
-    conn.prepare('UPDATE personas SET edad = 30 WHERE id = ?').run(id);
+    conn.prepare('UPDATE personas SET fecha_aproximada = ? WHERE id = ?').run('(27 AÑOS AL DIA DE BODA)', id);
 
-    const persona = conn.prepare('SELECT edad, fecha_nacimiento FROM personas WHERE id = ?').get(id);
-    expect(persona).toEqual({ edad: 30, fecha_nacimiento: null });
-    expect(() => conn.prepare('UPDATE personas SET edad = -1 WHERE id = ?').run(id)).toThrow(/CHECK/);
+    const persona = conn.prepare('SELECT fecha_aproximada, fecha_nacimiento FROM personas WHERE id = ?').get(id);
+    expect(persona).toEqual({ fecha_aproximada: '(27 AÑOS AL DIA DE BODA)', fecha_nacimiento: null });
   });
 
   it('cada UPDATE sube version una sola vez, salvo que la sincronización la fije', () => {
@@ -167,7 +205,7 @@ describe('modelo', () => {
     const conn = open();
     seed(conn);
     conn.exec(`INSERT INTO usuarios (id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno)
-               VALUES (1, 1, 'parroco1', 'usuario_parroquia', 'Usuario', 'Parroquia', 'Uno')`);
+               VALUES (1, 1, 'parroco1', 'admin_parroquia', 'Usuario', 'Parroquia', 'Uno')`);
     const personaId = insertPersona(conn, 'Diego');
     const insert = conn.prepare(
       `INSERT INTO cambios_persona (client_id, persona_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo)
@@ -195,12 +233,13 @@ describe('modelo', () => {
     expect(() => insertPersona(conn, 'Diego', '')).toThrow(/CHECK/);
   });
 
-  it('no guarda contraseñas en usuarios ni DNI de los padres en personas', () => {
+  it('en usuarios solo guarda la contraseña cambiada que falta subir, y no hay DNI de los padres en personas', () => {
     const conn = open();
     const columnas = (tabla: string) =>
       conn.prepare(`SELECT name FROM pragma_table_info('${tabla}')`).pluck().all();
 
     expect(columnas('usuarios')).not.toContain('password_hash');
+    expect(columnas('usuarios')).toContain('password_hash_pendiente');
     expect(columnas('personas')).not.toContain('padre_dni');
     expect(columnas('personas')).not.toContain('madre_dni');
   });

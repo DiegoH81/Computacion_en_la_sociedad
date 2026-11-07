@@ -11,8 +11,8 @@ import { baptism, change, marriage, type BaptismValues } from './helpers/records
 import { save_reference_data } from '../../electron/main/sync/sync';
 import { age_at, get_statistics } from '../../electron/main/controllers/statistics';
 
-const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
-const parish2: Session = { user_id: 2, role: 'usuario_parroquia', parish_id: 2, token: 't' };
+const parish1: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 't' };
+const parish2: Session = { user_id: 2, role: 'admin_parroquia', parish_id: 2, token: 't' };
 const NOW = new Date(2026, 5, 15); // 15 de junio de 2026
 
 let dir: string;
@@ -31,7 +31,7 @@ const stats = (year?: number, parroquiaId = 1) => get_statistics(db, parroquiaId
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'prelatura-statistics-'));
   db = open_local_database(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
-  const user = (id: number, parroquia_id: number) => ({ id, parroquia_id, username: `u${id}`, rol: 'usuario_parroquia' as const, nombre: 'U', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 });
+  const user = (id: number, parroquia_id: number) => ({ id, parroquia_id, username: `u${id}`, rol: 'admin_parroquia' as const, nombre: 'U', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 });
   save_reference_data(db, {
     parroquias: [
       { id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 },
@@ -40,6 +40,7 @@ beforeEach(() => {
     ministros: [
       { id: 1, client_id: 'm1', parroquia_id: 1, titulo: null, nombre: 'Manuel', apellido_paterno: 'Torres', apellido_materno: 'Rios', activo: 1, version: 1 },
       { id: 2, client_id: 'm2', parroquia_id: 1, titulo: null, nombre: 'Luis', apellido_paterno: 'Ramos', apellido_materno: 'Paz', activo: 1, version: 1 },
+      { id: 3, client_id: 'm3', parroquia_id: 2, titulo: null, nombre: 'Hugo', apellido_paterno: 'Paz', apellido_materno: 'Rey', activo: 1, version: 1 },
     ],
     usuarios: [user(1, 1), user(2, 2)],
   });
@@ -131,7 +132,7 @@ describe('estadísticas', () => {
   });
 
   it('solo cuenta la parroquia indicada y excluye las anuladas', () => {
-    create_person_sacrament(db, 'bautismo', parish2, partida('2026-01-01'));
+    create_person_sacrament(db, 'bautismo', parish2, partida('2026-01-01', { sacramento: { ministro_id: 3 } }));
     const anulada = create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01'));
     create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-02'));
     annul_sacrament(db, parish1, anulada, 'Duplicada');
@@ -141,15 +142,16 @@ describe('estadísticas', () => {
     expect(stats(2026, 2).totales.bautismo.anio).toBe(1);
   });
 
-  it('agrupa edades con la fecha de nacimiento o la edad, y separa las que no tienen dato', () => {
+  it('agrupa edades con la fecha de nacimiento; la fecha aproximada cuenta como sin dato', () => {
     create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { fecha_nacimiento: '2025-12-01' } }));
-    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { edad: 8 } }));
-    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { edad: 50 } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { fecha_nacimiento: '2017-06-10' } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { fecha_nacimiento: '1975-03-02' } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { persona: { fecha_aproximada: '8 años' } }));
     create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01'));
 
     expect(stats(2026).edades.bautismo).toEqual({
       bandas: [1, 0, 1, 0, 0, 0, 1],
-      sinDato: 1,
+      sinDato: 2,
       promedio: 19.3,
     });
   });
@@ -157,8 +159,8 @@ describe('estadísticas', () => {
   it('en matrimonio cuenta a los dos cónyuges en las edades, pero una sola partida', () => {
     create_marriage(db, parish1, marriage({
       sacramento: { fecha_emision: '2026-02-14', libro: '1', folio: '1', numero: '1' },
-      conyuge_1: { nombres: 'Luis', apellido_paterno: 'Paz', edad: 30 },
-      conyuge_2: { nombres: 'Rosa', apellido_paterno: 'Rey', edad: 28 },
+      conyuge_1: { nombres: 'Luis', apellido_paterno: 'Paz', apellido_materno: 'Gil', fecha_nacimiento: '1995-06-01' },
+      conyuge_2: { nombres: 'Rosa', apellido_paterno: 'Rey', apellido_materno: 'Sol', fecha_nacimiento: '1997-06-01' },
     }));
 
     const { totales, edades } = stats(2026);
@@ -172,15 +174,15 @@ describe('estadísticas', () => {
     create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01', { sacramento: { ministro_id: 2 } }));
     create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-02', { sacramento: { ministro_id: 2 } }));
     create_person_sacrament(db, 'confirmacion', parish1, partida('2026-01-03', { sacramento: { ministro_id: 1 } }));
-    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-04', { persona: { cambios: [change('nombres', 'Anita')] } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-04', { sacramento: { ministro_id: 2 }, persona: { cambios: [change('nombres', 'Anita')] } }));
 
     const { ministros, registro } = stats(2026);
 
     expect(ministros).toEqual([
-      { nombre: 'Luis Ramos Paz', total: 2 },
+      { nombre: 'Luis Ramos Paz', total: 3 },
       { nombre: 'Manuel Torres Rios', total: 1 },
     ]);
-    expect(registro).toEqual({ anuladas: 0, sinCelebrante: 1, conCorrecciones: 1 });
+    expect(registro).toEqual({ anuladas: 0, conCorrecciones: 1 });
   });
 
   it('ofrece los años con datos y el actual, y arma la tendencia hasta el año elegido', () => {
@@ -198,6 +200,6 @@ describe('estadísticas', () => {
     expect(stats(undefined)).toMatchObject({ anio: 2026, esAnioActual: true, anios: [2026] });
     expect(get_statistics(db, 1, '1; DROP TABLE personas', NOW).anio).toBe(2026);
     expect(stats(undefined).ministros).toEqual([]);
-    expect(stats(undefined).registro).toEqual({ anuladas: 0, sinCelebrante: 0, conCorrecciones: 0 });
+    expect(stats(undefined).registro).toEqual({ anuladas: 0, conCorrecciones: 0 });
   });
 });

@@ -10,10 +10,10 @@ import { find_duplicates, similarity } from '../../electron/main/controllers/dup
 import { annul_sacrament, create_marriage, create_person_sacrament } from '../../electron/main/controllers/sacraments';
 import { save_reference_data } from '../../electron/main/sync/sync';
 import type { DuplicateQuery } from '../../shared/models';
-import { baptism, change, marriage, type BaptismValues } from './helpers/records';
+import { baptism, change, marriage, type BaptismValues, TEST_MINISTER, TEST_MINISTER_2 } from './helpers/records';
 
-const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
-const parish2: Session = { user_id: 2, role: 'usuario_parroquia', parish_id: 2, token: 't' };
+const parish1: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 't' };
+const parish2: Session = { user_id: 2, role: 'admin_parroquia', parish_id: 2, token: 't' };
 
 // Un bautismo (o confirmación) de Nestor Quispe Machaca, libro 2, folio 1, número 713.
 const partida = (values: BaptismValues = {}, tipo: 'bautismo' | 'confirmacion' = 'bautismo') =>
@@ -34,13 +34,13 @@ const find = (persona: object, excludeId?: number) => find_duplicates(db, 'bauti
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'prelatura-duplicates-'));
   db = open_local_database(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
-  const user = (id: number, parroquia_id: number) => ({ id, parroquia_id, username: `u${id}`, rol: 'usuario_parroquia' as const, nombre: 'U', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 });
+  const user = (id: number, parroquia_id: number) => ({ id, parroquia_id, username: `u${id}`, rol: 'admin_parroquia' as const, nombre: 'U', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 });
   save_reference_data(db, {
     parroquias: [
       { id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 },
       { id: 2, nombre: 'Parroquia 2', ubicacion: null, activa: 1 },
     ],
-    ministros: [],
+    ministros: [TEST_MINISTER, TEST_MINISTER_2],
     usuarios: [user(1, 1), user(2, 2)],
   });
 });
@@ -62,7 +62,7 @@ describe('similitud', () => {
 
 describe('búsqueda de duplicados', () => {
   it('avisa con nivel alto si coincide el DNI, también en otra parroquia', () => {
-    create_person_sacrament(db, 'bautismo', parish2, partida({ persona: { dni: '12345678' } }));
+    create_person_sacrament(db, 'bautismo', parish2, partida({ persona: { dni: '12345678' }, sacramento: { ministro_id: TEST_MINISTER_2.id } }));
 
     const [match, ...rest] = find({ ...person, dni: '12345678' });
 
