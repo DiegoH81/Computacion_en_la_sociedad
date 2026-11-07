@@ -179,7 +179,6 @@ export function save_requests(db: D1Database, record: RecordData): D1PreparedSta
 	);
 }
 
-// Solo los eventos nuevos ("known_ids" son los que el servidor ya tiene), con sus datos.
 export function save_new_history(db: D1Database, record: RecordData, known_ids: Set<string>): D1PreparedStatement[]
 {
 	const writes: D1PreparedStatement[] = [];
