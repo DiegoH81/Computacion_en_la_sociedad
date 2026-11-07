@@ -29,12 +29,12 @@ describe('rutas /api/parishes para administradores', () => {
       env.prelatura_db.prepare(`INSERT INTO parroquias (id, nombre, activa) VALUES (1, 'San Pedro', 1), (2, 'Cerrada', 0)`),
       env.prelatura_db.prepare(
         `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, parroquia_id, activo, principal)
-         VALUES (1, 'admin', 'hash', 'Admin', 'De', 'Prueba', 'admin', NULL, 1, 1),
-                (2, 'parroco1', 'hash', 'Usuario', 'Parroquia', 'Uno', 'usuario_parroquia', 1, 1, 0)`,
+         VALUES (1, 'admin', 'hash', 'Admin', 'De', 'Prueba', 'admin_general', NULL, 1, 1),
+                (2, 'parroco1', 'hash', 'Usuario', 'Parroquia', 'Uno', 'admin_parroquia', 1, 1, 0)`,
       ),
     ]);
-    adminToken = await sign_jwt({ usuarioId: ADMIN_ID, rol: 'admin', parroquiaId: null }, env.JWT_SECRET);
-    parishUserToken = await sign_jwt({ usuarioId: PARISH_USER_ID, rol: 'usuario_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
+    adminToken = await sign_jwt({ usuarioId: ADMIN_ID, rol: 'admin_general', parroquiaId: null }, env.JWT_SECRET);
+    parishUserToken = await sign_jwt({ usuarioId: PARISH_USER_ID, rol: 'admin_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
   });
 
   it('lista todas, también las deshabilitadas, con su ubicación', async () => {
@@ -86,13 +86,14 @@ describe('rutas /api/parishes para administradores', () => {
 
   it('GET /api/users/me dice si el admin es el principal, y make-principal pasa la marca', async () => {
     await env.prelatura_db
-      .prepare(`INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, activo) VALUES (3, 'admin2', 'hash', 'Otro', 'A', 'B', 'admin', 1)`)
+      .prepare(`INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, activo) VALUES (3, 'admin2', 'hash', 'Otro', 'A', 'B', 'admin_general', 1)`)
       .run();
-    const otherToken = await sign_jwt({ usuarioId: 3, rol: 'admin', parroquiaId: null }, env.JWT_SECRET);
+    const otherToken = await sign_jwt({ usuarioId: 3, rol: 'admin_general', parroquiaId: null }, env.JWT_SECRET);
 
     expect(await (await api('/api/users/me', { token: adminToken })).json()).toEqual({ principal: true });
     expect(await (await api('/api/users/me', { token: otherToken })).json()).toEqual({ principal: false });
-    expect((await api('/api/users/me', { token: parishUserToken })).status).toBe(403);
+    // El administrador de una parroquia también pregunta: el principal de la suya gestiona a sus administradores.
+    expect((await api('/api/users/me', { token: parishUserToken })).status).toBe(200);
 
     expect((await api('/api/users/3/make-principal', { method: 'PATCH', token: otherToken })).status).toBe(403);
     expect((await api('/api/users/3/make-principal', { method: 'PATCH', token: adminToken })).status).toBe(200);

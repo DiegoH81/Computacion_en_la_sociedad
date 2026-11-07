@@ -17,7 +17,7 @@ const NEW_USER_BODY = {
 
 function tokenFor(
   userId: number,
-  rol: 'admin' | 'usuario_parroquia',
+  rol: 'admin_general' | 'admin_parroquia' | 'usuario',
   parroquiaId: number | null,
 ): Promise<string> {
   return sign_jwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
@@ -53,14 +53,14 @@ describe('rutas /api/users (Worker real + D1)', () => {
       .prepare(
         `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno,
                                rol, parroquia_id, activo)
-         VALUES (?, 'admin', 'hash', 'Administrador', 'De', 'Prueba', 'admin', NULL, 1),
-                (?, 'parroco1', 'hash', 'Usuario', 'Parroquia', 'Uno', 'usuario_parroquia', 1, 1)`,
+         VALUES (?, 'admin', 'hash', 'Administrador', 'De', 'Prueba', 'admin_general', NULL, 1),
+                (?, 'parroco1', 'hash', 'Usuario', 'Parroquia', 'Uno', 'usuario', 1, 1)`,
       )
       .bind(ADMIN_ID, PARISH_USER_ID)
       .run();
 
-    adminToken = await tokenFor(ADMIN_ID, 'admin', null);
-    parishUserToken = await tokenFor(PARISH_USER_ID, 'usuario_parroquia', 1);
+    adminToken = await tokenFor(ADMIN_ID, 'admin_general', null);
+    parishUserToken = await tokenFor(PARISH_USER_ID, 'usuario', 1);
   });
 
   describe('autenticación y autorización', () => {
@@ -77,7 +77,7 @@ describe('rutas /api/users (Worker real + D1)', () => {
       ['PATCH', '/api/users/1/toggle-active', undefined],
     ];
 
-    it.each(ENDPOINTS)('%s %s responde 403 a un usuario_parroquia', async (method, path, body) => {
+    it.each(ENDPOINTS)('%s %s responde 403 a un usuario (ayudante)', async (method, path, body) => {
       const response = await api(path, { method, token: parishUserToken, body });
 
       expect(response.status).toBe(403);

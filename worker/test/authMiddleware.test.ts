@@ -10,7 +10,7 @@ const MISSING_USER_ID = 999;
 const INVALID_SESSION_MESSAGE = 'Sesión inválida o expirada.';
 
 function tokenFor(userId: number, secret: string = env.JWT_SECRET): Promise<string> {
-  return sign_jwt({ usuarioId: userId, rol: 'usuario_parroquia', parroquiaId: 1 }, secret);
+  return sign_jwt({ usuarioId: userId, rol: 'admin_parroquia', parroquiaId: 1 }, secret);
 }
 
 function requestWith(token?: string): Request {
@@ -32,8 +32,8 @@ describe('authMiddleware (integración con D1)', () => {
       .prepare(
         `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno,
                                rol, parroquia_id, activo)
-         VALUES (?, 'usuario.activo', 'hash', 'Activo', 'De', 'Prueba', 'usuario_parroquia', 1, 1),
-                (?, 'usuario.deshabilitado', 'hash', 'Deshabilitado', 'De', 'Prueba', 'usuario_parroquia', 1, 0)`,
+         VALUES (?, 'usuario.activo', 'hash', 'Activo', 'De', 'Prueba', 'admin_parroquia', 1, 1),
+                (?, 'usuario.deshabilitado', 'hash', 'Deshabilitado', 'De', 'Prueba', 'admin_parroquia', 1, 0)`,
       )
       .bind(ACTIVE_USER_ID, DISABLED_USER_ID)
       .run();

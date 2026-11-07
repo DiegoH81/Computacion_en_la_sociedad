@@ -6,20 +6,20 @@ const TEST_SECRET = 'secreto-de-prueba-suficientemente-largo';
 describe('JWT signing and verification', () => {
   it('firma y verifica un token válido, preservando el payload', async () => {
     const token = await sign_jwt(
-      { usuarioId: 1, rol: 'admin', parroquiaId: null },
+      { usuarioId: 1, rol: 'admin_general', parroquiaId: null },
       TEST_SECRET,
     );
 
     const payload = await verify_jwt(token, TEST_SECRET);
 
     expect(payload.usuarioId).toBe(1);
-    expect(payload.rol).toBe('admin');
+    expect(payload.rol).toBe('admin_general');
     expect(payload.parroquiaId).toBeNull();
   });
 
   it('rechaza un token firmado con un secreto distinto', async () => {
     const token = await sign_jwt(
-      { usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1 },
+      { usuarioId: 1, rol: 'admin_parroquia', parroquiaId: 1 },
       TEST_SECRET,
     );
 
@@ -28,7 +28,7 @@ describe('JWT signing and verification', () => {
 
   it('rechaza un token con el payload alterado (firma inválida)', async () => {
     const token = await sign_jwt(
-      { usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1 },
+      { usuarioId: 1, rol: 'admin_parroquia', parroquiaId: 1 },
       TEST_SECRET,
     );
 

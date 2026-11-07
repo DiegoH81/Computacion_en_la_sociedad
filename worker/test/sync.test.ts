@@ -8,9 +8,9 @@ const db = () => env.prelatura_db;
 const DEVICE = '11111111-2222-4333-8444-555555555555';
 const KEY = 'ab'.repeat(32);
 
-const tokenParish1 = () => sign_jwt({ usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
-const tokenParish2 = () => sign_jwt({ usuarioId: 2, rol: 'usuario_parroquia', parroquiaId: 2 }, env.JWT_SECRET);
-const tokenAdmin = () => sign_jwt({ usuarioId: 3, rol: 'admin', parroquiaId: null }, env.JWT_SECRET);
+const tokenParish1 = () => sign_jwt({ usuarioId: 1, rol: 'admin_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
+const tokenParish2 = () => sign_jwt({ usuarioId: 2, rol: 'admin_parroquia', parroquiaId: 2 }, env.JWT_SECRET);
+const tokenAdmin = () => sign_jwt({ usuarioId: 3, rol: 'admin_general', parroquiaId: null }, env.JWT_SECRET);
 
 function api(path: string, token: string, init: { method?: string; body?: unknown } = {}) {
   return SELF.fetch(`https://example.com${path}`, {
@@ -39,7 +39,7 @@ const persona = (client_id: string, nombres = 'Diego') => ({
   apellido_paterno: 'Guido',
   apellido_materno: 'Alvaro',
   fecha_nacimiento: null,
-  edad: 30,
+  fecha_aproximada: '30 años',
   lugar_nacimiento: null,
   padre: null,
   madre: null,
@@ -93,9 +93,9 @@ beforeEach(async () => {
     db().prepare(`INSERT INTO parroquias (id, nombre) VALUES (1, 'Parroquia 1'), (2, 'Parroquia 2')`),
     db().prepare(
       `INSERT INTO usuarios (id, username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno)
-       VALUES (1, 'p1', 'hash-secreto', 'usuario_parroquia', 1, 'P', 'U', 'N'),
-              (2, 'p2', 'hash-secreto', 'usuario_parroquia', 2, 'P', 'D', 'S'),
-              (3, 'adm', 'hash-secreto', 'admin', NULL, 'A', 'D', 'M')`,
+       VALUES (1, 'p1', 'hash-secreto', 'admin_parroquia', 1, 'P', 'U', 'N'),
+              (2, 'p2', 'hash-secreto', 'admin_parroquia', 2, 'P', 'D', 'S'),
+              (3, 'adm', 'hash-secreto', 'admin_general', NULL, 'A', 'D', 'M')`,
     ),
     db().prepare(
       `INSERT INTO ministros (client_id, parroquia_id, nombre, apellido_paterno, apellido_materno, updated_at)
@@ -114,12 +114,12 @@ describe('subir cambios', () => {
     expect(await count('bautismos')).toBe(1);
     const fila = await db()
       .prepare(
-        `SELECT s.libro, m.client_id AS ministro, b.padrino_1, p.edad FROM sacramentos s
+        `SELECT s.libro, m.client_id AS ministro, b.padrino_1, p.fecha_aproximada FROM sacramentos s
          JOIN bautismos b ON b.sacramento_id = s.id JOIN personas p ON p.id = b.persona_id
          JOIN ministros m ON m.id = s.ministro_id`,
       )
       .first();
-    expect(fila).toEqual({ libro: '1', ministro: 'ministro-1', padrino_1: 'Pedro', edad: 30 });
+    expect(fila).toEqual({ libro: '1', ministro: 'ministro-1', padrino_1: 'Pedro', fecha_aproximada: '30 años' });
   });
 
   it('guarda un matrimonio con sus dos cónyuges', async () => {
@@ -215,10 +215,11 @@ describe('subir cambios', () => {
     expect(fila?.parroquia_id).toBe(1);
   });
 
-  it('el administrador puede subir partidas de cualquier parroquia', async () => {
+  it('el administrador general solo consulta: no puede subir partidas', async () => {
     const [r] = await push(await tokenAdmin(), [cambio(bautismo({ parroquia_id: 2 }), null)]);
 
-    expect(resultado(r)).toBe('aplicado');
+    expect(r).toMatchObject({ estado: 'rechazado', motivo: expect.stringContaining('solo consulta') });
+    expect(await count('sacramentos')).toBe(0);
   });
 
   it('no reutiliza la persona de otra partida', async () => {
@@ -387,15 +388,17 @@ describe('descargar', () => {
     expect((await api('/api/sync/record?entidad=bautismo&client_id=nada', token)).status).toBe(404);
   });
 
-  it('los datos de referencia nunca incluyen contraseñas', async () => {
+  it('la referencia trae las contraseñas (hash) solo de la propia parroquia, para entrar sin internet', async () => {
     const response = await api('/api/reference', await tokenParish1());
-    const text = await response.text();
+    const data = (await response.json()) as { parroquias: unknown[]; ministros: unknown[]; usuarios: { id: number; password_hash: string | null }[] };
 
-    expect(text).not.toContain('hash');
-    const data = JSON.parse(text);
     expect(data.parroquias).toHaveLength(2);
     expect(data.usuarios).toHaveLength(3);
+    expect(data.usuarios.map((u) => [u.id, u.password_hash])).toEqual([[1, 'hash-secreto'], [2, null], [3, null]]);
     expect(data.ministros[0]).toMatchObject({ client_id: 'ministro-1', version: 1 });
+
+    const general = (await (await api('/api/reference', await tokenAdmin())).json()) as typeof data;
+    expect(general.usuarios.every((u) => u.password_hash === 'hash-secreto')).toBe(true);
   });
 });
 
