@@ -1,18 +1,15 @@
 // POST /api/sync/push: guarda en la base online los cambios que hizo una PC.
-// 
-// For each change
-//   1. Validation is done
-//   2. Authorization is validated (user or admin)
-//   3. Solve conflicts
-//   4. Everything goes in a db.batch (transaction)
-//
-// Answer returns either "aplicado", "conflicto" or "rechazado".
 
-import type { ChangeResult, PersonData, RecordData, SacramentType, SyncChange } from '../../../shared/sync';
-import { PERSON_FIELDS } from '../models/person';
+
+import type { ChangeResult, PersonCorrection, PersonData, RecordData, SacramentType, SyncChange, UserData } from '../../../shared/sync';
+import { PERSON_COLUMNS } from '../../../shared/record_fields';
 import { is_sacrament_type } from '../models/sacrament';
+import { cannot_create, cannot_disable, cannot_modify, NEW_PRINCIPAL_SQL, role_parish_error } from '../models/user';
+import { read_actor } from '../controllers/users';
 import type { TokenUser } from '../utils/crypto';
-import { check_minister, check_record, RejectedChange } from './validation';
+import { read_record } from './pull';
+import { check_helper_edit, check_helper_new, save_new_history, save_requests, users_named } from './requests';
+import { check_minister, check_record, check_user, RejectedChange } from './validation';
 
 const CONFLICT_REASON = 'Otra PC modificó este registro antes de que se subiera este cambio.';
 
@@ -37,9 +34,24 @@ interface SavedRecord extends SavedVersion
 	estado: string;
 }
 
+interface SavedUser extends SavedVersion
+{
+	id: number;
+	username: string;
+	rol: string;
+	parroquia_id: number | null;
+	activo: number;
+	principal: number;
+}
+
+type VersionedTable = 'sacramentos' | 'ministros' | 'usuarios';
+
 function check_permission(user: TokenUser, parish_id: number, what: string): void
 {
-	if (user.rol !== 'admin' && user.parroquiaId !== parish_id)
+	if (user.rol === 'admin_general')
+		throw new RejectedChange(`El administrador general solo consulta: no puede modificar ${what}.`);
+
+	if (user.parroquiaId !== parish_id)
 		throw new RejectedChange(`No tiene permiso para modificar ${what} de otra parroquia.`);
 }
 
@@ -56,7 +68,7 @@ function find_conflict(change: SyncChange, saved: SavedVersion): ChangeResult | 
 }
 
 
-function version_guard(db: D1Database, table: 'sacramentos' | 'ministros', client_id: string, version: number): D1PreparedStatement
+function version_guard(db: D1Database, table: VersionedTable, client_id: string, version: number): D1PreparedStatement
 {
 	const sql = `SELECT CASE WHEN (SELECT version FROM ${table} WHERE client_id = ?) = ? THEN 1 ELSE json('version distinta') END`;
 	return db.prepare(sql).bind(client_id, version);
@@ -67,7 +79,19 @@ function is_version_guard_error(error: unknown): boolean
 	return error instanceof Error && /malformed JSON/i.test(error.message);
 }
 
+function table_of(entity: string): VersionedTable
+{
+	if (entity === 'ministro')
+		return 'ministros';
+
+	if (entity === 'usuario')
+		return 'usuarios';
+
+	return 'sacramentos';
+}
+
 // Ministers
+
 async function apply_minister(db: D1Database, user: TokenUser, change: SyncChange): Promise<ChangeResult>
 {
 	const minister = check_minister(change.datos);
@@ -88,6 +112,10 @@ async function apply_minister(db: D1Database, user: TokenUser, change: SyncChang
 		check_permission(user, saved.parroquia_id, 'ministros');
 		if (saved.parroquia_id !== minister.parroquia_id)
 			throw new RejectedChange('La parroquia de un ministro no se puede cambiar.');
+
+		const is_resend = saved.ultimo_cola_id === change.cola_id;
+		if (user.rol === 'usuario' && !is_resend)
+			throw new RejectedChange('Solo el administrador de la parroquia puede modificar ministros.');
 
 		const conflict = find_conflict(change, saved);
 		if (conflict)
@@ -116,7 +144,6 @@ async function apply_minister(db: D1Database, user: TokenUser, change: SyncChang
 		);
 	}
 
-	
 	writes.push(db.prepare('SELECT version FROM ministros WHERE client_id = ?').bind(minister.client_id));
 
 	const results = await db.batch<{ version: number }>(writes);
@@ -124,6 +151,111 @@ async function apply_minister(db: D1Database, user: TokenUser, change: SyncChang
 
 	return { entidad: 'ministro', client_id: minister.client_id, estado: 'aplicado', version: version };
 }
+
+async function apply_user(db: D1Database, user: TokenUser, change: SyncChange): Promise<ChangeResult>
+{
+	const account: UserData = check_user(change.datos);
+	if (account.client_id !== change.client_id)
+		throw new RejectedChange('El registro no coincide con el cambio.');
+
+	const actor = await read_actor(db, user);
+
+	const saved = await db
+		.prepare('SELECT id, username, rol, parroquia_id, activo, principal, version, ultimo_cola_id FROM usuarios WHERE client_id = ?')
+		.bind(account.client_id)
+		.first<SavedUser>();
+
+	const writes: D1PreparedStatement[] = [];
+
+	if (saved)
+	{
+		if (saved.rol !== account.rol || saved.parroquia_id !== account.parroquia_id)
+			throw new RejectedChange('El rol y la parroquia de una cuenta no se pueden cambiar.');
+
+		if (saved.username !== account.username)
+			throw new RejectedChange('El nombre de usuario no se puede cambiar.');
+
+		const reason = cannot_modify(actor, { id: saved.id, rol: account.rol, parroquia_id: account.parroquia_id });
+		if (reason)
+			throw new RejectedChange(reason);
+
+		const disable_reason = saved.activo === 1 && account.activo !== 1 ? cannot_disable({ ...account, principal: saved.principal === 1 }) : null;
+		if (disable_reason)
+			throw new RejectedChange(disable_reason);
+
+		if (saved.id === actor.id && saved.activo !== account.activo)
+			throw new RejectedChange('No puede deshabilitar su propia cuenta.');
+
+		const conflict = find_conflict(change, saved);
+		if (conflict)
+			return conflict;
+
+		writes.push(version_guard(db, 'usuarios', account.client_id, saved.version));
+		writes.push(
+			db
+				.prepare(
+					`UPDATE usuarios
+					 SET nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?,
+						password_hash = COALESCE(?, password_hash), ultimo_cola_id = ?
+					 WHERE client_id = ?`,
+				)
+				.bind(account.nombre, account.apellido_paterno, account.apellido_materno, account.activo, account.password_hash ?? null, change.cola_id, account.client_id),
+		);
+	}
+	else
+	{
+		const target = { rol: account.rol, parroquia_id: account.parroquia_id };
+		const reason = role_parish_error(target) ?? cannot_create(actor, target);
+		if (reason)
+			throw new RejectedChange(reason);
+
+		if (!account.password_hash)
+			throw new RejectedChange('Falta la contraseña de la cuenta nueva.');
+
+		const [parish, taken] = await db.batch([
+			db.prepare('SELECT 1 FROM parroquias WHERE id = ? AND activa = 1').bind(account.parroquia_id),
+			db.prepare('SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE').bind(account.username),
+		]);
+
+		if (account.parroquia_id !== null && parish.results.length === 0)
+			throw new RejectedChange('La parroquia de la cuenta no existe en el servidor.');
+
+		if (taken.results.length > 0)
+			throw new RejectedChange('Ese nombre de usuario ya existe. Cámbielo en esta PC.');
+
+		writes.push(
+			db
+				.prepare(
+					`INSERT INTO usuarios
+						(client_id, username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno, activo, ultimo_cola_id, updated_at, principal)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${NOW_SQL}, ${NEW_PRINCIPAL_SQL})`,
+				)
+				.bind(
+					account.client_id,
+					account.username,
+					account.password_hash,
+					account.rol,
+					account.parroquia_id,
+					account.nombre,
+					account.apellido_paterno,
+					account.apellido_materno,
+					account.activo,
+					change.cola_id,
+					account.rol,
+					account.parroquia_id,
+				),
+		);
+	}
+
+	writes.push(db.prepare('SELECT id, version FROM usuarios WHERE client_id = ?').bind(account.client_id));
+
+	const results = await db.batch<{ id: number; version: number }>(writes);
+	const row = results[results.length - 1].results[0];
+
+	return { entidad: 'usuario', client_id: account.client_id, estado: 'aplicado', version: row.version, id: row.id };
+}
+
+// Sacraments
 
 function sacrament_table(type: SacramentType): string
 {
@@ -172,10 +304,10 @@ async function read_saved_people(db: D1Database, type: SacramentType, record_id:
 // Person
 function save_person(db: D1Database, parish_id: number, person: PersonData): D1PreparedStatement
 {
-	const columns = PERSON_FIELDS.join(', ');
-	const marks = PERSON_FIELDS.map(() => '?').join(', ');
-	const updates = PERSON_FIELDS.map((field) => `${field} = excluded.${field}`).join(', ');
-	const values = PERSON_FIELDS.map((field) => person[field]);
+	const columns = PERSON_COLUMNS.join(', ');
+	const marks = PERSON_COLUMNS.map(() => '?').join(', ');
+	const updates = PERSON_COLUMNS.map((field) => `${field} = excluded.${field}`).join(', ');
+	const values = PERSON_COLUMNS.map((field) => person[field]);
 
 	return db
 		.prepare(
@@ -290,15 +422,20 @@ function save_detail(db: D1Database, record: RecordData): D1PreparedStatement
 	return save_godparents(db, sacrament_table(record.tipo), record);
 }
 
-// Change
-function save_correction(db: D1Database, record: RecordData, correction: RecordData['cambios'][number]): D1PreparedStatement
+// Una corrección no cambia de campo ni de valor; lo que sí cambia es su estado, cuando el
+// administrador de la parroquia la aprueba o la rechaza.
+function save_correction(db: D1Database, record: RecordData, correction: PersonCorrection): D1PreparedStatement
 {
 	return db
 		.prepare(
 			`INSERT INTO cambios_persona
-				(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio)
-			 VALUES (?, (SELECT id FROM personas WHERE client_id = ?), (SELECT id FROM sacramentos WHERE client_id = ?), ?, ?, ?, ?, ?)
-			 ON CONFLICT (client_id) DO NOTHING`,
+				(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,
+				 estado, revisado_por_usuario_id, revisado_en)
+			 VALUES (?, (SELECT id FROM personas WHERE client_id = ?), (SELECT id FROM sacramentos WHERE client_id = ?), ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (client_id) DO UPDATE SET
+				estado = excluded.estado,
+				revisado_por_usuario_id = excluded.revisado_por_usuario_id,
+				revisado_en = excluded.revisado_en`,
 		)
 		.bind(
 			correction.client_id,
@@ -309,9 +446,11 @@ function save_correction(db: D1Database, record: RecordData, correction: RecordD
 			correction.valor_anterior,
 			correction.valor_nuevo,
 			correction.fecha_cambio,
+			correction.estado,
+			correction.revisado_por_usuario_id,
+			correction.revisado_en,
 		);
 }
-
 
 async function apply_record(db: D1Database, user: TokenUser, change: SyncChange, type: SacramentType): Promise<ChangeResult>
 {
@@ -323,14 +462,8 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 
 	const people_ids = record.personas.map((person) => person.client_id);
 
-	const user_set = new Set<number>();
-	for (const correction of record.cambios)
-		user_set.add(correction.usuario_id);
-
-	if (record.anulado_por_usuario_id)
-		user_set.add(record.anulado_por_usuario_id);
-
-	const user_ids = [...user_set];
+	const user_ids = users_named(record);
+	const history_ids = record.historial.map((entry) => entry.client_id);
 
 	const reads = await db.batch([
 		db.prepare('SELECT id, tipo, parroquia_id, version, estado, ultimo_cola_id FROM sacramentos WHERE client_id = ?').bind(record.client_id),
@@ -338,6 +471,7 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 		db.prepare('SELECT id, rol, parroquia_id FROM usuarios WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(user_ids)),
 		db.prepare('SELECT id FROM parroquias WHERE id = ?').bind(record.parroquia_id),
 		db.prepare('SELECT id FROM ministros WHERE client_id = ?').bind(record.ministro_client_id),
+		db.prepare('SELECT client_id FROM historial_partidas WHERE client_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(history_ids)),
 	]);
 
 	const saved = reads[0].results[0] as SavedRecord | undefined;
@@ -345,6 +479,7 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 	const found_users = reads[2].results as { id: number; rol: string; parroquia_id: number | null }[];
 	const parish_exists = reads[3].results.length > 0;
 	const minister_exists = reads[4].results.length > 0;
+	const known_history = new Set((reads[5].results as { client_id: string }[]).map((row) => row.client_id));
 
 	if (!parish_exists)
 		throw new RejectedChange('La parroquia no existe en el servidor.');
@@ -355,8 +490,14 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 	for (const user_id of user_ids)
 	{
 		const found = found_users.find((row) => row.id === user_id);
-		if (!found || (found.rol !== 'admin' && found.parroquia_id !== record.parroquia_id))
+		if (!found || (found.rol !== 'admin_general' && found.parroquia_id !== record.parroquia_id))
 			throw new RejectedChange('La partida indica un usuario que no pertenece a su parroquia.');
+	}
+
+	for (const correction of record.cambios)
+	{
+		if (!people_ids.includes(correction.persona_client_id))
+			throw new RejectedChange('Una corrección no corresponde a las personas de la partida.');
 	}
 
 	const writes: D1PreparedStatement[] = [];
@@ -382,17 +523,23 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 		if (!saved_people || saved_people.some((client_id, i) => client_id !== people_ids[i]))
 			throw new RejectedChange('Las personas no corresponden a esta partida.');
 
+		const is_resend = saved.ultimo_cola_id === change.cola_id;
+		if (user.rol === 'usuario' && !is_resend)
+		{
+			const stored = await read_record(db, type, record.client_id);
+			check_helper_edit(stored as RecordData, record, user.usuarioId);
+		}
+
 		writes.push(version_guard(db, 'sacramentos', record.client_id, saved.version));
 	}
-	else if (people_already_saved)
+	else
 	{
-		throw new RejectedChange('Las personas ya pertenecen a otra partida.');
-	}
+		if (people_already_saved)
+			throw new RejectedChange('Las personas ya pertenecen a otra partida.');
 
-	for (const correction of record.cambios)
-	{
-		if (!people_ids.includes(correction.persona_client_id))
-			throw new RejectedChange('Una corrección no corresponde a las personas de la partida.');
+		if (user.rol === 'usuario')
+			check_helper_new(record, user.usuarioId);
+
 	}
 
 	for (const person of record.personas)
@@ -403,6 +550,9 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 
 	for (const correction of record.cambios)
 		writes.push(save_correction(db, record, correction));
+
+	writes.push(...save_requests(db, record));
+	writes.push(...save_new_history(db, record, known_history));
 
 	writes.push(db.prepare('SELECT version FROM sacramentos WHERE client_id = ?').bind(record.client_id));
 
@@ -426,6 +576,9 @@ async function apply_change(db: D1Database, user: TokenUser, change: SyncChange)
 		if (entity === 'ministro')
 			return await apply_minister(db, user, change);
 
+		if (entity === 'usuario')
+			return await apply_user(db, user, change);
+
 		if (is_sacrament_type(entity))
 			return await apply_record(db, user, change, entity);
 
@@ -438,8 +591,7 @@ async function apply_change(db: D1Database, user: TokenUser, change: SyncChange)
 
 		if (is_version_guard_error(error))
 		{
-			const table = entity === 'ministro' ? 'ministros' : 'sacramentos';
-			const row = await db.prepare(`SELECT version FROM ${table} WHERE client_id = ?`).bind(client_id).first<{ version: number }>();
+			const row = await db.prepare(`SELECT version FROM ${table_of(entity)} WHERE client_id = ?`).bind(client_id).first<{ version: number }>();
 			const version = row ? row.version : 0;
 
 			return { entidad: entity, client_id: client_id, estado: 'conflicto', version: version, motivo: CONFLICT_REASON };
