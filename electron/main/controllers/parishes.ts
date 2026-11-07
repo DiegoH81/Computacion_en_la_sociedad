@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { LocalDatabase } from '../db/database';
-import { check_parish_access } from '../models/parish';
+import { check_parish_admin } from '../models/parish';
 import type { Session } from '../models/session';
 import { FILE_NAMES, MAX_LOGO_LENGTH } from '../utils/config';
 import { ServiceError } from '../utils/errors';
@@ -34,7 +34,7 @@ export function read_parish_logo(user_data_folder: string, parish_id: number): s
 
 export function save_parish_logo(user_data_folder: string, session: Session, parish_id: number, logo: unknown): void
 {
-	check_parish_access(session, parish_id, 'Solo puede cambiar el logo de su propia parroquia.');
+	check_parish_admin(session, parish_id, 'Solo puede cambiar el logo de su propia parroquia.', 'Solo el administrador de la parroquia puede cambiar el logo.');
 
 	const file = logo_path(user_data_folder, parish_id);
 
