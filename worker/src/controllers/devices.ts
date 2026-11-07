@@ -62,7 +62,7 @@ devices_router.put('/:id/key', async (c) =>
 
 	const db = c.env.prelatura_db;
 	const device = await read_device(db, device_id);
-	if (device && user.rol !== 'admin' && device.parroquia_id !== null && device.parroquia_id !== user.parroquiaId)
+	if (device && user.rol !== 'admin_general' && device.parroquia_id !== null && device.parroquia_id !== user.parroquiaId)
 		throw new ServiceError(OTHER_PARISH, 403);
 
 	
@@ -98,7 +98,7 @@ devices_router.get('/:id/key', async (c) =>
 	if (!device)
 		throw new ServiceError('No hay copia de la clave de esta PC.', 404);
 
-	if (user.rol !== 'admin' && device.parroquia_id !== user.parroquiaId)
+	if (user.rol !== 'admin_general' && device.parroquia_id !== user.parroquiaId)
 		throw new ServiceError(OTHER_PARISH, 403);
 
 	return c.json({ clave: await decrypt_device_key(device.clave_cifrada, secret) });

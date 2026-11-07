@@ -10,7 +10,7 @@
 //   ... --local --persist-to=carpeta
 
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -64,8 +64,8 @@ DELETE FROM parroquias WHERE nombre IN ('Parroquia 1', 'Parroquia 2', 'Parroquia
 -- Solo puede haber un principal (lo asegura un índice UNIQUE): se quita antes de dárselo al nuevo.
 UPDATE usuarios SET principal = 0 WHERE principal = 1;
 
-INSERT INTO usuarios (username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno, principal)
-VALUES (${sqlText(values.admin)}, ${sqlText(hash)}, 'admin', NULL, ${sqlText(values.nombre)}, ${sqlText(values.paterno)}, ${sqlText(values.materno)}, 1);
+INSERT INTO usuarios (client_id, username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno, principal)
+VALUES (${sqlText(randomUUID())}, ${sqlText(values.admin)}, ${sqlText(hash)}, 'admin_general', NULL, ${sqlText(values.nombre)}, ${sqlText(values.paterno)}, ${sqlText(values.materno)}, 1);
 `;
 
 const directory = mkdtempSync(path.join(tmpdir(), 'prelatura-bootstrap-'));

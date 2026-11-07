@@ -1,18 +1,3 @@
-// Llena la base LOCAL de desarrollo con datos de prueba: parroquias, ministros, usuarios y partidas
-// de bautismo, confirmación y matrimonio. Sirve para ver las tablas con varias páginas, las
-// estadísticas con años y meses, y casos raros: partidas anuladas, fechas incompletas, edad en vez
-// de fecha de nacimiento y notas marginales.
-//
-// Uso, desde worker/ (con la base ya creada por "npm run db:setup"):
-//   npm run db:seed
-//   node src/scripts/seed-dev.mjs --persist-to=carpeta     (otra base local)
-//
-// Nunca toca la base remota. Se puede correr más de una vez: los datos son siempre los mismos y
-// cada fila se inserta solo si todavía no existe (INSERT OR IGNORE con un client_id fijo).
-//
-// Las PCs reciben las partidas nuevas en su próxima sincronización. Todas las cuentas nuevas
-// tienen la contraseña de parroco1: parroco123.
-
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -197,7 +182,7 @@ function random_dni()
 	return chance(0.6) ? String(random_int(10000000, 79999999)) : null;
 }
 
-// Una persona: fecha de nacimiento, solo la edad, o ninguna de las dos.
+// Una persona: fecha de nacimiento, solo una fecha aproximada, o ninguna de las dos.
 function random_person(key, sex, event_date, typical_age)
 {
 	const name = random_person_name(sex);
@@ -205,19 +190,19 @@ function random_person(key, sex, event_date, typical_age)
 	const birth_year = Math.max(1900, event_year - typical_age());
 
 	let fecha_nacimiento = null;
-	let edad = null;
+	let fecha_aproximada = null;
 	const roll = next_random();
 	if (roll < 0.75)
 		fecha_nacimiento = clamp_to_today(random_date(birth_year, birth_year, true));
 	else if (roll < 0.9)
-		edad = Math.max(0, event_year - birth_year);
+		fecha_aproximada = `${Math.max(0, event_year - birth_year)} años`;
 
 	return {
 		client_id: seed_uuid(key),
 		dni: random_dni(),
 		...name,
 		fecha_nacimiento,
-		edad,
+		fecha_aproximada,
 		lugar_nacimiento: chance(0.8) ? pick(PLACES) : null,
 		padre: chance(0.85) ? random_full_name('m') : null,
 		madre: chance(0.9) ? random_full_name('f') : null,
@@ -233,9 +218,9 @@ const statements = [];
 function insert_person(person, parish_name)
 {
 	statements.push(
-		`INSERT OR IGNORE INTO personas (client_id, parroquia_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, edad, lugar_nacimiento, padre, madre)
+		`INSERT OR IGNORE INTO personas (client_id, parroquia_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, fecha_aproximada, lugar_nacimiento, padre, madre)
 		 VALUES (${sql_value(person.client_id)}, ${parish_id(parish_name)}, ${sql_value(person.dni)}, ${sql_value(person.nombres)}, ${sql_value(person.apellido_paterno)},
-		         ${sql_value(person.apellido_materno)}, ${sql_value(person.fecha_nacimiento)}, ${sql_value(person.edad)}, ${sql_value(person.lugar_nacimiento)},
+		         ${sql_value(person.apellido_materno)}, ${sql_value(person.fecha_nacimiento)}, ${sql_value(person.fecha_aproximada)}, ${sql_value(person.lugar_nacimiento)},
 		         ${sql_value(person.padre)}, ${sql_value(person.madre)});`,
 	);
 }
@@ -327,8 +312,8 @@ for (const plan of RECORDS_PER_PARISH)
 			.replace(/[̀-ͯ]/g, '')
 			.toLowerCase() + `.${parish_key.slice(-1)}${index}`;
 		statements.push(
-			`INSERT OR IGNORE INTO usuarios (username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno, activo)
-			 VALUES (${sql_value(username)}, ${PARISH_PASSWORD_HASH}, 'usuario_parroquia', ${parish_id(plan.parroquia)}, ${sql_value(name.nombres)},
+			`INSERT OR IGNORE INTO usuarios (client_id, username, password_hash, rol, parroquia_id, nombre, apellido_paterno, apellido_materno, activo)
+			 VALUES (${sql_value(seed_uuid(`seed-usuario-${parish_key}-${index}`))}, ${sql_value(username)}, ${PARISH_PASSWORD_HASH}, ${index === 0 ? "'admin_parroquia'" : "'usuario'"}, ${parish_id(plan.parroquia)}, ${sql_value(name.nombres)},
 			         ${sql_value(name.apellido_paterno)}, ${sql_value(name.apellido_materno)}, ${chance(0.85) ? 1 : 0});`,
 		);
 	}

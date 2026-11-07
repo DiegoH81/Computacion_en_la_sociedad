@@ -14,7 +14,7 @@ export const sync_router = new Hono<AppEnv>();
 
 sync_router.get('/reference', async (c) =>
 {
-	return c.json(await read_reference(c.env.prelatura_db));
+	return c.json(await read_reference(c.env.prelatura_db, c.get('user')));
 });
 
 sync_router.post('/sync/push', async (c) =>

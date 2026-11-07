@@ -1,8 +1,8 @@
 //   GET    /api/parishes                      Active parishes
-//   GET    /api/parishes/todas                All parishes, only      ADMIN
-//   POST   /api/parishes                      Create parish { nombre, ubicacion }      ADMIN
-//   PUT    /api/parishes/:id                  Edit parish nombre y ubicación      ADMIN
-//   PATCH  /api/parishes/:id/toggle-active    Enable or disable      ADMIN
+//   GET    /api/parishes/todas                All parishes, only      ADMIN_GENERAL
+//   POST   /api/parishes                      Create parish { nombre, ubicacion }      ADMIN_GENERAL
+//   PUT    /api/parishes/:id                  Edit parish nombre y ubicación      ADMIN_GENERAL
+//   PATCH  /api/parishes/:id/toggle-active    Enable or disable      ADMIN_GENERAL
 
 import { Hono } from 'hono';
 import type { Parish } from '../../../shared/models';
@@ -12,8 +12,8 @@ import { authenticate, ServiceError, type AppEnv } from '../utils/middleware';
 
 function check_admin(user: TokenUser): void
 {
-	if (user.rol !== 'admin')
-		throw new ServiceError('Solo un administrador puede gestionar parroquias.', 403);
+	if (user.rol !== 'admin_general')
+		throw new ServiceError('Solo el administrador general puede gestionar parroquias.', 403);
 }
 
 function is_duplicate_error(error: unknown): boolean

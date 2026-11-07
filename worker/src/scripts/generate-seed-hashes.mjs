@@ -1,9 +1,3 @@
-// Script temporal, NO forma parte del Worker ni de la app.
-// Se corre una sola vez con Node para generar los hashes de la semilla,
-// y su salida se pega directamente en la migración SQL.
-//
-// Uso: node generate-seed-hashes.mjs
-
 const PBKDF2_ITERATIONS = 100_000;
 
 async function hashPassword(plainPassword) {
