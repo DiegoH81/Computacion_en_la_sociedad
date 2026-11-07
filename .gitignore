@@ -27,3 +27,7 @@ dist-ssr
 .env.example
 .dev.vars
 .dev.vars.example
+*.xlsx
+resources/instalador/*.json
+
+release
