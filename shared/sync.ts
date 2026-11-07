@@ -1,8 +1,30 @@
-export type Role = 'admin' | 'usuario_parroquia';
+export type Role = 'admin_general' | 'admin_parroquia' | 'usuario';
+
+export const ROLES: readonly Role[] = ['admin_general', 'admin_parroquia', 'usuario'];
 
 export type SacramentType = 'bautismo' | 'confirmacion' | 'matrimonio';
 
-export type SyncEntity = SacramentType | 'ministro';
+export type SyncEntity = SacramentType | 'ministro' | 'usuario';
+
+export type CorrectionState = 'pendiente' | 'aprobado' | 'rechazado';
+
+export type RequestType = 'digitacion' | 'nota_marginal';
+
+export type RequestState = 'pendiente' | 'aprobado' | 'rechazado' | 'descartado';
+
+export const HISTORY_EVENTS = [
+	'registrada',
+	'importada',
+	'editada',
+	'correccion',
+	'cambio_pedido',
+	'cambio_aprobado',
+	'cambio_rechazado',
+	'cambio_descartado',
+	'anulada',
+] as const;
+
+export type HistoryEvent = (typeof HISTORY_EVENTS)[number];
 
 export interface PersonData
 {
@@ -12,7 +34,7 @@ export interface PersonData
 	apellido_paterno: string;
 	apellido_materno: string;
 	fecha_nacimiento: string | null;
-	edad: number | null;
+	fecha_aproximada: string | null;
 	lugar_nacimiento: string | null;
 	padre: string | null;
 	madre: string | null;
@@ -27,6 +49,9 @@ export interface PersonCorrection
 	valor_anterior: string | null;
 	valor_nuevo: string | null;
 	fecha_cambio: string;
+	estado: CorrectionState;
+	revisado_por_usuario_id: number | null;
+	revisado_en: string | null;
 }
 
 export interface RecordData
@@ -51,6 +76,43 @@ export interface RecordData
 	personas: PersonData[];
 	detalle: Record<string, string | null>;
 	cambios: PersonCorrection[];
+	solicitudes: ChangeRequestData[];
+	historial: HistoryData[];
+}
+
+
+export interface ChangeRequestData
+{
+	client_id: string;
+	usuario_id: number;
+	parte: string;
+	campo: string;
+	tipo: RequestType;
+	valor_anterior: string | null;
+	valor_nuevo: string | null;
+	estado: RequestState;
+	motivo: string | null;
+	revisado_por_usuario_id: number | null;
+	revisado_en: string | null;
+	creado_en: string;
+}
+
+export interface HistoryFieldData
+{
+	parte: string;
+	campo: string;
+	valor_anterior: string | null;
+	valor_nuevo: string | null;
+}
+
+export interface HistoryData
+{
+	client_id: string;
+	usuario_id: number;
+	evento: HistoryEvent;
+	motivo: string | null;
+	fecha: string;
+	campos: HistoryFieldData[];
 }
 
 export interface MinisterData
@@ -73,11 +135,28 @@ export interface SyncChange
 	client_id: string;
 	version_base: number | null;
 	cola_id: string;
-	datos: RecordData | MinisterData;
+	datos: RecordData | MinisterData | UserData;
+}
+
+export interface UserData
+{
+	client_id: string;
+	id?: number;
+	parroquia_id: number | null;
+	username: string;
+	rol: Role;
+	nombre: string;
+	apellido_paterno: string;
+	apellido_materno: string;
+	activo: number;
+	principal?: number;
+	password_hash?: string | null;
+	version?: number;
+	updated_at?: string;
 }
 
 export type ChangeResult =
-	| { entidad: SyncEntity; client_id: string; estado: 'aplicado'; version: number }
+	| { entidad: SyncEntity; client_id: string; estado: 'aplicado'; version: number; id?: number }
 	| { entidad: SyncEntity; client_id: string; estado: 'conflicto'; version: number; motivo: string }
 	| { entidad: SyncEntity; client_id: string; estado: 'rechazado'; motivo: string };
 
