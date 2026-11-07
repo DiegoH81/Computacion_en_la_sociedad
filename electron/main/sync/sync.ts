@@ -1,27 +1,24 @@
-// La sincronización entre esta PC y la base online.
-//
-// Una sincronización completa (run_sync) hace, en orden:
-//   1. Bajar la referencia: parroquias, ministros y usuarios.
-//   2. Subir la cola de cambios (de a PUSH_BATCH_SIZE).
-//   3. Bajar las partidas que cambiaron desde el último cursor.
-//
-// Si el servidor dice "conflicto" (otra PC cambió el mismo registro), la fila queda en la cola
-// marcada así hasta que el usuario elija con cuál versión quedarse (resolve_conflict).
-
-import type { ChangeResult, MinisterData, PullPage, RecordData, SyncChange, SyncEntity } from '../../../shared/sync';
+import type { ChangeResult, MinisterData, PullPage, RecordData, SyncChange, SyncEntity, UserData } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
+import { current_session } from '../models/session';
 import { PUSH_BATCH_SIZE, SYNC_KEYS } from '../utils/config';
 import { get_record, get_reference, pull_page, push_changes, type ReferenceData, type RemoteRequest } from './online';
 import { get_sync_value, remove_from_queue, set_sync_value, type QueueRow } from './queue';
-import { MissingReferenceError, read_local_minister, read_local_record, save_downloaded_minister, save_downloaded_record, set_server_version } from './records';
+import {
+	adopt_server_user_id,
+	MissingReferenceError,
+	read_local_minister,
+	read_local_record,
+	read_local_user,
+	save_downloaded_minister,
+	save_downloaded_record,
+	save_downloaded_user,
+	set_server_version,
+} from './records';
 
 export type ConflictChoice = 'servidor' | 'local';
 
-// ---------------------------------------------------------------------------
-// Referencia
-// ---------------------------------------------------------------------------
-
-// Guarda parroquias, ministros y usuarios, todo en una transacción.
+// Reference
 export function save_reference_data(db: LocalDatabase, data: ReferenceData): void
 {
 	const save_parish = db.prepare(
@@ -29,21 +26,7 @@ export function save_reference_data(db: LocalDatabase, data: ReferenceData): voi
 		 ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa`,
 	);
 
-	// Las bases anteriores a la versión 2 tienen ministros con client_id "servidor-<id>".
-	// Aquí se cambia por el client_id real que manda el servidor.
 	const adopt_minister = db.prepare('UPDATE ministros SET client_id = ? WHERE client_id = ?');
-
-	// Si un username pasó de una cuenta a otra, se le cambia a la vieja un momento
-	// para que el índice UNIQUE no choque mientras se actualizan las dos.
-	const free_username = db.prepare(`UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?`);
-
-	const save_user = db.prepare(
-		`INSERT INTO usuarios (id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)
-		 VALUES (@id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo)
-		 ON CONFLICT (id) DO UPDATE SET
-			parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,
-			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo`,
-	);
 
 	const save_all = db.transaction(() =>
 	{
@@ -57,12 +40,8 @@ export function save_reference_data(db: LocalDatabase, data: ReferenceData): voi
 		}
 
 		for (const user of data.usuarios)
-		{
-			free_username.run(user.username, user.id);
-			save_user.run(user);
-		}
+			save_downloaded_user(db, user);
 
-		// Una cuenta deshabilitada deja de entrar sin internet en cuanto esta PC se entera.
 		db.exec('DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)');
 	});
 
@@ -75,9 +54,29 @@ export async function refresh_reference(db: LocalDatabase, request: RemoteReques
 	save_reference_data(db, data);
 }
 
-// ---------------------------------------------------------------------------
-// Subir
-// ---------------------------------------------------------------------------
+
+function read_local_data(db: LocalDatabase, row: QueueRow): RecordData | MinisterData | UserData
+{
+	if (row.entidad === 'ministro')
+		return read_local_minister(db, row.client_id);
+
+	if (row.entidad === 'usuario')
+		return read_local_user(db, row.client_id);
+
+	return read_local_record(db, row.client_id);
+}
+
+
+function adopt_user_id(db: LocalDatabase, client_id: string, server_id: number | undefined): void
+{
+	if (!server_id)
+		return;
+
+	const old_id = adopt_server_user_id(db, client_id, server_id);
+	const session = current_session();
+	if (old_id !== null && session && session.user_id === old_id)
+		session.user_id = server_id;
+}
 
 function save_push_result(db: LocalDatabase, row: QueueRow, result: ChangeResult): void
 {
@@ -89,14 +88,18 @@ function save_push_result(db: LocalDatabase, row: QueueRow, result: ChangeResult
 			return;
 		}
 
-		// Si el usuario editó el registro mientras se subía, la revisión cambió: la fila se queda
-		// en la cola para subir la edición nueva, pero ya partiendo de la versión del servidor.
+		if (row.entidad === 'usuario')
+			adopt_user_id(db, row.client_id, result.id);
+
 		const current = db.prepare('SELECT revision FROM sync_cola WHERE id = ?').get(row.id) as { revision: number };
 
 		if (current.revision === row.revision)
 		{
 			remove_from_queue(db, row.entidad, row.client_id);
 			set_server_version(db, row.entidad, row.client_id, result.version);
+
+			if (row.entidad === 'usuario')
+				db.prepare('UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?').run(row.client_id);
 		}
 		else
 		{
@@ -109,9 +112,8 @@ function save_push_result(db: LocalDatabase, row: QueueRow, result: ChangeResult
 
 export async function push_pending(db: LocalDatabase, request: RemoteRequest, token: string): Promise<void>
 {
-	// Primero los ministros, porque una partida puede nombrar a uno recién creado.
 	const pending_ids = db
-		.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' ORDER BY entidad = 'ministro' DESC, id`)
+		.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' ORDER BY entidad = 'usuario' DESC, entidad = 'ministro' DESC, id`)
 		.pluck()
 		.all() as number[];
 
@@ -119,7 +121,6 @@ export async function push_pending(db: LocalDatabase, request: RemoteRequest, to
 
 	for (let start = 0; start < pending_ids.length; start += PUSH_BATCH_SIZE)
 	{
-		// Se vuelve a leer cada fila: mientras se subía el lote anterior pudo cambiar o salir de la cola.
 		const rows: QueueRow[] = [];
 		for (const id of pending_ids.slice(start, start + PUSH_BATCH_SIZE))
 		{
@@ -133,8 +134,7 @@ export async function push_pending(db: LocalDatabase, request: RemoteRequest, to
 
 		const changes: SyncChange[] = rows.map((row) =>
 		{
-			const data = row.entidad === 'ministro' ? read_local_minister(db, row.client_id) : read_local_record(db, row.client_id);
-			return { entidad: row.entidad, client_id: row.client_id, version_base: row.version_base, cola_id: row.cola_id, datos: data };
+			return { entidad: row.entidad, client_id: row.client_id, version_base: row.version_base, cola_id: row.cola_id, datos: read_local_data(db, row) };
 		});
 
 		const response = await push_changes(request, token, changes);
@@ -147,11 +147,7 @@ export async function push_pending(db: LocalDatabase, request: RemoteRequest, to
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Bajar
-// ---------------------------------------------------------------------------
 
-// Guarda una página entera y el cursor nuevo en una transacción: o se guarda todo o nada.
 function save_page(db: LocalDatabase, page: PullPage): void
 {
 	const save = db.transaction(() =>
@@ -165,7 +161,6 @@ function save_page(db: LocalDatabase, page: PullPage): void
 	save();
 }
 
-// La partida nombra algo (un ministro, una parroquia o un usuario) que esta PC todavía no tiene.
 function is_missing_reference(error: unknown): boolean
 {
 	if (error instanceof MissingReferenceError)
@@ -190,7 +185,6 @@ export async function pull_changes(db: LocalDatabase, request: RemoteRequest, to
 			if (!is_missing_reference(error))
 				throw error;
 
-			// Se baja la referencia de nuevo y se reintenta una vez.
 			await refresh_reference(db, request, token);
 			save_page(db, page);
 		}
@@ -208,12 +202,7 @@ export async function run_sync(db: LocalDatabase, request: RemoteRequest, token:
 	set_sync_value(db, SYNC_KEYS.last_sync, new Date().toISOString());
 }
 
-// ---------------------------------------------------------------------------
-// Conflictos
-// ---------------------------------------------------------------------------
 
-// choice = 'local': se queda la versión de esta PC; se vuelve a subir partiendo de la del servidor.
-// choice = 'servidor': se descarta la versión de esta PC y se guarda la del servidor.
 export async function resolve_conflict(db: LocalDatabase, request: RemoteRequest, token: string, entity: SyncEntity, client_id: string, choice: ConflictChoice): Promise<void>
 {
 	const response = await get_record(request, token, entity, client_id);
@@ -228,6 +217,8 @@ export async function resolve_conflict(db: LocalDatabase, request: RemoteRequest
 		}
 		else if (entity === 'ministro')
 			save_downloaded_minister(db, server_record as MinisterData, true);
+		else if (entity === 'usuario')
+			save_downloaded_user(db, server_record as UserData & { id: number }, true);
 		else
 			save_downloaded_record(db, server_record as RecordData, true);
 	});
@@ -235,10 +226,7 @@ export async function resolve_conflict(db: LocalDatabase, request: RemoteRequest
 	resolve();
 }
 
-// ---------------------------------------------------------------------------
-// Resumen para la pantalla
-// ---------------------------------------------------------------------------
-
+// For UI
 export interface SyncItem
 {
 	entidad: SyncEntity;
@@ -250,13 +238,18 @@ export interface SyncItem
 
 const TYPE_NAMES = { bautismo: 'Bautismo', confirmacion: 'Confirmación', matrimonio: 'Matrimonio' };
 
-// Un texto para que el usuario reconozca el registro, por ejemplo "Bautismo: libro 1, folio 2, registro 3".
 function describe(db: LocalDatabase, row: QueueRow): string
 {
 	if (row.entidad === 'ministro')
 	{
 		const minister = db.prepare('SELECT nombre, apellido_paterno FROM ministros WHERE client_id = ?').get(row.client_id) as { nombre: string; apellido_paterno: string } | undefined;
 		return `Ministro ${minister?.nombre ?? ''} ${minister?.apellido_paterno ?? ''}`.trim();
+	}
+
+	if (row.entidad === 'usuario')
+	{
+		const user = db.prepare('SELECT username FROM usuarios WHERE client_id = ?').get(row.client_id) as { username: string } | undefined;
+		return `Usuario ${user?.username ?? ''}`.trim();
 	}
 
 	const type_name = TYPE_NAMES[row.entidad];

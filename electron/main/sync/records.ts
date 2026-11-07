@@ -1,70 +1,56 @@
-// Convierte partidas y ministros entre la base local y el JSON que viaja al servidor (ver online.ts).
-//
-//   read_local_record / read_local_minister             base local  ->  JSON para subir
-//   save_downloaded_record / save_downloaded_minister   JSON descargado  ->  base local
-
 import type { Minister, Sacrament } from '../../../shared/models';
-import type { MinisterData, PersonCorrection, PersonData, RecordData, SacramentType, SyncEntity } from '../../../shared/sync';
+import type { MinisterData, PersonCorrection, PersonData, RecordData, SyncEntity, UserData } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
-import { PERSON_COLUMNS } from '../models/person';
+import { detail_columns, PERSON_COLUMNS } from '../../../shared/record_fields';
+import { discard_unsent_requests, read_request_data, save_downloaded_requests } from '../models/change_request';
+import { discard_unsent_history, read_history_data, save_downloaded_history } from '../models/history';
 import { detail_table, person_columns } from '../models/sacrament';
 import { is_in_queue, remove_from_queue } from './queue';
 
-// La partida descargada nombra algo que esta base todavía no tiene (por ejemplo, un ministro nuevo).
-// sync.ts lo arregla bajando de nuevo la referencia y reintentando.
 export class MissingReferenceError extends Error {}
 
-// Las columnas propias de cada tipo (el "detalle" del JSON).
-const GODPARENT_COLUMNS = ['padrino_1', 'padrino_2'];
-const MARRIAGE_COLUMNS =
-[
-	'lugar',
-	'testigo_1',
-	'testigo_2',
-	'testigo_3',
-	'testigo_4',
-	'conyuge_1_bautismo_parroquia',
-	'conyuge_1_bautismo_fecha',
-	'conyuge_2_bautismo_parroquia',
-	'conyuge_2_bautismo_fecha',
-];
+type VersionedTable = 'sacramentos' | 'ministros' | 'usuarios';
 
-function detail_columns(type: SacramentType): string[]
-{
-	if (type === 'matrimonio')
-		return MARRIAGE_COLUMNS;
-
-	return GODPARENT_COLUMNS;
-}
-
-// ---------------------------------------------------------------------------
-// Versiones
-// ---------------------------------------------------------------------------
-
-// Los triggers de la base suben "version" en cada UPDATE que no la cambia.
-// Para guardar la versión que dice el servidor, primero se pone -1 y después la versión real:
-// como en los dos UPDATE la versión sí cambia, el trigger no se dispara.
-function allow_version_write(db: LocalDatabase, table: 'sacramentos' | 'ministros', id: number): void
+function allow_version_write(db: LocalDatabase, table: VersionedTable, id: number): void
 {
 	db.prepare(`UPDATE ${table} SET version = -1 WHERE id = ?`).run(id);
 }
 
-// Guarda la versión que asignó el servidor, sin tocar los datos.
-export function set_server_version(db: LocalDatabase, entity: SyncEntity, client_id: string, version: number): void
+function table_of(entity: SyncEntity): VersionedTable
 {
-	const table = entity === 'ministro' ? 'ministros' : 'sacramentos';
-	db.prepare(`UPDATE ${table} SET version = ? WHERE client_id = ? AND version <> ?`).run(version, client_id, version);
+	if (entity === 'ministro')
+		return 'ministros';
+
+	if (entity === 'usuario')
+		return 'usuarios';
+
+	return 'sacramentos';
 }
 
-// ---------------------------------------------------------------------------
-// Leer de la base local para subir
-// ---------------------------------------------------------------------------
+export function set_server_version(db: LocalDatabase, entity: SyncEntity, client_id: string, version: number): void
+{
+	db.prepare(`UPDATE ${table_of(entity)} SET version = ? WHERE client_id = ? AND version <> ?`).run(version, client_id, version);
+}
 
+// Local work
 export function read_local_minister(db: LocalDatabase, client_id: string): MinisterData
 {
 	return db
 		.prepare('SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?')
 		.get(client_id) as MinisterData;
+}
+
+export function read_local_user(db: LocalDatabase, client_id: string): UserData
+{
+	const row = db
+		.prepare(
+			`SELECT client_id, id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo,
+				password_hash_pendiente AS password_hash
+			 FROM usuarios WHERE client_id = ?`,
+		)
+		.get(client_id) as UserData;
+
+	return row;
 }
 
 export function read_local_record(db: LocalDatabase, client_id: string): RecordData
@@ -93,7 +79,8 @@ export function read_local_record(db: LocalDatabase, client_id: string): RecordD
 
 	const corrections = db
 		.prepare(
-			`SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio
+			`SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio,
+				c.estado, c.revisado_por_usuario_id, c.revisado_en
 			 FROM cambios_persona c
 			 JOIN personas p ON p.id = c.persona_id
 			 WHERE c.sacramento_id = ?
@@ -119,14 +106,12 @@ export function read_local_record(db: LocalDatabase, client_id: string): RecordD
 		personas: people,
 		detalle: detail,
 		cambios: corrections,
+		solicitudes: read_request_data(db, sacrament.id),
+		historial: read_history_data(db, sacrament.id),
 	};
 }
 
-// ---------------------------------------------------------------------------
-// Guardar lo descargado en la base local
-// ---------------------------------------------------------------------------
 
-// Crea o actualiza la persona y devuelve su id local.
 function save_downloaded_person(db: LocalDatabase, parish_id: number, person: PersonData): number
 {
 	const values = PERSON_COLUMNS.map((column) => person[column]);
@@ -147,7 +132,6 @@ function save_downloaded_person(db: LocalDatabase, parish_id: number, person: Pe
 	return Number(result.lastInsertRowid);
 }
 
-// El id local del ministro que nombra la partida.
 function local_minister_id(db: LocalDatabase, client_id: string | null): number | null
 {
 	if (!client_id)
@@ -160,11 +144,6 @@ function local_minister_id(db: LocalDatabase, client_id: string | null): number 
 	return row.id;
 }
 
-// Guarda una partida que vino del servidor.
-//
-// Normalmente no toca una partida que tiene cambios sin subir: esos cambios se suben primero,
-// y si otra PC la cambió, el servidor la marca como conflicto.
-// Con force = true (el usuario eligió "usar la del servidor") se pisa la versión local.
 export function save_downloaded_record(db: LocalDatabase, record: RecordData, force: boolean = false): void
 {
 	const version = record.version ?? 1;
@@ -183,7 +162,6 @@ export function save_downloaded_record(db: LocalDatabase, record: RecordData, fo
 	const people_ids = record.personas.map((person) => save_downloaded_person(db, record.parroquia_id, person));
 	const updated_at = record.updated_at ?? new Date().toISOString();
 
-	// Los mismos valores, en el mismo orden, para el UPDATE y el INSERT.
 	const values =
 	[
 		minister_id,
@@ -229,18 +207,21 @@ export function save_downloaded_record(db: LocalDatabase, record: RecordData, fo
 
 	save_downloaded_detail(db, record, sacrament_id, people_ids);
 	save_downloaded_corrections(db, record, sacrament_id, people_ids);
+	save_downloaded_requests(db, sacrament_id, record.solicitudes ?? []);
+	save_downloaded_history(db, sacrament_id, record.historial ?? []);
 
 	if (force)
 	{
 		// Se descartó la versión local: sus correcciones sin subir ya no corresponden.
 		const kept_ids = JSON.stringify(record.cambios.map((correction) => correction.client_id));
 		db.prepare('DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))').run(sacrament_id, kept_ids);
+		discard_unsent_requests(db, sacrament_id, record.solicitudes ?? []);
+		discard_unsent_history(db, sacrament_id, record.historial ?? []);
 
 		remove_from_queue(db, record.tipo, record.client_id);
 	}
 }
 
-// La fila de bautismos, confirmaciones o matrimonios.
 function save_downloaded_detail(db: LocalDatabase, record: RecordData, sacrament_id: number, people_ids: number[]): void
 {
 	const detail = record.detalle;
@@ -291,17 +272,20 @@ function save_downloaded_detail(db: LocalDatabase, record: RecordData, sacrament
 	).run(sacrament_id, people_ids[0], detail.padrino_1 ?? null, detail.padrino_2 ?? null);
 }
 
-// Una corrección que ya estaba (mismo client_id) no se duplica.
 function save_downloaded_corrections(db: LocalDatabase, record: RecordData, sacrament_id: number, people_ids: number[]): void
 {
-	// client_id de cada persona  ->  su id local
 	const local_person_ids = new Map<string, number>();
 	record.personas.forEach((person, i) => local_person_ids.set(person.client_id, people_ids[i]));
 
 	const insert = db.prepare(
-		`INSERT INTO cambios_persona (client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (client_id) DO NOTHING`,
+		`INSERT INTO cambios_persona
+			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,
+			 estado, revisado_por_usuario_id, revisado_en)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT (client_id) DO UPDATE SET
+			estado = excluded.estado,
+			revisado_por_usuario_id = excluded.revisado_por_usuario_id,
+			revisado_en = excluded.revisado_en`,
 	);
 
 	for (const correction of record.cambios)
@@ -315,13 +299,85 @@ function save_downloaded_corrections(db: LocalDatabase, record: RecordData, sacr
 			correction.valor_anterior,
 			correction.valor_nuevo,
 			correction.fecha_cambio,
+			correction.estado ?? 'aprobado',
+			correction.revisado_por_usuario_id ?? null,
+			correction.revisado_en ?? null,
 		);
 	}
 }
 
+export function save_downloaded_user(db: LocalDatabase, user: UserData & { id: number }, force: boolean = false): void
+{
+	user = { ...user, client_id: user.client_id ?? `servidor-${user.id}` };
+
+	if (!force && is_in_queue(db, 'usuario', user.client_id))
+		return;
+
+	db.prepare(`UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?`).run(user.username, user.id);
+	db.prepare(`UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?`).run(user.client_id, user.id);
+
+	db.prepare(
+		`INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)
+		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)
+		 ON CONFLICT (id) DO UPDATE SET
+			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,
+			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,
+			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL`,
+	).run({
+		id: user.id,
+		client_id: user.client_id,
+		parroquia_id: user.parroquia_id,
+		username: user.username,
+		rol: user.rol,
+		nombre: user.nombre,
+		apellido_paterno: user.apellido_paterno,
+		apellido_materno: user.apellido_materno ?? '',
+		activo: user.activo,
+		principal: user.principal ?? 0,
+		updated_at: user.updated_at ?? new Date().toISOString(),
+	});
+
+	allow_version_write(db, 'usuarios', user.id);
+	db.prepare('UPDATE usuarios SET version = ? WHERE id = ?').run(user.version ?? 1, user.id);
+
+	if (user.password_hash)
+	{
+		db.prepare(
+			`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
+			 ON CONFLICT (usuario_id) DO UPDATE SET
+				verificador = excluded.verificador,
+				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+		).run(user.id, user.password_hash);
+	}
+
+	if (force)
+		remove_from_queue(db, 'usuario', user.client_id);
+}
+
+export function adopt_server_user_id(db: LocalDatabase, client_id: string, server_id: number): number | null
+{
+	const row = db.prepare('SELECT id FROM usuarios WHERE client_id = ?').get(client_id) as { id: number } | undefined;
+	if (!row || row.id === server_id)
+		return null;
+
+	const old_id = row.id;
+
+
+	db.pragma('defer_foreign_keys = ON');
+	db.prepare('UPDATE usuarios SET id = ? WHERE id = ?').run(server_id, old_id);
+	db.prepare('UPDATE cambios_persona SET usuario_id = ? WHERE usuario_id = ?').run(server_id, old_id);
+	db.prepare('UPDATE cambios_persona SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?').run(server_id, old_id);
+	db.prepare('UPDATE sacramentos SET anulado_por_usuario_id = ? WHERE anulado_por_usuario_id = ?').run(server_id, old_id);
+	db.prepare('UPDATE solicitudes_cambio SET usuario_id = ? WHERE usuario_id = ?').run(server_id, old_id);
+	db.prepare('UPDATE solicitudes_cambio SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?').run(server_id, old_id);
+	db.prepare('UPDATE historial_partidas SET usuario_id = ? WHERE usuario_id = ?').run(server_id, old_id);
+	db.prepare('UPDATE credenciales_locales SET usuario_id = ? WHERE usuario_id = ?').run(server_id, old_id);
+
+	return old_id;
+}
+
 const MINISTER_FIELDS = ['titulo', 'nombre', 'apellido_paterno', 'apellido_materno', 'activo'] as const;
 
-// Guarda un ministro que vino del servidor. force igual que en save_downloaded_record.
 export function save_downloaded_minister(db: LocalDatabase, minister: MinisterData, force: boolean = false): void
 {
 	const version = minister.version ?? 1;
@@ -332,8 +388,6 @@ export function save_downloaded_minister(db: LocalDatabase, minister: MinisterDa
 
 	if (!force && is_in_queue(db, 'ministro', minister.client_id))
 	{
-		// Las bases de la versión 3 anotaron en la cola ministros que solo se descargaron.
-		// Si son iguales a los del servidor y nunca se subieron, no hay nada que subir: se quitan de la cola.
 		const same_data = local !== undefined && MINISTER_FIELDS.every((field) => (local[field] ?? null) === (minister[field] ?? null));
 		const queued = db.prepare('SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?').get('ministro', minister.client_id) as { version_base: number | null };
 
