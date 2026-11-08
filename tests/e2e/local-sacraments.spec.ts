@@ -721,3 +721,63 @@ test('imprimir sobre el formato: solo los datos, en su lugar, con el ajuste de e
   await expect(window.locator('.a4-page')).toContainText('Notario Eclesiástico');
   expect(await printButton.boundingBox()).toEqual(before);
 });
+
+test('respaldo: se exporta con contraseña y, en una PC nueva, se restaura desde el login con lo que faltaba subir', async () => {
+  const window = await launchAndLogin();
+  const backupFile = path.join(userData, 'prueba.respaldo');
+
+  await window.getByRole('button', { name: 'Índice y partida de matrimonio' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  await fillRegister(window, '901', 'N° de');
+  await window.getByRole('textbox', { name: 'Nombres del esposo' }).fill('Respaldino');
+  await window.getByRole('textbox', { name: 'Apellido paterno del esposo' }).fill('Copia');
+  await window.getByRole('textbox', { name: 'Nombres de la esposa' }).fill('Guardada');
+  await window.getByRole('textbox', { name: 'Apellido paterno de la esposa' }).fill('Segura');
+  await save(window);
+
+  await app!.evaluate(({ dialog }, file) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
+  }, backupFile);
+  await window.getByRole('button', { name: 'Volver' }).first().click();
+  await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Exportar respaldo' }).click();
+  const exportDialog = window.getByRole('dialog', { name: 'Exportar respaldo' });
+  await exportDialog.getByLabel('Contraseña del respaldo').fill('clave-respaldo');
+  await exportDialog.getByLabel('Repetir contraseña').fill('clave-respaldo');
+  await exportDialog.getByRole('button', { name: 'Elegir dónde guardar' }).click();
+  await expect(exportDialog.getByText(/Respaldo guardado: \d+ partidas\. Incluye 1 cambio pendiente de subir/)).toBeVisible();
+  expect(readFileSync(backupFile, 'utf8')).not.toContain('Respaldino');
+  await app!.close();
+
+  // Otra PC, vacía: restaura desde el login y entra con la misma cuenta.
+  const otherPc = mkdtempSync(path.join(tmpdir(), 'prelatura-sacraments-'));
+  try {
+    app = await electron.launch({ args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${otherPc}`] });
+    const fresh = await app.firstWindow();
+    await app.evaluate(({ dialog }, file) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
+    }, backupFile);
+    await fresh.getByRole('button', { name: 'Restaurar respaldo' }).click();
+    const restoreDialog = fresh.getByRole('dialog', { name: 'Restaurar respaldo' });
+
+    await restoreDialog.getByLabel('Contraseña del respaldo').fill('otra-clave');
+    await restoreDialog.getByRole('button', { name: 'Elegir el respaldo' }).click();
+    await expect(restoreDialog.getByRole('alert')).toContainText('La contraseña no es la del respaldo');
+
+    await restoreDialog.getByLabel('Contraseña del respaldo').fill('clave-respaldo');
+    await restoreDialog.getByRole('button', { name: 'Elegir el respaldo' }).click();
+    await expect(restoreDialog.getByText(/Respaldo restaurado: \d+ partidas\. Incluye 1 cambio pendiente de subir/)).toBeVisible();
+    await restoreDialog.getByRole('button', { name: 'Ir al inicio de sesión' }).click();
+    await expect(fresh.getByRole('button', { name: 'Restaurar respaldo' })).toBeHidden();
+
+    await fresh.getByPlaceholder('Nombre de usuario').fill('parroco1');
+    await fresh.getByPlaceholder('Contraseña').fill('parroco123');
+    await fresh.getByRole('button', { name: 'Iniciar sesión' }).click();
+    await fresh.getByRole('button', { name: 'Índice y partida de matrimonio' }).click();
+    await expect(fresh.getByRole('cell', { name: /Respaldino/ })).toBeVisible();
+  } finally {
+    await app?.close();
+    app = null;
+    rmSync(otherPc, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+});

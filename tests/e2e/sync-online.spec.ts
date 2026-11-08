@@ -67,10 +67,10 @@ function newPc(): string {
   return dir;
 }
 
-async function open(userData: string): Promise<{ app: ElectronApplication; window: Page }> {
+async function open(userData: string, env: Record<string, string> = {}): Promise<{ app: ElectronApplication; window: Page }> {
   const app = await electron.launch({
     args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-    env: { ...process.env, PRELATURA_API_URL: proxyUrl } as Record<string, string>,
+    env: { ...process.env, PRELATURA_API_URL: proxyUrl, ...env } as Record<string, string>,
   });
   apps.push(app);
   return { app, window: await app.firstWindow() };
@@ -201,7 +201,7 @@ test('login sin internet: una PC que no conoce al usuario lo pide, y después va
   let pc = await open(userData);
   await submitLogin(pc.window, 'parroco1', 'parroco123');
   await expect(pc.window.getByText(/todavía no está en esta PC/)).toBeVisible();
-  await expect(pc.window.getByRole('button', { name: 'Cargar archivo de datos' })).toBeVisible();
+  await expect(pc.window.getByRole('button', { name: 'Restaurar respaldo' })).toBeVisible();
   await closeApp(pc.app);
 
   mode = 'normal';
@@ -706,7 +706,7 @@ test('una cuenta creada sin internet entra en esa PC, y se sube cuando el párro
   await expect(other.window.getByText('En línea')).toBeVisible();
 });
 
-test('paquete inicial: el admin general lo genera, y una PC sin internet lo carga y ya puede consultar', async () => {
+test('paquete inicial: el admin general lo genera, y una PC sin internet instalada con él ya puede consultar', async () => {
   const dir = newPc();
   const packageFile = path.join(dir, 'paquete-inicial.json');
 
@@ -734,14 +734,10 @@ test('paquete inicial: el admin general lo genera, y una PC sin internet lo carg
   await expect(admin.window.getByText(/Paquete inicial guardado/)).toBeVisible();
   expect(existsSync(packageFile)).toBe(true);
 
-  // Una PC nueva, sin internet: carga el paquete y entra.
+  // Una PC nueva, sin internet, instalada con ese paquete (PRELATURA_PAQUETE hace de instalador): ya entra.
   mode = 'sin-internet';
-  const fresh = await open(newPc());
-  await fresh.app.evaluate(({ dialog }, file) => {
-    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
-  }, packageFile);
-  await fresh.window.getByRole('button', { name: 'Cargar archivo de datos' }).click();
-  await expect(fresh.window.getByText(/Listo: se cargaron/)).toBeVisible();
+  const fresh = await open(newPc(), { PRELATURA_SIN_PAQUETE: '', PRELATURA_PAQUETE: packageFile });
+  await expect(fresh.window.getByRole('button', { name: 'Restaurar respaldo' })).toBeHidden();
   await submitLogin(fresh.window, 'parroco1', 'parroco123');
   await expect(fresh.window.getByText(DASHBOARD_TEXT)).toBeVisible();
   await goToBaptisms(fresh.window);

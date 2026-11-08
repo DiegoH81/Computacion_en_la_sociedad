@@ -282,6 +282,10 @@ describe('cuentas creadas en esta PC', () => {
     await push_pending(db, request, 'token');
 
     expect(sent[0]).toMatchObject({ entidad: 'usuario', datos: { username: 'ana.ayudante', password_hash: expect.stringMatching(/^100000:/) } });
+    // La partida sale después de la cuenta, ya con el id del servidor (no con el provisional negativo).
+    const record_sent = JSON.stringify(sent.filter((cambio) => cambio.entidad === 'bautismo'));
+    expect(record_sent).toContain('"usuario_id":50');
+    expect(record_sent).not.toMatch(/"usuario_id":-\d/);
     expect(db.prepare('SELECT id, password_hash_pendiente FROM usuarios WHERE username = ?').get('ana.ayudante')).toEqual({ id: 50, password_hash_pendiente: null });
     expect(read(id).sacramento.solicitudes?.[0]).toMatchObject({ solicitado_por: 'Ana Paz' });
     expect(db.prepare('SELECT DISTINCT usuario_id FROM historial_partidas').pluck().all()).toEqual([50]);
