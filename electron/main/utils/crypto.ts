@@ -1,4 +1,4 @@
-import { pbkdf2, randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
+import { createCipheriv, createDecipheriv, pbkdf2, randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 
 const KEY_LENGTH = 32;
 const HASH_LENGTH = 32;
@@ -85,4 +85,47 @@ export async function matches_verifier(password: string, verifier: string): Prom
 	const actual = await compute_hash(password, Buffer.from(salt, 'base64'), options, expected.length);
 
 	return timingSafeEqual(actual, expected);
+}
+
+export interface PasswordEncrypted
+{
+	sal: string;
+	iv: string;
+	etiqueta: string;
+	datos: string;
+}
+
+const IV_LENGTH = 12;
+
+export async function encrypt_with_password(password: string, data: Buffer): Promise<PasswordEncrypted>
+{
+	const salt = randomBytes(SALT_LENGTH);
+	const iv = randomBytes(IV_LENGTH);
+	const key = await compute_hash(password, salt, COST, KEY_LENGTH);
+
+	const cipher = createCipheriv('aes-256-gcm', key, iv);
+	const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+
+	return {
+		sal: salt.toString('base64'),
+		iv: iv.toString('base64'),
+		etiqueta: cipher.getAuthTag().toString('base64'),
+		datos: encrypted.toString('base64'),
+	};
+}
+
+export async function decrypt_with_password(password: string, encrypted: PasswordEncrypted): Promise<Buffer | null>
+{
+	const key = await compute_hash(password, Buffer.from(encrypted.sal, 'base64'), COST, KEY_LENGTH);
+
+	try
+	{
+		const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(encrypted.iv, 'base64'));
+		decipher.setAuthTag(Buffer.from(encrypted.etiqueta, 'base64'));
+		return Buffer.concat([decipher.update(Buffer.from(encrypted.datos, 'base64')), decipher.final()]);
+	}
+	catch
+	{
+		return null;
+	}
 }

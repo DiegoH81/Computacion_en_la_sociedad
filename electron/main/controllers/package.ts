@@ -1,17 +1,3 @@
-// El paquete inicial: todo lo que una PC necesita para funcionar sin internet desde el primer día.
-//
-// Lo genera el administrador general en una PC con todo sincronizado (package.export): parroquias,
-// usuarios con su contraseña (solo el hash), ministros y todas las partidas. Ese archivo se pone en
-// resources/instalador/paquete-inicial.json antes de armar el instalador (ver resources/instalador/LEEME.md).
-//
-// En una PC nueva, la base empieza vacía. Al abrir la app, si encuentra el paquete del instalador lo
-// carga solo (load_bundled_package). También se puede elegir un archivo desde el login (package.import).
-// En los dos casos, solo si la base todavía no tiene usuarios: así nadie puede meter cuentas propias
-// en una PC que ya está en uso.
-//
-// Lo cargado cuenta como ya sincronizado. Cuando haya internet, la PC sube lo suyo y baja lo que
-// cambió desde que se generó el paquete.
-
 import { app, BrowserWindow, dialog } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -169,7 +155,7 @@ export function load_bundled_package(): void
 	if (process.env.PRELATURA_SIN_PAQUETE === '1')
 		return;
 
-	const file = bundled_package_path();
+	const file = process.env.PRELATURA_PAQUETE || bundled_package_path();
 	let db: LocalDatabase;
 	try
 	{
@@ -194,14 +180,14 @@ export function load_bundled_package(): void
 	}
 }
 
-function parent_window(): BrowserWindow | undefined
+export function parent_window(): BrowserWindow | undefined
 {
 	return BrowserWindow.getFocusedWindow() ?? undefined;
 }
 
 export const package_public_routes: PublicRoutes =
 {
-	// El login muestra "Cargar paquete inicial" solo si la PC todavía no tiene usuarios.
+	// El login ofrece restaurar un respaldo solo si la PC todavía no tiene usuarios.
 	'package.status': () =>
 	{
 		try
@@ -212,25 +198,6 @@ export const package_public_routes: PublicRoutes =
 		{
 			return { necesita_paquete: false };
 		}
-	},
-
-	'package.import': async () =>
-	{
-		const db = get_database();
-		if (!needs_package(db))
-			throw new ServiceError('Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.', 409);
-
-		const options = {
-			title: 'Elegir el paquete inicial',
-			properties: ['openFile' as const],
-			filters: [{ name: 'Paquete inicial', extensions: ['json'] }],
-		};
-		const window = parent_window();
-		const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
-		if (choice.canceled || choice.filePaths.length === 0)
-			return { cancelado: true };
-
-		return { cancelado: false, ...load_package(db, read_package_file(choice.filePaths[0])) };
 	},
 };
 

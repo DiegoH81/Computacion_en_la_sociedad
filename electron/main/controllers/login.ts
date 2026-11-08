@@ -111,12 +111,8 @@ function start_local_session(user: LoginResponse['usuario'], username: string, p
 	return { token: OFFLINE_TOKEN, usuario: user };
 }
 
-export const NOT_IN_THIS_PC = 'Este usuario todavía no está en esta PC. Cargue el paquete inicial o conéctese a internet para entrar por primera vez.';
+export const NOT_IN_THIS_PC = 'Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.';
 
-// Se entra primero con lo que tiene esta PC, para que funcione sin internet desde el primer día
-// (con el paquete inicial, ver controllers/package.ts). Solo se pregunta al servidor si la PC no
-// conoce al usuario o no reconoce la contraseña (por ejemplo, porque se cambió en otra PC).
-// Si la base local hay que recuperarla, se necesita el servidor (sync/recovery.ts).
 export async function login(payload: { username: string; password: string }): Promise<LoginResponse>
 {
 	const username = typeof payload?.username === 'string' ? payload.username.trim() : '';

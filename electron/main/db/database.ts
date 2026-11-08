@@ -259,6 +259,15 @@ export function open_temp_database(paths: LocalPaths, keys: KeyStore): { db: Loc
 	}
 }
 
+export function create_temp_database(paths: LocalPaths, keys: KeyStore, migrations: readonly string[]): { db: LocalDatabase; key: string }
+{
+	remove_with_extra_files(paths.temp_database);
+	const key = new_key();
+	keys.write(paths.temp_key, key);
+
+	return { db: open_local_database(paths.temp_database, key, migrations), key: key };
+}
+
 export function install_temp_database(paths: LocalPaths, keys: KeyStore, key: string): LocalDatabase
 {
 	set_aside(paths);

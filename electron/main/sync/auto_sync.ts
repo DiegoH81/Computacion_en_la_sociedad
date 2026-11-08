@@ -171,6 +171,11 @@ export function sync_now(): Promise<void>
 	return running_sync;
 }
 
+export function wait_for_sync(): Promise<void>
+{
+	return running_sync ?? Promise.resolve();
+}
+
 export function get_sync_status()
 {
 	require_session();

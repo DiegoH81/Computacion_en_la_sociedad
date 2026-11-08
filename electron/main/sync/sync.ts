@@ -112,11 +112,16 @@ function save_push_result(db: LocalDatabase, row: QueueRow, result: ChangeResult
 
 export async function push_pending(db: LocalDatabase, request: RemoteRequest, token: string): Promise<void>
 {
-	const pending_ids = db
-		.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' ORDER BY entidad = 'usuario' DESC, entidad = 'ministro' DESC, id`)
-		.pluck()
-		.all() as number[];
+	const pending = db
+		.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' AND (entidad = 'usuario') = ? ORDER BY entidad = 'ministro' DESC, id`)
+		.pluck();
 
+	await push_rows(db, request, token, pending.all(1) as number[]);
+	await push_rows(db, request, token, pending.all(0) as number[]);
+}
+
+async function push_rows(db: LocalDatabase, request: RemoteRequest, token: string, pending_ids: number[]): Promise<void>
+{
 	const read_row = db.prepare('SELECT * FROM sync_cola WHERE id = ?');
 
 	for (let start = 0; start < pending_ids.length; start += PUSH_BATCH_SIZE)
