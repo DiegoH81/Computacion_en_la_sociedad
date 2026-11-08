@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BackupDialog, type BackupMode } from '../components/features/BackupDialog';
 import { LegacyImportDialog } from '../components/features/LegacyImportDialog';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { ParishLogoSettings } from '../components/features/ParishLogoSettings';
+import { handleLogout } from '../controllers/AuthController';
 import { ApiError } from '../lib/apiClient';
 import { ROLE_LABELS, usePermissions } from '../lib/permissions';
 import { ImportService } from '../services/ImportService';
@@ -36,6 +38,7 @@ export function SettingsPage() {
   const permissions = usePermissions();
 
   const [isImporting, setIsImporting] = useState(false);
+  const [backupMode, setBackupMode] = useState<BackupMode | null>(null);
   const [packageMessage, setPackageMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
   async function handleExportPackage() {
@@ -50,6 +53,12 @@ export function SettingsPage() {
     } catch (error) {
       setPackageMessage({ text: error instanceof ApiError ? error.message : 'No se pudo generar el paquete inicial.', isError: true });
     }
+  }
+
+  // Restaurar cierra la sesión en Electron: las cuentas pueden ser otras, hay que volver a entrar.
+  async function handleRestored() {
+    await handleLogout();
+    navigate('/login', { replace: true });
   }
 
   return (
@@ -83,6 +92,12 @@ export function SettingsPage() {
             {permissions.canAdminister && (
               <SettingsButton label="Importar Excel del sistema anterior" onClick={() => setIsImporting(true)} />
             )}
+            {permissions.canManageUsers && (
+              <>
+                <SettingsButton label="Exportar respaldo" onClick={() => setBackupMode('export')} />
+                <SettingsButton label="Restaurar respaldo" onClick={() => setBackupMode('restore')} />
+              </>
+            )}
             {rol === 'admin_general' && (
               <SettingsButton label="Generar paquete inicial" onClick={handleExportPackage} />
             )}
@@ -106,6 +121,7 @@ export function SettingsPage() {
       </div>
 
       {isImporting && <LegacyImportDialog parroquiaNombre={parroquiaActivaNombre ?? ''} onClose={() => setIsImporting(false)} />}
+      {backupMode && <BackupDialog mode={backupMode} onClose={() => setBackupMode(null)} onRestored={handleRestored} />}
     </MainMenuLayout>
   );
 }

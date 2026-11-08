@@ -39,14 +39,9 @@ export const ImportService = {
     return localRequest('legacyImport.confirm', { token });
   },
 
-  /** Si esta PC todavía no tiene usuarios y necesita el paquete inicial. No pide sesión. */
+  /** Si esta PC todavía no tiene usuarios (el login ofrece restaurar un respaldo). No pide sesión. */
   packageStatus(): Promise<{ necesita_paquete: boolean }> {
     return localRequest('package.status');
-  },
-
-  /** Abre el selector de archivos y carga el paquete inicial. Solo en una PC nueva. */
-  importPackage(): Promise<({ cancelado: false } & PackageSummary) | { cancelado: true }> {
-    return localRequest('package.import');
   },
 
   /** El administrador general guarda el paquete inicial para el instalador. */

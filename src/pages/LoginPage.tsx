@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { InitialPackageLoader } from '../components/features/InitialPackageLoader';
+import { EmptyPcRestore } from '../components/features/EmptyPcRestore';
 import { LoginForm } from '../components/features/LoginForm';
 import { DecorativeWave } from '../components/ui/DecorativeWave';
 import { CrestIcon } from '../components/ui/MenuIcons';
@@ -47,7 +47,7 @@ export function LoginPage() {
           errorMessage={errorMessage}
         />
 
-        <InitialPackageLoader />
+        <EmptyPcRestore />
       </main>
     </div>
   );
