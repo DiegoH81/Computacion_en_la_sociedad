@@ -22,7 +22,7 @@ describe('authService.login (integración con D1)', () => {
                               rol, parroquia_id, activo)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind('usuario.activo', hashActivo, 'Usuario', 'Activo', 'Test', 'usuario_parroquia', 1, 1)
+      .bind('usuario.activo', hashActivo, 'Usuario', 'Activo', 'Test', 'admin_parroquia', 1, 1)
       .run();
 
     const hashInactivo = await hash_password('passwordCorrecta123');
@@ -32,7 +32,7 @@ describe('authService.login (integración con D1)', () => {
                               rol, parroquia_id, activo)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind('usuario.inactivo', hashInactivo, 'Usuario', 'Inactivo', 'Test', 'usuario_parroquia', 1, 0)
+      .bind('usuario.inactivo', hashInactivo, 'Usuario', 'Inactivo', 'Test', 'admin_parroquia', 1, 0)
       .run();
   });
 

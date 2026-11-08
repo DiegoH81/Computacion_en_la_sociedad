@@ -13,7 +13,7 @@ export interface Statistics {
   bandasEdad: string[];
   edades: Record<SacramentKey, { bandas: number[]; sinDato: number; promedio: number | null }>;
   ministros: { nombre: string; total: number }[];
-  registro: { anuladas: number; sinCelebrante: number; conCorrecciones: number };
+  registro: { anuladas: number; conCorrecciones: number };
 }
 
 export const StatisticsService = {

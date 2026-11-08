@@ -4,8 +4,9 @@
 //   read_record      one register to solve a conlict
 //   read_reference   parrishes, ministers and users
 
-import type { PersonCorrection, PersonData, RecordData } from '../../../shared/sync';
-import { detail_columns } from '../models/sacrament';
+import type { ChangeRequestData, HistoryData, HistoryFieldData, PersonCorrection, PersonData, RecordData } from '../../../shared/sync';
+import { detail_columns } from '../../../shared/record_fields';
+import type { TokenUser } from '../utils/crypto';
 import type { JsonObject } from '../utils/helpers';
 
 
@@ -15,6 +16,8 @@ const SACRAMENT_COLUMNS = `s.id, s.tipo, s.client_id, s.parroquia_id, m.client_i
 
 const MINISTER_SELECT = `SELECT id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at
 	FROM ministros`;
+
+const USER_SELECT = `SELECT id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, version, updated_at FROM usuarios`;
 
 type Row = JsonObject;
 
@@ -28,9 +31,18 @@ function by_sacrament_id(rows: Row[]): Map<number, Row>
 	return map;
 }
 
+function without(row: Row, columns: string[]): Row
+{
+	const copy = { ...row };
+	for (const column of columns)
+		delete copy[column];
+
+	return copy;
+}
+
 async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql: string, values: unknown[]): Promise<{ seq: number; record: RecordData }[]>
 {
-	const [sacraments, baptisms, confirmations, marriages, people, corrections] = await db.batch<Row>([
+	const [sacraments, baptisms, confirmations, marriages, people, corrections, requests, history, history_fields] = await db.batch<Row>([
 		db.prepare(sacraments_sql).bind(...values),
 
 		db.prepare(`SELECT * FROM bautismos WHERE sacramento_id IN (${ids_sql})`).bind(...values),
@@ -39,7 +51,7 @@ async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql
 
 		db
 			.prepare(
-				`SELECT id, client_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, edad, lugar_nacimiento, padre, madre
+				`SELECT id, client_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, fecha_aproximada, lugar_nacimiento, padre, madre
 				 FROM personas
 				 WHERE id IN (
 					SELECT persona_id FROM bautismos WHERE sacramento_id IN (${ids_sql})
@@ -53,11 +65,30 @@ async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql
 		db
 			.prepare(
 				`SELECT c.client_id, c.sacramento_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio,
-				        c.valor_anterior, c.valor_nuevo, c.fecha_cambio
+				        c.valor_anterior, c.valor_nuevo, c.fecha_cambio, c.estado, c.revisado_por_usuario_id, c.revisado_en
 				 FROM cambios_persona c
 				 JOIN personas p ON p.id = c.persona_id
 				 WHERE c.sacramento_id IN (${ids_sql})
 				 ORDER BY c.id`,
+			)
+			.bind(...values),
+
+		db
+			.prepare(
+				`SELECT client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, estado, motivo,
+				        revisado_por_usuario_id, revisado_en, creado_en
+				 FROM solicitudes_cambio WHERE sacramento_id IN (${ids_sql}) ORDER BY id`,
+			)
+			.bind(...values),
+
+		db
+			.prepare(`SELECT id, client_id, sacramento_id, usuario_id, evento, motivo, fecha FROM historial_partidas WHERE sacramento_id IN (${ids_sql}) ORDER BY id`)
+			.bind(...values),
+
+		db
+			.prepare(
+				`SELECT historial_id, parte, campo, valor_anterior, valor_nuevo FROM historial_campos
+				 WHERE historial_id IN (SELECT id FROM historial_partidas WHERE sacramento_id IN (${ids_sql})) ORDER BY id`,
 			)
 			.bind(...values),
 	]);
@@ -72,6 +103,11 @@ async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql
 		const { id, ...person } = row;
 		people_by_id.set(id, person as PersonData);
 	}
+
+	// Los datos de cada evento del historial, por su id.
+	const fields_by_history = new Map<number, HistoryFieldData[]>();
+	for (const { historial_id, ...field } of history_fields.results)
+		fields_by_history.set(historial_id, [...(fields_by_history.get(historial_id) ?? []), field as HistoryFieldData]);
 
 	const output: { seq: number; record: RecordData }[] = [];
 
@@ -121,7 +157,22 @@ async function read_full_records(db: D1Database, sacraments_sql: string, ids_sql
 			record_corrections.push(clean as PersonCorrection);
 		}
 
-		const record = { ...sacrament, personas: record_people, detalle: detail, cambios: record_corrections } as RecordData;
+		const record_requests = requests.results
+			.filter((request) => request.sacramento_id === id)
+			.map((request) => without(request, ['sacramento_id']) as ChangeRequestData);
+
+		const record_history = history.results
+			.filter((entry) => entry.sacramento_id === id)
+			.map((entry) => ({ ...without(entry, ['id', 'sacramento_id']), campos: fields_by_history.get(entry.id) ?? [] }) as HistoryData);
+
+		const record = {
+			...sacrament,
+			personas: record_people,
+			detalle: detail,
+			cambios: record_corrections,
+			solicitudes: record_requests,
+			historial: record_history,
+		} as RecordData;
 		output.push({ seq: seq, record: record });
 	}
 
@@ -158,6 +209,9 @@ export async function read_record(db: D1Database, entity: string, client_id: str
 	if (entity === 'ministro')
 		return db.prepare(`${MINISTER_SELECT} WHERE client_id = ?`).bind(client_id).first();
 
+	if (entity === 'usuario')
+		return db.prepare(`${USER_SELECT} WHERE client_id = ?`).bind(client_id).first();
+
 	const sacraments_sql = `SELECT ${SACRAMENT_COLUMNS}
 		FROM sacramentos s
 		LEFT JOIN ministros m ON m.id = s.ministro_id
@@ -171,12 +225,20 @@ export async function read_record(db: D1Database, entity: string, client_id: str
 	return rows[0].record;
 }
 
-export async function read_reference(db: D1Database)
+export async function read_reference(db: D1Database, user: TokenUser)
 {
+	const sees_all = user.rol === 'admin_general' ? 1 : 0;
+
 	const [parishes, ministers, users] = await db.batch([
 		db.prepare('SELECT id, nombre, ubicacion, activa FROM parroquias'),
 		db.prepare(MINISTER_SELECT),
-		db.prepare('SELECT id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo FROM usuarios'),
+		db
+			.prepare(
+				`${USER_SELECT.replace(' FROM usuarios', '')},
+					CASE WHEN ? = 1 OR parroquia_id = ? OR id = ? THEN password_hash END AS password_hash
+				 FROM usuarios`,
+			)
+			.bind(sees_all, user.parroquiaId ?? -1, user.usuarioId),
 	]);
 
 	return {

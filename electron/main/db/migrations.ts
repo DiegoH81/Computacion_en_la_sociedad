@@ -229,4 +229,183 @@ export const LOCAL_MIGRATIONS: readonly string[] = [
     actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   );
   `,
+  `
+  -- La edad pasa a ser una fecha aproximada en texto libre: los libros traen cosas como
+  -- "22 AG 1978" o "(27 AÑOS AL DIA DE BODA)". Las edades que ya había se conservan como "N años".
+  ALTER TABLE personas ADD COLUMN fecha_aproximada TEXT;
+  UPDATE personas SET fecha_aproximada = edad || ' años' WHERE edad IS NOT NULL;
+  ALTER TABLE personas DROP COLUMN edad;
+  `,
+  `
+  -- Tres roles (ver worker/src/db/migrations/0015_roles_y_correcciones.sql):
+  --   admin_general, admin_parroquia (el párroco) y usuario (un ayudante).
+  -- Un admin sin parroquia pasa a admin_general; las demás cuentas, a admin_parroquia.
+  --
+  -- Los usuarios ahora se pueden crear y editar en esta PC sin internet y subirse después:
+  --   client_id      los identifica ante el servidor (el mismo 'servidor-<id>' que puso su migración).
+  --   id negativo    una cuenta creada aquí que el servidor todavía no conoce; al subirla se cambia por el suyo.
+  --   password_hash_pendiente   la contraseña cambiada aquí que falta subir (PBKDF2, el formato del
+  --                             servidor). Se borra en cuanto el servidor la recibe.
+  CREATE TABLE usuarios_nueva (
+    id               INTEGER PRIMARY KEY,
+    client_id        TEXT    NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
+    parroquia_id     INTEGER REFERENCES parroquias(id),
+    username         TEXT    NOT NULL UNIQUE,
+    rol              TEXT    NOT NULL CHECK (rol IN ('admin_general', 'admin_parroquia', 'usuario')),
+    nombre           TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL,
+    activo           INTEGER NOT NULL DEFAULT 1,
+    principal        INTEGER NOT NULL DEFAULT 0,
+    password_hash_pendiente TEXT,
+    version          INTEGER NOT NULL DEFAULT 1,
+    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  INSERT INTO usuarios_nueva (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)
+  SELECT id, 'servidor-' || id, parroquia_id, username,
+         CASE WHEN rol = 'admin' AND parroquia_id IS NULL THEN 'admin_general' ELSE 'admin_parroquia' END,
+         nombre, apellido_paterno, apellido_materno, activo
+  FROM usuarios;
+
+  DROP TABLE usuarios;
+  ALTER TABLE usuarios_nueva RENAME TO usuarios;
+
+  CREATE TRIGGER trg_usuarios_touch
+  AFTER UPDATE ON usuarios
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE usuarios
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+
+  -- Una corrección pedida por un usuario queda 'pendiente' hasta que el admin_parroquia la revise.
+  ALTER TABLE cambios_persona ADD COLUMN estado TEXT NOT NULL DEFAULT 'aprobado'
+    CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'));
+  ALTER TABLE cambios_persona ADD COLUMN revisado_por_usuario_id INTEGER REFERENCES usuarios(id);
+  ALTER TABLE cambios_persona ADD COLUMN revisado_en TEXT;
+
+  -- La cola también lleva usuarios.
+  CREATE TABLE sync_cola_nueva (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro', 'usuario')),
+    client_id    TEXT    NOT NULL,
+    version_base INTEGER,
+    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    cola_id      TEXT    NOT NULL DEFAULT '',
+    revision     INTEGER NOT NULL DEFAULT 1,
+    estado       TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'conflicto', 'rechazado')),
+    motivo       TEXT,
+    UNIQUE (entidad, client_id)
+  );
+
+  INSERT INTO sync_cola_nueva (id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo)
+  SELECT id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo FROM sync_cola;
+
+  DROP TABLE sync_cola;
+  ALTER TABLE sync_cola_nueva RENAME TO sync_cola;
+  `,
+
+  // La nota marginal que propone un usuario con su corrección espera aquí hasta que el párroco la revise.
+  `
+  ALTER TABLE sacramentos ADD COLUMN anotaciones_propuestas TEXT;
+  `,
+
+  // Solicitudes de cambio e historial de las partidas (igual que la migración 0017 del Worker).
+  `
+  CREATE TABLE solicitudes_cambio (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id               TEXT    NOT NULL UNIQUE,
+    sacramento_id           INTEGER NOT NULL REFERENCES sacramentos(id),
+    usuario_id              INTEGER NOT NULL REFERENCES usuarios(id),
+    parte                   TEXT    NOT NULL CHECK (parte IN ('sacramento', 'persona', 'conyuge_1', 'conyuge_2', 'detalle')),
+    campo                   TEXT    NOT NULL,
+    tipo                    TEXT    NOT NULL CHECK (tipo IN ('digitacion', 'nota_marginal')),
+    valor_anterior          TEXT,
+    valor_nuevo             TEXT,
+    estado                  TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'descartado')),
+    motivo                  TEXT,
+    revisado_por_usuario_id INTEGER REFERENCES usuarios(id),
+    revisado_en             TEXT,
+    creado_en               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  CREATE INDEX idx_solicitudes_sacramento ON solicitudes_cambio (sacramento_id);
+
+  CREATE TABLE historial_partidas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id     TEXT    NOT NULL UNIQUE,
+    sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
+    evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
+                                                     'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),
+    motivo        TEXT,
+    fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);
+
+  CREATE TABLE historial_campos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    historial_id   INTEGER NOT NULL REFERENCES historial_partidas(id),
+    parte          TEXT    NOT NULL,
+    campo          TEXT    NOT NULL,
+    valor_anterior TEXT,
+    valor_nuevo    TEXT
+  );
+
+  CREATE INDEX idx_historial_campos ON historial_campos (historial_id);
+
+  -- Las correcciones de nombres pendientes: la misma client_id que tenían.
+  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
+  SELECT
+    c.client_id,
+    c.sacramento_id,
+    c.usuario_id,
+    CASE
+      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_1_id = c.persona_id) THEN 'conyuge_1'
+      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_2_id = c.persona_id) THEN 'conyuge_2'
+      ELSE 'persona'
+    END,
+    c.campo_cambio,
+    'nota_marginal',
+    c.valor_anterior,
+    c.valor_nuevo,
+    c.fecha_cambio
+  FROM cambios_persona c
+  WHERE c.estado = 'pendiente' AND c.sacramento_id IS NOT NULL;
+
+  -- La nota propuesta: la pidió quien pidió la corrección que iba con ella.
+  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
+  SELECT
+    s.client_id || '-nota',
+    s.id,
+    c.usuario_id,
+    'sacramento',
+    'anotaciones',
+    'digitacion',
+    s.anotaciones,
+    s.anotaciones_propuestas,
+    c.fecha_cambio
+  FROM sacramentos s
+  JOIN cambios_persona c ON c.id = (SELECT MIN(id) FROM cambios_persona WHERE sacramento_id = s.id AND estado = 'pendiente')
+  WHERE s.anotaciones_propuestas IS NOT NULL;
+
+  DELETE FROM cambios_persona WHERE estado = 'pendiente';
+
+  ALTER TABLE sacramentos DROP COLUMN anotaciones_propuestas;
+  `,
+
+  `
+  UPDATE usuarios SET principal = 1
+  WHERE id IN (
+    SELECT MIN(a.id) FROM usuarios a
+    WHERE a.rol = 'admin_parroquia' AND a.activo = 1 AND a.id > 0
+      AND NOT EXISTS (SELECT 1 FROM usuarios p WHERE p.principal = 1 AND p.parroquia_id = a.parroquia_id)
+    GROUP BY a.parroquia_id
+  );
+  `,
 ];

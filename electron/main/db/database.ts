@@ -1,6 +1,5 @@
-//   open_local_database   abre el archivo y aplica las migraciones que faltan
-//   open_or_detect        al iniciar la app: abre la base, la crea si es la primera vez, o avisa
-//                         que hay que recuperarla (eso necesita internet: ver sync/recovery.ts)
+//   open_local_database   opens fila and applies migrations
+//   open_or_detect        
 
 import Database from 'better-sqlite3-multiple-ciphers';
 import { randomUUID } from 'node:crypto';
@@ -258,6 +257,15 @@ export function open_temp_database(paths: LocalPaths, keys: KeyStore): { db: Loc
 		remove_with_extra_files(paths.temp_database);
 		return { db: open_local_database(paths.temp_database, key), key: key };
 	}
+}
+
+export function create_temp_database(paths: LocalPaths, keys: KeyStore, migrations: readonly string[]): { db: LocalDatabase; key: string }
+{
+	remove_with_extra_files(paths.temp_database);
+	const key = new_key();
+	keys.write(paths.temp_key, key);
+
+	return { db: open_local_database(paths.temp_database, key, migrations), key: key };
 }
 
 export function install_temp_database(paths: LocalPaths, keys: KeyStore, key: string): LocalDatabase

@@ -8,7 +8,7 @@ import { resetDatabase } from './helpers/resetDatabase';
 const PASSWORD = 'passwordCorrecta123';
 const url = (path: string) => `https://example.com${path}`;
 
-const token_parish = () => sign_jwt({ usuarioId: 1, rol: 'usuario_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
+const token_parish = () => sign_jwt({ usuarioId: 1, rol: 'admin_parroquia', parroquiaId: 1 }, env.JWT_SECRET);
 
 async function api(path: string, init: RequestInit = {}, token?: string) {
 	const headers = new Headers(init.headers);
@@ -33,7 +33,7 @@ beforeEach(async () => {
 		env.prelatura_db
 			.prepare(
 				`INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, parroquia_id, activo)
-				 VALUES (1, 'ana', ?, 'Ana', 'Rojas', '', 'usuario_parroquia', 1, 1)`,
+				 VALUES (1, 'ana', ?, 'Ana', 'Rojas', '', 'admin_parroquia', 1, 1)`,
 			)
 			.bind(await hash_password(PASSWORD)),
 	]);
@@ -66,7 +66,7 @@ describe('POST /api/auth/login', () => {
 		const body = (await response.json()) as { token: string; usuario: Record<string, unknown> };
 		expect(body.token.split('.')).toHaveLength(3);
 		// Sin apellido materno no queda un espacio al final.
-		expect(body.usuario).toEqual({ id: 1, nombre_completo: 'Ana Rojas', rol: 'usuario_parroquia', parroquia_id: 1, parroquia_nombre: 'San Pedro' });
+		expect(body.usuario).toEqual({ id: 1, nombre_completo: 'Ana Rojas', rol: 'admin_parroquia', parroquia_id: 1, parroquia_nombre: 'San Pedro' });
 	});
 
 	it('el token sirve para las rutas protegidas', async () => {
@@ -118,7 +118,7 @@ describe('rutas protegidas', () => {
 	});
 
 	it('un token mal firmado responde 401', async () => {
-		const forged = await sign_jwt({ usuarioId: 1, rol: 'admin', parroquiaId: null }, 'otro-secreto');
+		const forged = await sign_jwt({ usuarioId: 1, rol: 'admin_general', parroquiaId: null }, 'otro-secreto');
 		const response = await api('/api/parishes', {}, forged);
 
 		expect(response.status).toBe(401);
@@ -130,14 +130,14 @@ describe('rutas protegidas', () => {
 		expect(await response.json()).toEqual({ parishes: [{ id: 2, nombre: 'Abancay' }, { id: 1, nombre: 'San Pedro' }] });
 	});
 
-	it('GET /api/reference nunca manda password_hash', async () => {
+	it('GET /api/reference manda el password_hash de la propia cuenta, para entrar sin internet', async () => {
 		const response = await api('/api/reference', {}, await token_parish());
 		const body = (await response.json()) as { parroquias: unknown[]; ministros: unknown[]; usuarios: Record<string, unknown>[] };
 
 		expect(body.parroquias).toHaveLength(3);
 		expect(body.ministros).toEqual([]);
 		expect(body.usuarios).toHaveLength(1);
-		expect(Object.keys(body.usuarios[0])).not.toContain('password_hash');
+		expect(String(body.usuarios[0].password_hash)).toMatch(/^100000:/);
 	});
 
 	it('una ruta de sincronización desconocida, con sesión, responde 404', async () => {

@@ -1,7 +1,7 @@
 import type { IndexEntry } from '../../../shared/models';
 import type { SacramentType } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
-import { check_parish_access } from '../models/parish';
+import { check_parish_read } from '../models/parish';
 import { is_sacrament_type, people_of } from '../models/sacrament';
 import type { Session } from '../models/session';
 import { ServiceError } from '../utils/errors';
@@ -17,7 +17,7 @@ function check_request(session: Session, type: unknown, parish_id: unknown): ass
 	if (!Number.isInteger(parish_id) || (parish_id as number) <= 0)
 		throw new ServiceError('Debe especificar la parroquia.', 400);
 
-	check_parish_access(session, parish_id as number, 'No tiene permiso para imprimir el índice de otra parroquia.');
+	check_parish_read(session, parish_id as number, 'No tiene permiso para imprimir el índice de otra parroquia.');
 }
 
 export function list_index_books(db: LocalDatabase, session: Session, type: unknown, parish_id: unknown): string[]

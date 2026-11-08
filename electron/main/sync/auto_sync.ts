@@ -1,8 +1,3 @@
-// La sincronización automática mientras hay sesión, y el estado que muestra la pantalla.
-//
-// Se sincroniza cada SYNC_INTERVAL_MS. Si el token vence (dura 8 horas), se pide otro con la
-// misma contraseña, sin molestar al usuario.
-
 import type { SyncEntity } from '../../../shared/sync';
 import { OFFLINE_TOKEN } from '../../shared';
 import { current_key, database_paths, get_database } from '../db/app_database';
@@ -15,10 +10,6 @@ import { set_sync_value } from './queue';
 import { upload_key_copy } from './recovery';
 import { read_queue_summary, resolve_conflict, run_sync, type ConflictChoice } from './sync';
 
-//   en-linea        hay conexión y la última sincronización salió bien
-//   sin-conexion    no se pudo conectar
-//   requiere-login  el servidor ya no acepta la contraseña: hay que volver a entrar
-//   error           la sincronización falló por otro motivo
 export type ConnectionMode = 'en-linea' | 'sin-conexion' | 'requiere-login' | 'error';
 
 let mode: ConnectionMode = 'sin-conexion';
@@ -26,7 +17,7 @@ let last_error: string | null = null;
 let running_sync: Promise<void> | null = null;
 let sync_timer: ReturnType<typeof setInterval> | null = null;
 
-// Al iniciar sesión.
+// Starting session
 export function start_auto_sync(initial_mode: ConnectionMode): void
 {
 	if (!sync_timer)
@@ -43,14 +34,30 @@ export function stop_auto_sync(): void
 	sync_timer = null;
 }
 
-// Al cerrar sesión: el estado vuelve a como estaba antes del login.
 export function reset_sync_status(): void
 {
 	mode = 'sin-conexion';
 	last_error = null;
 }
 
-// Pide un token nuevo con la contraseña guardada. Devuelve null si no se pudo, y actualiza el modo.
+const ACCOUNT_NOT_UPLOADED = 'Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.';
+
+function is_waiting_upload(user_id: number): boolean
+{
+	if (user_id < 0)
+		return true;
+
+	try
+	{
+		const row = get_database().prepare('SELECT password_hash_pendiente FROM usuarios WHERE id = ?').get(user_id) as { password_hash_pendiente: string | null } | undefined;
+		return Boolean(row?.password_hash_pendiente);
+	}
+	catch
+	{
+		return false;
+	}
+}
+
 async function renew_token(): Promise<string | null>
 {
 	const session = current_session();
@@ -76,14 +83,19 @@ async function renew_token(): Promise<string | null>
 			return null;
 		}
 
+		if (is_waiting_upload(session.user_id))
+		{
+			mode = 'error';
+			last_error = ACCOUNT_NOT_UPLOADED;
+			return null;
+		}
+
 		mode = 'requiere-login';
 		last_error = 'La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.';
 		return null;
 	}
 }
 
-// Corre "action" con un token válido. Si el servidor responde 401 (el token venció tras la jornada
-// de 8 horas), pide otro y lo intenta una vez más. Si no hay forma de conseguir token, no hace nada.
 async function with_token(action: (token: string) => Promise<void>): Promise<void>
 {
 	const token = current_session()?.token || (await renew_token());
@@ -120,7 +132,6 @@ async function perform_sync(): Promise<void>
 			await run_sync(db, remote_request, token);
 			completed = true;
 
-			// Si falla la copia de la clave, la sincronización igual cuenta como hecha.
 			const key = current_key();
 			if (key)
 			{
@@ -148,8 +159,7 @@ async function perform_sync(): Promise<void>
 	}
 }
 
-// Nunca falla: lo que no se pudo subir sigue en la cola, y el estado se ve en get_sync_status.
-// Si ya hay una sincronización en curso, devuelve esa misma en vez de empezar otra.
+
 export function sync_now(): Promise<void>
 {
 	if (!current_session())
@@ -161,7 +171,11 @@ export function sync_now(): Promise<void>
 	return running_sync;
 }
 
-// Lo que muestra la pantalla de sincronización.
+export function wait_for_sync(): Promise<void>
+{
+	return running_sync ?? Promise.resolve();
+}
+
 export function get_sync_status()
 {
 	require_session();
@@ -198,7 +212,6 @@ export function dismiss_sync_notice(): void
 	set_sync_value(get_database(), SYNC_KEYS.notice, null);
 }
 
-// Al cerrar la app: intenta subir lo pendiente, pero sin retener el cierre más de limit_ms.
 export async function sync_before_quit(limit_ms: number): Promise<void>
 {
 	if (!current_session())

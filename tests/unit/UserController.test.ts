@@ -1,4 +1,4 @@
-import { useSessionStore } from '../../src/store/sessionStore';
+import { useSessionStore, type Rol } from '../../src/store/sessionStore';
 import {
   searchUsers,
   createUser,
@@ -8,33 +8,16 @@ import {
   makePrincipal,
 } from '../../src/controllers/UserController';
 import type { User } from '../../shared/models';
+import type { LocalResponse } from '../../electron/shared';
 
-interface FetchCall {
-  url: string;
-  method: string;
-  headers: Record<string, string>;
-  body: Record<string, unknown> | undefined;
-}
+// Las cuentas se gestionan en la PC (Electron), también sin internet. Pasar la marca de principal
+// también se pide a Electron, que lo hace en el Worker (necesita internet).
 
-/** Sustituye fetch por un mock que responde con el status y cuerpo indicados. */
-function mockFetch(status: number, responseBody: unknown) {
-  const fn = vi.fn<(url: string, init?: RequestInit) => Promise<unknown>>(async () => ({
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => responseBody,
-  }));
-  vi.stubGlobal('fetch', fn);
+/** Sustituye a Electron: responde lo indicado y guarda qué se le pidió. */
+function mockElectron(response: LocalResponse = { ok: true, data: { success: true } }) {
+  const fn = vi.fn<(method: string, payload?: unknown) => Promise<LocalResponse>>(async () => response);
+  window.electronAPI = { getAppVersion: async () => '0', localRequest: fn };
   return fn;
-}
-
-function firstCall(fn: ReturnType<typeof mockFetch>): FetchCall {
-  const [url, init] = fn.mock.calls[0];
-  return {
-    url,
-    method: init?.method ?? 'GET',
-    headers: (init?.headers ?? {}) as Record<string, string>,
-    body: init?.body ? JSON.parse(init.body as string) : undefined,
-  };
 }
 
 const PASSWORD = 'passwordNueva123';
@@ -42,26 +25,28 @@ const PASSWORD = 'passwordNueva123';
 // Una cuenta nueva en una parroquia existente, tal como la entrega el formulario.
 const VALID: User = {
   username: 'ana.quispe',
-  rol: 'usuario_parroquia',
+  rol: 'usuario',
   parroquia_id: 1,
-  nombre: 'Ana',
+  nombre: ' Ana ',
   apellido_paterno: 'Quispe',
   apellido_materno: 'Mamani',
   password: PASSWORD,
 };
 
-describe('UserController', () => {
-  beforeEach(() => {
-    useSessionStore.getState().setSession({
-      token: 'token-de-prueba',
-      usuarioId: 1,
-      usuarioNombre: 'Admin',
-      rol: 'admin',
-      parroquiaId: null,
-      parroquiaActivaId: 1,
-      parroquiaActivaNombre: 'Parroquia 1',
-    });
+function login(rol: Rol, parroquiaId: number | null) {
+  useSessionStore.getState().setSession({
+    token: 'token-de-prueba',
+    usuarioId: 1,
+    usuarioNombre: 'Admin',
+    rol,
+    parroquiaId,
+    parroquiaActivaId: parroquiaId ?? 1,
+    parroquiaActivaNombre: 'Parroquia 1',
   });
+}
+
+describe('UserController', () => {
+  beforeEach(() => login('admin_general', null));
 
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -69,228 +54,87 @@ describe('UserController', () => {
   });
 
   describe('createUser', () => {
-    // Este test fija el contrato con el Worker: la forma del cuerpo debe coincidir
-    // con la que acepta POST /api/users (ver worker/test/userRoutes.test.ts).
-    it('envía al Worker el model User, con una parroquia existente', async () => {
-      const fetchMock = mockFetch(201, { id: 5 });
+    it('manda a Electron el model User, sin la contraseña repetida y con los nombres recortados', async () => {
+      const electron = mockElectron({ ok: true, data: { id: -1 } });
 
-      const result = await createUser(VALID, PASSWORD);
-
-      expect(result.success).toBe(true);
-      const call = firstCall(fetchMock);
-      expect(call.url).toMatch(/\/api\/users$/);
-      expect(call.method).toBe('POST');
-      expect(call.headers['Authorization']).toBe('Bearer token-de-prueba');
-      expect(call.body).toEqual(VALID);
+      expect(await createUser(VALID, PASSWORD)).toEqual({ success: true });
+      expect(electron).toHaveBeenCalledWith('users.create', expect.objectContaining({ username: 'ana.quispe', nombre: 'Ana', parroquia_id: 1, password: PASSWORD }));
+      expect(JSON.stringify(electron.mock.calls[0][1])).not.toContain('confirm');
     });
 
-    it('nunca envía la contraseña repetida', async () => {
-      const fetchMock = mockFetch(201, { id: 5 });
+    it('un administrador general se manda sin parroquia, aunque se haya elegido una', async () => {
+      const electron = mockElectron({ ok: true, data: { id: -1 } });
 
-      await createUser(VALID, PASSWORD);
-
-      expect(JSON.stringify(firstCall(fetchMock).body)).not.toContain('confirm');
+      await createUser({ ...VALID, rol: 'admin_general', parroquia_id: 3 }, PASSWORD);
+      expect(electron.mock.calls[0][1]).toMatchObject({ rol: 'admin_general', parroquia_id: null });
     });
 
-    it('envía una parroquia nueva con el nombre sin espacios sobrantes', async () => {
-      const fetchMock = mockFetch(201, { id: 5 });
-
-      await createUser({ ...VALID, parroquia_id: null, parroquia_nueva: '  Parroquia Nueva  ' }, PASSWORD);
-
-      expect(firstCall(fetchMock).body).toMatchObject({ parroquia_id: null, parroquia_nueva: 'Parroquia Nueva' });
-    });
-
-    it('un administrador se envía sin parroquia, aunque se haya elegido una', async () => {
-      const fetchMock = mockFetch(201, { id: 5 });
-
-      const result = await createUser({ ...VALID, rol: 'admin', parroquia_id: 3, parroquia_nueva: 'X' }, PASSWORD);
-
-      expect(result.success).toBe(true);
-      expect(firstCall(fetchMock).body).toMatchObject({ rol: 'admin', parroquia_id: null });
-      expect(firstCall(fetchMock).body).not.toHaveProperty('parroquia_nueva');
-    });
-
-    describe('validación local: no llama al servidor', () => {
-      const INVALID_CASES: Array<[string, Partial<User>, string, string]> = [
-        ['sin nombre', { nombre: '  ' }, PASSWORD, 'Nombre y apellido paterno son requeridos.'],
-        ['sin apellido paterno', { apellido_paterno: '' }, PASSWORD, 'Nombre y apellido paterno son requeridos.'],
-        ['sin username', { username: ' ' }, PASSWORD, 'El nombre de usuario es requerido.'],
-        ['sin parroquia elegida', { parroquia_id: null }, PASSWORD, 'Debe seleccionar una parroquia.'],
-        ['parroquia nueva sin nombre', { parroquia_id: null, parroquia_nueva: '   ' }, PASSWORD, 'El nombre de la parroquia nueva es requerido.'],
-        ['contraseña de 7 caracteres', { password: '1234567' }, '1234567', 'La contraseña debe tener al menos 8 caracteres.'],
-        ['contraseñas que no coinciden', {}, 'otraDistinta123', 'Las contraseñas no coinciden.'],
-      ];
-
-      it.each(INVALID_CASES)('%s', async (_name, overrides, confirmPassword, expectedMessage) => {
-        const fetchMock = mockFetch(201, { id: 5 });
-
-        const result = await createUser({ ...VALID, ...overrides }, confirmPassword);
-
-        expect(result.success).toBe(false);
-        expect(result.errorMessage).toBe(expectedMessage);
-        expect(fetchMock).not.toHaveBeenCalled();
+    describe('validación local: no llama a Electron', () => {
+      it.each([
+        ['sin nombre', { ...VALID, nombre: '  ' }, PASSWORD, 'Nombre y apellido paterno son requeridos.'],
+        ['sin usuario', { ...VALID, username: ' ' }, PASSWORD, 'El nombre de usuario es requerido.'],
+        ['sin parroquia elegida', { ...VALID, parroquia_id: null }, PASSWORD, 'Debe seleccionar una parroquia.'],
+        ['contraseña corta', { ...VALID, password: 'corta' }, 'corta', 'La contraseña debe tener al menos 8 caracteres.'],
+        ['contraseñas distintas', VALID, 'otraCosa123', 'Las contraseñas no coinciden.'],
+      ])('%s', async (_name, user, confirm, message) => {
+        const electron = mockElectron();
+        expect(await createUser(user as User, confirm as string)).toEqual({ success: false, errorMessage: message });
+        expect(electron).not.toHaveBeenCalled();
       });
     });
 
-    it('muestra el mensaje que devuelve el Worker cuando rechaza la petición', async () => {
-      mockFetch(409, { message: 'Ese nombre de usuario ya existe.' });
+    it('el administrador de una parroquia no elige parroquia: la pone Electron', async () => {
+      login('admin_parroquia', 1);
+      const electron = mockElectron({ ok: true, data: { id: -1 } });
 
-      const result = await createUser(VALID, PASSWORD);
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toBe('Ese nombre de usuario ya existe.');
+      expect(await createUser({ ...VALID, parroquia_id: null }, PASSWORD)).toEqual({ success: true });
+      expect(electron).toHaveBeenCalledWith('users.create', expect.anything());
     });
 
-    it('sin sesión no llama al servidor', async () => {
-      const fetchMock = mockFetch(201, { id: 5 });
-      useSessionStore.getState().clearSession();
-
-      const result = await createUser(VALID, PASSWORD);
-
-      expect(result.success).toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
+    it('muestra el mensaje con que Electron rechaza la cuenta', async () => {
+      mockElectron({ ok: false, status: 409, message: 'Ese nombre de usuario ya existe.' });
+      expect(await createUser(VALID, PASSWORD)).toEqual({ success: false, errorMessage: 'Ese nombre de usuario ya existe.' });
     });
   });
 
   describe('updateUser', () => {
-    // La cuenta tal como llegó de la búsqueda, sin contraseña escrita.
-    const EDIT: User = { ...VALID, id: 7, activo: 1, parroquia_nombre: 'Parroquia 1', password: '' };
-
-    it('hace PUT a /api/users/:id sin contraseña si se deja vacía', async () => {
-      const fetchMock = mockFetch(200, { success: true });
-
-      const result = await updateUser(EDIT, '');
-
-      expect(result.success).toBe(true);
-      const call = firstCall(fetchMock);
-      expect(call.url).toMatch(/\/api\/users\/7$/);
-      expect(call.method).toBe('PUT');
-      expect(call.body).toMatchObject({ nombre: 'Ana', apellido_paterno: 'Quispe', apellido_materno: 'Mamani' });
-      expect(call.body).not.toHaveProperty('password');
+    it('sin contraseña nueva no la manda', async () => {
+      const electron = mockElectron();
+      await updateUser({ ...VALID, id: 7, password: '' }, '');
+      expect(electron.mock.calls[0][0]).toBe('users.update');
+      expect(electron.mock.calls[0][1]).not.toHaveProperty('password');
     });
 
-    it('envía la contraseña solo cuando se escribe una nueva', async () => {
-      const fetchMock = mockFetch(200, { success: true });
-
-      await updateUser({ ...EDIT, password: 'contraseñaNueva456' }, 'contraseñaNueva456');
-
-      expect(firstCall(fetchMock).body?.password).toBe('contraseñaNueva456');
-    });
-
-    it('rechaza una contraseña nueva que no coincide, sin llamar al servidor', async () => {
-      const fetchMock = mockFetch(200, { success: true });
-
-      const result = await updateUser({ ...EDIT, password: 'contraseñaNueva456' }, 'distinta');
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toBe('Las contraseñas no coinciden.');
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it('rechaza una contraseña nueva demasiado corta', async () => {
-      const fetchMock = mockFetch(200, { success: true });
-
-      const result = await updateUser({ ...EDIT, password: '1234567' }, '1234567');
-
-      expect(result.success).toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    it('rechaza escribir solo la confirmación sin contraseña', async () => {
-      const fetchMock = mockFetch(200, { success: true });
-
-      const result = await updateUser(EDIT, 'algo');
-
-      expect(result.success).toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
+    it('manda la contraseña solo cuando se escribe una nueva', async () => {
+      const electron = mockElectron();
+      await updateUser({ ...VALID, id: 7 }, PASSWORD);
+      expect(electron.mock.calls[0][1]).toMatchObject({ id: 7, password: PASSWORD });
     });
   });
 
-  describe('searchUsers', () => {
-    it('entrega las cuentas tal como llegan del Worker', async () => {
-      const users = [
-        { id: 1, username: 'admin', rol: 'admin', parroquia_id: null, nombre: 'Administrador', apellido_paterno: 'De', apellido_materno: 'Prueba', parroquia_nombre: null, activo: 1 },
-        { id: 3, username: 'secretaria2', rol: 'usuario_parroquia', parroquia_id: 2, nombre: 'Ana', apellido_paterno: 'Quispe', apellido_materno: 'Mamani', parroquia_nombre: 'Parroquia 2', activo: 0 },
-      ];
-      mockFetch(200, { resultados: users, total_paginas: 2 });
+  it('searchUsers entrega las cuentas tal como llegan de Electron', async () => {
+    const electron = mockElectron({ ok: true, data: { resultados: [{ ...VALID, id: 1 }], total_paginas: 3 } });
 
-      const result = await searchUsers({ orden: 'nombres', direccion: 'asc', pagina: 1 });
-
-      expect(result.success).toBe(true);
-      expect(result.totalPages).toBe(2);
-      expect(result.users).toEqual(users);
-    });
-
-    it('manda al Worker los filtros con los nombres de las columnas', async () => {
-      const fetchMock = mockFetch(200, { resultados: [], total_paginas: 1 });
-
-      await searchUsers({ apellido_paterno: 'Quispe', orden: 'apellido_paterno', direccion: 'desc', pagina: 2 });
-
-      const query = new URL(firstCall(fetchMock).url).searchParams;
-      expect(query.get('apellido_paterno')).toBe('Quispe');
-      expect(query.get('orden')).toBe('apellido_paterno');
-      expect(query.get('direccion')).toBe('desc');
-      expect(query.get('pagina')).toBe('2');
-    });
-
-    it('devuelve el mensaje del Worker si responde 403', async () => {
-      mockFetch(403, { message: 'Solo un administrador puede gestionar usuarios.' });
-
-      const result = await searchUsers({ orden: 'nombres', direccion: 'asc', pagina: 1 });
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toBe('Solo un administrador puede gestionar usuarios.');
-    });
+    const result = await searchUsers({ nombres: 'Ana', pagina: 2 });
+    expect(result).toMatchObject({ success: true, totalPages: 3, users: [{ id: 1 }] });
+    expect(electron).toHaveBeenCalledWith('users.search', { nombres: 'Ana', pagina: 2 });
   });
 
-  describe('administrador principal', () => {
-    it('loadIsPrincipal pregunta a GET /api/users/me', async () => {
-      const fetchMock = mockFetch(200, { principal: true });
+  it('toggleUserActive y loadIsPrincipal van a Electron', async () => {
+    const electron = mockElectron({ ok: true, data: { principal: true } });
 
-      expect(await loadIsPrincipal()).toBe(true);
-      expect(firstCall(fetchMock).url).toMatch(/\/api\/users\/me$/);
-    });
-
-    it('si el Worker no responde, se toma como que no es el principal', async () => {
-      mockFetch(500, { message: 'Error' });
-
-      expect(await loadIsPrincipal()).toBe(false);
-    });
-
-    it('makePrincipal hace PATCH a /api/users/:id/make-principal y muestra el rechazo del Worker', async () => {
-      const fetchMock = mockFetch(200, { success: true });
-
-      expect((await makePrincipal(3)).success).toBe(true);
-      expect(firstCall(fetchMock)).toMatchObject({ method: 'PATCH' });
-      expect(firstCall(fetchMock).url).toMatch(/\/api\/users\/3\/make-principal$/);
-
-      mockFetch(403, { message: 'Solo el administrador principal puede pasar la marca de principal.' });
-      expect(await makePrincipal(3)).toEqual({
-        success: false,
-        errorMessage: 'Solo el administrador principal puede pasar la marca de principal.',
-      });
-    });
+    expect(await loadIsPrincipal()).toBe(true);
+    await toggleUserActive(5);
+    expect(electron.mock.calls.map((call) => call[0])).toEqual(['users.me', 'users.toggleActive']);
+    expect(electron.mock.calls[1][1]).toEqual({ id: 5 });
   });
 
-  describe('toggleUserActive', () => {
-    it('hace PATCH a /api/users/:id/toggle-active', async () => {
-      const fetchMock = mockFetch(200, { success: true });
+  it('pasar la marca de principal se le pide a Electron, con el nombre de usuario', async () => {
+    const electron = mockElectron();
+    expect(await makePrincipal('ana.quispe')).toEqual({ success: true });
+    expect(electron).toHaveBeenCalledWith('users.makePrincipal', { username: 'ana.quispe' });
 
-      const result = await toggleUserActive(7);
-
-      expect(result.success).toBe(true);
-      const call = firstCall(fetchMock);
-      expect(call.url).toMatch(/\/api\/users\/7\/toggle-active$/);
-      expect(call.method).toBe('PATCH');
-    });
-
-    it('muestra el mensaje del Worker si rechaza deshabilitar la propia cuenta', async () => {
-      mockFetch(400, { message: 'No puede deshabilitar su propia cuenta.' });
-
-      const result = await toggleUserActive(1);
-
-      expect(result.success).toBe(false);
-      expect(result.errorMessage).toBe('No puede deshabilitar su propia cuenta.');
-    });
+    mockElectron({ ok: false, message: 'Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.', status: 503 });
+    expect(await makePrincipal('ana.quispe')).toMatchObject({ success: false, errorMessage: expect.stringContaining('necesita conexión a internet') });
   });
 });

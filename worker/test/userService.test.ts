@@ -13,8 +13,11 @@ import {
 } from '../src/controllers/users';
 import type { SearchFilters, User } from '../../shared/models';
 
-const ADMIN: TokenUser = { rol: 'admin', usuarioId: 1 };
-const PARISH_USER: TokenUser = { rol: 'usuario_parroquia', usuarioId: 2 };
+const ADMIN: TokenUser = { rol: 'admin_general', usuarioId: 1 };
+// Un ayudante: no gestiona cuentas.
+const PARISH_USER: TokenUser = { rol: 'usuario', usuarioId: 2, parroquiaId: 1 };
+// El párroco: gestiona solo los usuarios de su parroquia.
+const PARISH_ADMIN: TokenUser = { rol: 'admin_parroquia', usuarioId: 4, parroquiaId: 1 };
 
 const ADMIN_PASSWORD = 'adminPassword123';
 const PARISH_USER_PASSWORD = 'parrocoPassword123';
@@ -32,7 +35,7 @@ const VALID_CREATE: User = {
   apellido_materno: 'Mamani',
   username: 'ana.quispe',
   password: 'passwordNueva123',
-  rol: 'usuario_parroquia',
+  rol: 'admin_parroquia',
   parroquia_id: 1,
 };
 
@@ -71,8 +74,8 @@ describe('userService (integración con D1)', () => {
       .prepare(
         `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno,
                                rol, parroquia_id, activo)
-         VALUES (1, 'admin', ?, 'Administrador', 'De', 'Prueba', 'admin', NULL, 1),
-                (2, 'parroco1', ?, 'Usuario', 'Parroquia', 'Uno', 'usuario_parroquia', 1, 1)`,
+         VALUES (1, 'admin', ?, 'Administrador', 'De', 'Prueba', 'admin_general', NULL, 1),
+                (2, 'parroco1', ?, 'Usuario', 'Parroquia', 'Uno', 'usuario', 1, 1)`,
       )
       .bind(adminHash, parishUserHash)
       .run();
@@ -188,7 +191,7 @@ describe('userService (integración con D1)', () => {
 
       const created = await getUser(id);
       expect(created?.username).toBe('ana.quispe');
-      expect(created?.rol).toBe('usuario_parroquia');
+      expect(created?.rol).toBe('admin_parroquia');
       expect(created?.parroquia_id).toBe(1);
       expect(created?.activo).toBe(1);
       expect(created?.password_hash).not.toBe('passwordNueva123');
@@ -201,7 +204,7 @@ describe('userService (integración con D1)', () => {
       const result = await login(env.prelatura_db, env.JWT_SECRET, 'ana.quispe', 'passwordNueva123');
 
       expect(result.usuario.nombre_completo).toBe('Ana Quispe Mamani');
-      expect(result.usuario.rol).toBe('usuario_parroquia');
+      expect(result.usuario.rol).toBe('admin_parroquia');
     });
 
     it('crea la parroquia nueva junto con el usuario y los enlaza', async () => {
@@ -236,8 +239,8 @@ describe('userService (integración con D1)', () => {
     it('un admin que no es el principal no puede crear administradores', async () => {
       const usersBefore = await count('usuarios');
 
-      await expect(create_user(env.prelatura_db, ADMIN, { ...VALID_CREATE, rol: 'admin' }))
-        .rejects.toMatchObject({ status: 403, message: 'Solo el administrador principal puede crear administradores.' });
+      await expect(create_user(env.prelatura_db, ADMIN, { ...VALID_CREATE, rol: 'admin_general' }))
+        .rejects.toMatchObject({ status: 403, message: 'Solo el administrador principal puede crear administradores generales.' });
       expect(await count('usuarios')).toBe(usersBefore);
     });
 
@@ -330,7 +333,7 @@ describe('userService (integración con D1)', () => {
           env.prelatura_db.prepare(
             `INSERT INTO usuarios (username, password_hash, nombre, apellido_paterno, apellido_materno,
                                    rol, parroquia_id, activo)
-             VALUES ('parroco1', 'h', 'x', 'y', 'z', 'usuario_parroquia', last_insert_rowid(), 1)`,
+             VALUES ('parroco1', 'h', 'x', 'y', 'z', 'admin_parroquia', last_insert_rowid(), 1)`,
           ),
         ]),
       ).rejects.toThrow();
@@ -409,20 +412,56 @@ describe('userService (integración con D1)', () => {
         nombre: 'Usuario',
         apellido_paterno: 'Parroquia',
         username: 'otro.username',
-        rol: 'admin',
+        rol: 'admin_general',
         parroquia_id: 2,
       } as unknown as Parameters<typeof update_user>[3]);
 
       const after = await getUser(2);
       expect(after?.username).toBe('parroco1');
-      expect(after?.rol).toBe('usuario_parroquia');
+      expect(after?.rol).toBe('usuario');
       expect(after?.parroquia_id).toBe(1);
     });
   });
 
   // -------------------------------------------------------------------------
+  describe('administrador de parroquia', () => {
+    beforeEach(async () => {
+      await env.prelatura_db
+        .prepare(
+          `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, parroquia_id, activo)
+           VALUES (4, 'parroco.uno', ?, 'Párroco', 'Uno', 'Uno', 'admin_parroquia', 1, 1),
+                  (5, 'ayudante.dos', ?, 'Ayudante', 'Dos', 'Dos', 'usuario', 2, 1)`,
+        )
+        .bind(adminHash, adminHash)
+        .run();
+    });
+
+    it('crea usuarios solo en su parroquia, aunque mande otra', async () => {
+      const id = await create_user(env.prelatura_db, PARISH_ADMIN, { ...VALID_CREATE, rol: 'usuario', parroquia_id: 2 });
+
+      expect(await getUser(id)).toMatchObject({ rol: 'usuario', parroquia_id: 1 });
+    });
+
+    it('no crea administradores ni parroquias nuevas', async () => {
+      await expect(create_user(env.prelatura_db, PARISH_ADMIN, { ...VALID_CREATE, rol: 'admin_parroquia' })).rejects.toMatchObject({ status: 403 });
+      await expect(create_user(env.prelatura_db, PARISH_ADMIN, { ...VALID_CREATE, rol: 'admin_general' })).rejects.toMatchObject({ status: 403 });
+    });
+
+    it('solo ve y modifica a los usuarios de su parroquia', async () => {
+      const page = await search_users(env.prelatura_db, PARISH_ADMIN, SEARCH_ALL, PAGE_SIZE);
+      expect(page.resultados.map((u) => u.username).sort()).toEqual(['parroco.uno', 'parroco1']);
+
+      await toggle_user_active(env.prelatura_db, PARISH_ADMIN, 2);
+      expect((await getUser(2))?.activo).toBe(0);
+
+      await expect(toggle_user_active(env.prelatura_db, PARISH_ADMIN, 5)).rejects.toMatchObject({ status: 403 });
+      await expect(update_user(env.prelatura_db, PARISH_ADMIN, 1, { nombre: 'X', apellido_paterno: 'Y' } as User)).rejects.toMatchObject({ status: 403 });
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe('administrador principal', () => {
-    const OTHER_ADMIN: TokenUser = { rol: 'admin', usuarioId: 3 };
+    const OTHER_ADMIN: TokenUser = { rol: 'admin_general', usuarioId: 3 };
 
     beforeEach(async () => {
       await env.prelatura_db.batch([
@@ -430,16 +469,16 @@ describe('userService (integración con D1)', () => {
         env.prelatura_db
           .prepare(
             `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, parroquia_id, activo)
-             VALUES (3, 'admin2', ?, 'Otro', 'Admin', 'Dos', 'admin', NULL, 1)`,
+             VALUES (3, 'admin2', ?, 'Otro', 'Admin', 'Dos', 'admin_general', NULL, 1)`,
           )
           .bind(adminHash),
       ]);
     });
 
     it('crea administradores sin parroquia, aunque se mande una, y sin la marca de principal', async () => {
-      const id = await create_user(env.prelatura_db, ADMIN, { ...VALID_CREATE, rol: 'admin', principal: 1 });
+      const id = await create_user(env.prelatura_db, ADMIN, { ...VALID_CREATE, rol: 'admin_general', principal: 1 });
 
-      expect(await getUser(id)).toMatchObject({ rol: 'admin', parroquia_id: null, principal: 0 });
+      expect(await getUser(id)).toMatchObject({ rol: 'admin_general', parroquia_id: null, principal: 0 });
     });
 
     it('solo el principal modifica o deshabilita a otros administradores', async () => {
@@ -481,6 +520,76 @@ describe('userService (integración con D1)', () => {
 
     it('la base no deja que haya dos principales', async () => {
       await expect(env.prelatura_db.prepare('UPDATE usuarios SET principal = 1 WHERE id = 3').run()).rejects.toThrow(/UNIQUE/);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('principal de parroquia', () => {
+    // En la parroquia 1: el principal (10) y otro administrador (11). En la 2, su principal (12).
+    const PRINCIPAL: TokenUser = { rol: 'admin_parroquia', usuarioId: 10, parroquiaId: 1 };
+    const OTHER: TokenUser = { rol: 'admin_parroquia', usuarioId: 11, parroquiaId: 1 };
+    const account = (username: string, rol: User['rol'] = 'usuario', parroquia_id = 1): User => ({ ...VALID_CREATE, username, rol, parroquia_id });
+
+    beforeEach(async () => {
+      await env.prelatura_db
+        .prepare(
+          `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno, rol, parroquia_id, activo, principal)
+           VALUES (10, 'principal1', 'h', 'P', 'R', 'I', 'admin_parroquia', 1, 1, 1),
+                  (11, 'otro1', 'h', 'O', 'T', 'R', 'admin_parroquia', 1, 1, 0),
+                  (12, 'principal2', 'h', 'P', 'D', 'O', 'admin_parroquia', 2, 1, 1)`,
+        )
+        .run();
+    });
+
+    it('el primer administrador de una parroquia queda como su principal; los siguientes, no', async () => {
+      await env.prelatura_db.prepare('INSERT INTO parroquias (id, nombre) VALUES (3, ?)').bind('Parroquia 3').run();
+      const first = await create_user(env.prelatura_db, ADMIN, account('primero3', 'admin_parroquia', 3));
+      const second = await create_user(env.prelatura_db, ADMIN, account('segundo3', 'admin_parroquia', 3));
+
+      expect(await getUser(first)).toMatchObject({ principal: 1 });
+      expect(await getUser(second)).toMatchObject({ principal: 0 });
+    });
+
+    it('solo el principal crea y modifica a otros administradores de su parroquia; los demás, solo usuarios', async () => {
+      await expect(create_user(env.prelatura_db, OTHER, account('nuevo.admin', 'admin_parroquia'))).rejects.toMatchObject({ status: 403 });
+      await expect(create_user(env.prelatura_db, OTHER, account('nuevo.ayudante'))).resolves.toBeGreaterThan(0);
+      await expect(toggle_user_active(env.prelatura_db, OTHER, 10)).rejects.toMatchObject({ status: 403 });
+      await expect(update_user(env.prelatura_db, OTHER, 10, { ...VALID_CREATE, nombre: 'Cambiado' })).rejects.toMatchObject({ status: 403 });
+
+      const id = await create_user(env.prelatura_db, PRINCIPAL, account('admin.delegado', 'admin_parroquia'));
+      expect(await getUser(id)).toMatchObject({ rol: 'admin_parroquia', parroquia_id: 1, principal: 0 });
+      await toggle_user_active(env.prelatura_db, PRINCIPAL, 11);
+      expect(await getUser(11)).toMatchObject({ activo: 0 });
+
+      // Aunque pida otra parroquia, la cuenta queda en la suya.
+      const own = await create_user(env.prelatura_db, PRINCIPAL, account('ajeno', 'admin_parroquia', 2));
+      expect(await getUser(own)).toMatchObject({ parroquia_id: 1 });
+    });
+
+    it('al principal no lo deshabilita nadie: primero hay que pasar la marca', async () => {
+      await expect(toggle_user_active(env.prelatura_db, ADMIN, 10)).rejects.toMatchObject({ status: 400 });
+
+      await make_principal(env.prelatura_db, PRINCIPAL, 11);
+      expect(await getUser(10)).toMatchObject({ principal: 0 });
+      expect(await getUser(11)).toMatchObject({ principal: 1 });
+
+      await toggle_user_active(env.prelatura_db, ADMIN, 10);
+      expect(await getUser(10)).toMatchObject({ activo: 0 });
+    });
+
+    it('la marca la pasa el principal de la parroquia o un administrador general, no otro administrador', async () => {
+      await expect(make_principal(env.prelatura_db, OTHER, 11)).rejects.toMatchObject({ status: 403 });
+      await expect(make_principal(env.prelatura_db, PRINCIPAL, 12)).rejects.toMatchObject({ status: 400 });
+
+      await make_principal(env.prelatura_db, ADMIN, 11);
+      expect(await getUser(11)).toMatchObject({ principal: 1 });
+      expect(await getUser(10)).toMatchObject({ principal: 0 });
+      // La otra parroquia conserva el suyo.
+      expect(await getUser(12)).toMatchObject({ principal: 1 });
+    });
+
+    it('la base admite un principal por parroquia, no dos', async () => {
+      await expect(env.prelatura_db.prepare('UPDATE usuarios SET principal = 1 WHERE id = 11').run()).rejects.toThrow(/UNIQUE/);
     });
   });
 

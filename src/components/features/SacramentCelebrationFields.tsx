@@ -14,7 +14,6 @@ interface SacramentCelebrationFieldsProps {
   priestOptions: Minister[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
-  priestParishId?: number;
   notesOpen: boolean;
   onToggleNotes: () => void;
 }
@@ -28,7 +27,6 @@ export function SacramentCelebrationFields({
   priestOptions,
   onSearchPriest,
   isSearchingPriests,
-  priestParishId,
   notesOpen,
   onToggleNotes,
 }: SacramentCelebrationFieldsProps) {
@@ -43,14 +41,13 @@ export function SacramentCelebrationFields({
           onChange={(v) => onChange({ ...record, sacramento: { ...sacramento, fecha_evento: v } })}
         />
       </StackedFormField>
-      <StackedFormField label="Celebrante">
+      <StackedFormField label="Celebrante" required>
         <PriestSelector
           value={sacramento.ministro_id}
           onSelect={(id) => onChange({ ...record, sacramento: { ...sacramento, ministro_id: id } })}
           onSearch={onSearchPriest}
           options={priestOptions}
           isLoading={isSearchingPriests}
-          parroquiaId={priestParishId}
         />
       </StackedFormField>
       <Field variant="panel" label="Padrino" value={record.padrino_1 ?? ''} onChange={(v) => onChange({ ...record, padrino_1: v })} />

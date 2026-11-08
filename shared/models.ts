@@ -1,4 +1,5 @@
-import type { Role, SacramentType } from './sync';
+import type { RecordPart } from './record_fields';
+import type { CorrectionState, HistoryEvent, RequestState, RequestType, Role, SacramentType } from './sync';
 
 export interface User
 {
@@ -51,6 +52,9 @@ export interface PersonChange
 	valor_anterior?: string | null;
 	valor_nuevo: string | null;
 	fecha_cambio?: string;
+	estado?: CorrectionState;
+	revisado_por_usuario_id?: number | null;
+	revisado_en?: string | null;
 }
 
 
@@ -64,7 +68,7 @@ export interface Person
 	apellido_paterno: string;
 	apellido_materno: string;
 	fecha_nacimiento: string | null;
-	edad: number | null;
+	fecha_aproximada: string | null;
 	lugar_nacimiento: string | null;
 	padre: string | null;
 	madre: string | null;
@@ -94,10 +98,38 @@ export interface Sacrament
 	version?: number;
 	created_at?: string;
 	updated_at?: string;
-	parroquia?: Parish;         // al leer
-	ministro?: Minister | null; // al leer: el celebrante, si tiene
+	parroquia?: Parish;
+	ministro?: Minister | null;
+	solicitudes?: ChangeRequest[];
 }
 
+export interface ChangeRequest
+{
+	id: number;
+	parte: RecordPart;
+	campo: string;
+	tipo: RequestType;
+	valor_anterior: string | null;
+	valor_nuevo: string | null;
+	texto_anterior: string | null;
+	texto_nuevo: string | null;
+	estado: RequestState;
+	motivo: string | null;
+	solicitado_por: string;
+	creado_en: string;
+	revisado_por: string | null;
+	revisado_en: string | null;
+}
+
+export interface HistoryEntry
+{
+	id: number;
+	evento: HistoryEvent;
+	motivo: string | null;
+	fecha: string;
+	usuario: string;
+	campos: { parte: RecordPart; campo: string; texto_anterior: string | null; texto_nuevo: string | null }[];
+}
 
 export interface Baptism
 {

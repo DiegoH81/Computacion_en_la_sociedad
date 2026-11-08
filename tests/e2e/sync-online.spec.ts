@@ -1,8 +1,10 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { field, saveRecord } from './form-helpers';
+import { launchApp } from './launch';
 
 // Dos PCs reales contra el Worker de pruebas. Entre ellas y el Worker hay un proxy que permite
 // simular que se va internet, o que la respuesta del servidor nunca llega.
@@ -66,11 +68,8 @@ function newPc(): string {
   return dir;
 }
 
-async function open(userData: string): Promise<{ app: ElectronApplication; window: Page }> {
-  const app = await electron.launch({
-    args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-    env: { ...process.env, PRELATURA_API_URL: proxyUrl } as Record<string, string>,
-  });
+async function open(userData: string, env: Record<string, string> = {}): Promise<{ app: ElectronApplication; window: Page }> {
+  const app = await launchApp(userData, { ...process.env, PRELATURA_API_URL: proxyUrl, ...env } as Record<string, string>);
   apps.push(app);
   return { app, window: await app.firstWindow() };
 }
@@ -95,8 +94,6 @@ async function closeApp(app: ElectronApplication): Promise<void> {
   apps.splice(apps.indexOf(app), 1);
 }
 
-const field = (window: Page, label: string) => window.locator(`label:text-is("${label}") + input`).last();
-
 async function goToBaptisms(window: Page): Promise<void> {
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
 }
@@ -110,8 +107,7 @@ async function createBaptism(window: Page, registro: string, nombre: string): Pr
   await field(window, 'Nombres').fill(nombre);
   await field(window, 'Apellido paterno').fill('Sincro');
   await field(window, 'Apellido materno').fill('Prueba');
-  await window.getByRole('button', { name: 'Guardar cambios' }).click();
-  await expect(window.getByRole('button', { name: 'Guardar cambios' })).toBeHidden();
+  await saveRecord(window);
 }
 
 async function renameBaptism(window: Page, registro: string, nombre: string): Promise<void> {
@@ -147,10 +143,12 @@ async function openSyncPage(window: Page): Promise<void> {
 }
 
 async function syncNow(window: Page): Promise<void> {
-  const button = window.getByRole('button', { name: /^Sincroniza(r ahora|ndo…)$/ });
-  await expect(button).toBeEnabled();
+  // El de la página, no el indicador de arriba (que también dice "Sincronizando…").
+  const main = window.getByRole('main');
+  const button = main.getByRole('button', { name: /^Sincroniza(r ahora|ndo…)$/ });
+  await expect(button).toBeEnabled({ timeout: 30_000 });
   await button.click();
-  await expect(window.getByRole('button', { name: 'Sincronizar ahora' })).toBeEnabled({ timeout: 30_000 });
+  await expect(main.getByRole('button', { name: 'Sincronizar ahora' })).toBeEnabled({ timeout: 30_000 });
 }
 
 const pending = (window: Page) => window.getByTestId('sync-pendientes');
@@ -193,14 +191,15 @@ test('lo creado en una PC llega a otra, y una corrección vuelve a la primera', 
   await expect(pcA.window.getByRole('cell', { name: 'Alfonsa', exact: true })).toHaveCount(1);
 });
 
-test('login sin internet: exige un primer ingreso online y luego valida localmente', async () => {
+test('login sin internet: una PC que no conoce al usuario lo pide, y después valida localmente', async () => {
   const userData = newPc();
 
-  // Sin ningún ingreso previo en esta PC no se puede entrar.
+  // Sin paquete inicial ni ningún ingreso previo, esta PC no conoce al usuario.
   mode = 'sin-internet';
   let pc = await open(userData);
   await submitLogin(pc.window, 'parroco1', 'parroco123');
-  await expect(pc.window.getByText(/debe iniciar sesión con internet la primera vez/)).toBeVisible();
+  await expect(pc.window.getByText(/todavía no está en esta PC/)).toBeVisible();
+  await expect(pc.window.getByRole('button', { name: 'Restaurar respaldo' })).toBeVisible();
   await closeApp(pc.app);
 
   mode = 'normal';
@@ -466,4 +465,328 @@ test('cerrar sesión sin internet: conserva lo pendiente y la entrada sin conexi
   await goToBaptisms(pc.window);
   await searchBaptism(pc.window, 'Hermelinda');
   await expect(pc.window.getByRole('cell', { name: 'Hermelinda' })).toHaveCount(1);
+});
+
+// ---------------------------------------------------------------------------
+// Cuentas, correcciones con aprobación y paquete inicial
+// ---------------------------------------------------------------------------
+
+/** Un nombre de usuario que no se repite entre corridas del mismo Worker de pruebas. */
+const uniqueUsername = (prefix: string) => `${prefix}${Date.now().toString(36)}`;
+
+/** Vuelve al menú principal con "Volver", esperando cada pantalla para no hacer clic a medio cambio. */
+async function backToDashboard(window: Page): Promise<void> {
+  const dashboard = window.getByText(DASHBOARD_TEXT);
+  const back = window.getByRole('button', { name: 'Volver' }).first();
+  for (let i = 0; i < 4; i++) {
+    await expect(dashboard.or(back)).toBeVisible();
+    if (await dashboard.isVisible()) return;
+    const before = await window.evaluate(() => location.hash);
+    await back.click();
+    await expect.poll(() => window.evaluate(() => location.hash)).not.toBe(before);
+  }
+  await expect(dashboard).toBeVisible();
+}
+
+/** El párroco crea un ayudante (rol usuario) de su parroquia, desde Configuración. */
+async function createHelper(window: Page, username: string, password: string): Promise<void> {
+  await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Agregar usuario' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  const form = window.getByRole('dialog', { name: 'Añadir nuevo usuario' });
+  await form.getByLabel('Nombre', { exact: true }).fill('Ana');
+  await form.getByLabel('Apellido paterno', { exact: true }).fill('Ayuda');
+  await form.getByLabel('Apellido materno', { exact: true }).fill('Prueba');
+  await form.getByLabel('Nombre de usuario', { exact: true }).fill(username);
+  await form.getByLabel('Contraseña', { exact: true }).fill(password);
+  await form.getByLabel('Repetir contraseña', { exact: true }).fill(password);
+  await form.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(form).toBeHidden();
+  await expect(window.getByRole('cell', { name: username }).first()).toBeVisible();
+  await backToDashboard(window);
+}
+
+async function logout(window: Page): Promise<void> {
+  await backToDashboard(window);
+  await window.getByRole('button', { name: 'Cerrar sesión' }).click();
+  await expect(window.getByPlaceholder('Nombre de usuario')).toBeVisible();
+}
+
+/** El párroco crea un ayudante con internet, y el ayudante entra en otra PC. */
+async function parishAndHelper(): Promise<{ parish: { app: ElectronApplication; window: Page }; helper: { app: ElectronApplication; window: Page } }> {
+  const username = uniqueUsername('ayudante');
+  const password = 'clave-del-ayudante';
+
+  const parish = await login(newPc());
+  await createHelper(parish.window, username, password);
+
+  const helper = await open(newPc());
+  await submitLogin(helper.window, username, password);
+  await expect(helper.window.getByText(DASHBOARD_TEXT)).toBeVisible({ timeout: 30_000 });
+  return { parish, helper };
+}
+
+/** Sincroniza la PC desde cualquier pantalla y vuelve a la lista de bautismos. */
+async function syncAndBack(window: Page): Promise<void> {
+  await backToDashboard(window);
+  await openSyncPage(window);
+  await syncNow(window);
+  await expect(pending(window)).toHaveText('0');
+  await backToBaptisms(window);
+}
+
+/** Marca la partida en la lista (si ya estaba marcada, otro clic la desmarcaría). */
+async function selectRecord(window: Page, registro: string): Promise<void> {
+  const box = window.getByRole('checkbox', { name: `Seleccionar partida ${registro}` });
+  if (!(await box.isChecked())) await box.click();
+  await expect(box).toBeChecked();
+}
+
+async function openForChange(window: Page, registro: string, nombre: string): Promise<Locator> {
+  await searchBaptism(window, nombre);
+  await selectRecord(window, registro);
+  await window.getByRole('button', { name: 'Pedir cambio' }).click();
+  return window.getByRole('dialog', { name: 'Pedir cambio' });
+}
+
+test('el ayudante escribe la nota en blanco y pide una corrección; el párroco la aprueba en otra PC', async () => {
+  const { parish, helper } = await parishAndHelper();
+  await backToDashboard(parish.window);
+  await goToBaptisms(parish.window);
+  await createBaptism(parish.window, '9201', 'Corregina');
+  await syncAndBack(parish.window);
+
+  // El ayudante: la nota estaba en blanco y se guarda; el nombre queda pedido.
+  await syncAndBack(helper.window);
+  let request = await openForChange(helper.window, '9201', 'Corregina');
+  await expect(request).toContainText('Si la nota marginal está en blanco, la que escriba se guarda en el momento');
+  await request.getByRole('button', { name: 'Añadir campo a modificar' }).click();
+  await request.getByRole('textbox', { name: 'Campo nuevo' }).fill('Corregida');
+  await request.getByRole('textbox', { name: 'Anotaciones', exact: true }).fill('Se corrige el nombre según el DNI.');
+  await request.getByRole('button', { name: 'Pedir cambio' }).click();
+  await expect(request).toBeHidden();
+
+  // Mientras espera, el ayudante ve su pedido y no puede pedir otro.
+  request = await openForChange(helper.window, '9201', 'Corregina');
+  await expect(request).toContainText('Su pedido de cambio espera la aprobación');
+  await expect(request.getByRole('button', { name: 'Pedir cambio' })).toBeDisabled();
+  await expect(request.getByRole('textbox', { name: 'Anotaciones', exact: true })).toHaveValue('Se corrige el nombre según el DNI.');
+  await request.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await helper.window.getByRole('button', { name: 'Sí, cancelar' }).click();
+  await syncAndBack(helper.window);
+
+  // El párroco: lo ve en "Cambios por aprobar", con el valor anterior y el nuevo.
+  await syncAndBack(parish.window);
+  await backToDashboard(parish.window);
+  await parish.window.getByRole('button', { name: /cambios por aprobar/ }).click();
+  const card = parish.window.getByRole('article', { name: 'Cambio de la partida 9201' });
+  await expect(card).toContainText('Corregina');
+  await expect(card).toContainText('Corregida');
+  await expect(card.getByRole('region', { name: 'Nota marginal' })).toContainText('Corregida');
+  await expect(card).toContainText('Espera su aprobación.');
+  await card.getByRole('button', { name: 'Aprobar' }).click();
+  await parish.window.getByRole('alertdialog').getByRole('button', { name: 'Aprobar' }).click();
+  await expect(card).toBeHidden();
+
+  // Aprobado: llega a la PC del ayudante, y la búsqueda encuentra el nombre anterior.
+  await syncAndBack(parish.window);
+  await syncAndBack(helper.window);
+  await searchBaptism(helper.window, 'Corregina');
+  await expect(helper.window.getByRole('cell', { name: 'Corregida' })).toBeVisible();
+});
+
+test('el párroco edita una partida con un cambio pendiente: usa los valores pedidos y queda en el historial', async () => {
+  const { parish, helper } = await parishAndHelper();
+  await backToDashboard(parish.window);
+  await goToBaptisms(parish.window);
+  await createBaptism(parish.window, '9202', 'Historiana');
+  await syncAndBack(parish.window);
+
+  await syncAndBack(helper.window);
+  const request = await openForChange(helper.window, '9202', 'Historiana');
+  await field(helper.window, 'Padre').fill('Juan Quispe Mamani');
+  await request.getByRole('button', { name: 'Pedir cambio' }).click();
+  await expect(request).toBeHidden();
+  await syncAndBack(helper.window);
+
+  // En la PC del párroco el formulario muestra lo pedido, y "Usar estos valores" lo pone en los campos.
+  await syncAndBack(parish.window);
+  await searchBaptism(parish.window, 'Historiana');
+  await selectRecord(parish.window, '9202');
+  await parish.window.getByRole('button', { name: 'Editar' }).click();
+  const edit = parish.window.getByRole('dialog', { name: 'Editar partida' });
+  await expect(edit.getByRole('region', { name: 'Cambio pedido' })).toContainText('Juan Quispe Mamani');
+  await expect(field(parish.window, 'Padre')).toHaveValue('Pedro Prueba');
+  await edit.getByRole('button', { name: 'Usar estos valores' }).click();
+  await expect(field(parish.window, 'Padre')).toHaveValue('Juan Quispe Mamani');
+  await saveRecord(parish.window);
+
+  // El historial cuenta todo, el evento más nuevo primero.
+  await selectRecord(parish.window, '9202');
+  await parish.window.getByRole('button', { name: 'Historial' }).click();
+  const history = parish.window.getByRole('dialog', { name: 'Historial de la partida' });
+  const rows = history.getByRole('row');
+  await expect(rows.nth(1)).toContainText('Aprobó el cambio');
+  await expect(rows.nth(1)).toContainText('Juan Quispe Mamani');
+  await expect(history).toContainText('Pidió un cambio');
+  await expect(history).toContainText('Registró la partida');
+  await history.getByRole('button', { name: 'Cerrar' }).click();
+
+  // El ayudante no tiene el botón del historial.
+  await expect(helper.window.getByRole('button', { name: 'Historial' })).toHaveCount(0);
+});
+
+test('si el párroco guarda sin usar lo pedido, se le avisa y el pedido queda descartado', async () => {
+  const { parish, helper } = await parishAndHelper();
+  await backToDashboard(parish.window);
+  await goToBaptisms(parish.window);
+  await createBaptism(parish.window, '9203', 'Descartina');
+  await syncAndBack(parish.window);
+
+  await syncAndBack(helper.window);
+  let request = await openForChange(helper.window, '9203', 'Descartina');
+  await field(helper.window, 'Madre').fill('Rosa Pedida');
+  await request.getByRole('button', { name: 'Pedir cambio' }).click();
+  await syncAndBack(helper.window);
+
+  await syncAndBack(parish.window);
+  await searchBaptism(parish.window, 'Descartina');
+  await selectRecord(parish.window, '9203');
+  await parish.window.getByRole('button', { name: 'Editar' }).click();
+  await field(parish.window, 'Padrino').fill('Mario');
+  await parish.window.getByRole('button', { name: 'Guardar cambios' }).click();
+  const warning = parish.window.getByRole('alertdialog');
+  await expect(warning).toContainText('Si guarda sin usar esos valores, el pedido se descarta.');
+  await warning.getByRole('button', { name: 'Guardar y descartar' }).click();
+  await expect(parish.window.getByRole('button', { name: 'Guardar cambios' })).toBeHidden();
+  await syncAndBack(parish.window);
+
+  // El ayudante ve que su pedido se descartó, y puede pedir otro.
+  await syncAndBack(helper.window);
+  request = await openForChange(helper.window, '9203', 'Descartina');
+  await expect(request).toContainText('Su pedido anterior fue descartado');
+  await expect(request).toContainText('Descartada al editar la partida');
+  await expect(request.getByRole('button', { name: 'Pedir cambio' })).toBeEnabled();
+});
+
+test('una cuenta creada sin internet entra en esa PC, y se sube cuando el párroco sincroniza', async () => {
+  const username = uniqueUsername('sinred');
+  const password = 'clave-sin-internet';
+  const pc = await login(newPc());
+
+  mode = 'sin-internet';
+  await createHelper(pc.window, username, password);
+  await logout(pc.window);
+  await submitLogin(pc.window, username, password);
+  await expect(pc.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+
+  // Vuelve internet, pero el servidor todavía no conoce la cuenta: no se pide volver a entrar.
+  mode = 'normal';
+  await openSyncPage(pc.window);
+  await syncNow(pc.window);
+  await expect(pc.window.getByText('Esta cuenta todavía no está en el servidor')).toBeVisible();
+  await expect(pc.window.getByText('Debe iniciar sesión de nuevo')).toHaveCount(0);
+
+  // El párroco entra en esa PC y sincroniza: la cuenta se sube.
+  await logout(pc.window);
+  await submitLogin(pc.window, 'parroco1', 'parroco123');
+  await expect(pc.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  await openSyncPage(pc.window);
+  await syncNow(pc.window);
+  await expect(pending(pc.window)).toHaveText('0');
+
+  // Ahora el ayudante también entra en otra PC.
+  await logout(pc.window);
+  const other = await open(newPc());
+  await submitLogin(other.window, username, password);
+  await expect(other.window.getByText(DASHBOARD_TEXT)).toBeVisible({ timeout: 30_000 });
+  await openSyncPage(other.window);
+  await expect(other.window.getByText('En línea')).toBeVisible();
+});
+
+test('paquete inicial: el admin general lo genera, y una PC sin internet instalada con él ya puede consultar', async () => {
+  const dir = newPc();
+  const packageFile = path.join(dir, 'paquete-inicial.json');
+
+  // Una partida que ya está en el servidor.
+  const parish = await login(newPc());
+  await goToBaptisms(parish.window);
+  await createBaptism(parish.window, '9301', 'Paquetina');
+  await backToDashboard(parish.window);
+  await openSyncPage(parish.window);
+  await syncNow(parish.window);
+  await expect(pending(parish.window)).toHaveText('0');
+
+  // El administrador general genera el paquete.
+  const admin = await open(newPc());
+  await submitLogin(admin.window, 'admin', 'admin123');
+  await expect(admin.window.getByText('Seleccionar Parroquia')).toBeVisible({ timeout: 30_000 });
+  await admin.window.getByRole('combobox').selectOption({ label: 'Parroquia 1' });
+  await admin.window.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(admin.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  await admin.app.evaluate(({ dialog }, file) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
+  }, packageFile);
+  await admin.window.getByRole('button', { name: 'Configuración' }).click();
+  await admin.window.getByRole('button', { name: 'Generar paquete inicial' }).click();
+  await expect(admin.window.getByText(/Paquete inicial guardado/)).toBeVisible();
+  expect(existsSync(packageFile)).toBe(true);
+
+  // Una PC nueva, sin internet, instalada con ese paquete (PRELATURA_PAQUETE hace de instalador): ya entra.
+  mode = 'sin-internet';
+  const fresh = await open(newPc(), { PRELATURA_SIN_PAQUETE: '', PRELATURA_PAQUETE: packageFile });
+  await expect(fresh.window.getByRole('button', { name: 'Restaurar respaldo' })).toBeHidden();
+  await submitLogin(fresh.window, 'parroco1', 'parroco123');
+  await expect(fresh.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  await goToBaptisms(fresh.window);
+  await searchBaptism(fresh.window, 'Paquetina');
+  await expect(fresh.window.getByRole('cell', { name: 'Paquetina' })).toBeVisible();
+});
+
+// Va al final: le pasa a otro administrador la marca de principal de parroco1.
+test('el principal de la parroquia crea un administrador, que no puede tocarlo, y le pasa la marca', async () => {
+  const username = uniqueUsername('delegado');
+  const password = 'clave-del-delegado';
+  const principal = await login(newPc());
+
+  // parroco1 es el principal de Parroquia 1: elige el tipo de cuenta.
+  await principal.window.getByRole('button', { name: 'Configuración' }).click();
+  await principal.window.getByRole('button', { name: 'Agregar usuario' }).click();
+  await principal.window.getByRole('button', { name: '+ Agregar' }).click();
+  const form = principal.window.getByRole('dialog', { name: 'Añadir nuevo usuario' });
+  await form.getByLabel('Nombre', { exact: true }).fill('Delia');
+  await form.getByLabel('Apellido paterno', { exact: true }).fill('Delegada');
+  await form.getByLabel('Apellido materno', { exact: true }).fill('Prueba');
+  await form.getByLabel('Nombre de usuario', { exact: true }).fill(username);
+  await form.getByLabel('Tipo de cuenta', { exact: true }).selectOption('admin_parroquia');
+  await form.getByLabel('Contraseña', { exact: true }).fill(password);
+  await form.getByLabel('Repetir contraseña', { exact: true }).fill(password);
+  await form.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(form).toBeHidden();
+
+  // Al principal no lo deshabilita nadie, ni él mismo.
+  await principal.window.getByRole('checkbox', { name: 'Seleccionar usuario parroco1' }).click();
+  await expect(principal.window.getByRole('button', { name: 'Deshabilitar' })).toBeDisabled();
+  await principal.window.getByRole('checkbox', { name: 'Seleccionar usuario parroco1' }).click();
+
+  // El nuevo administrador entra en otra PC: hace todo el trabajo, pero no toca al principal ni crea administradores.
+  const delegate = await open(newPc());
+  await submitLogin(delegate.window, username, password);
+  await expect(delegate.window.getByText(DASHBOARD_TEXT)).toBeVisible({ timeout: 30_000 });
+  await delegate.window.getByRole('button', { name: 'Configuración' }).click();
+  await expect(delegate.window.getByRole('button', { name: 'Importar Excel del sistema anterior' })).toBeVisible();
+  await delegate.window.getByRole('button', { name: 'Agregar usuario' }).click();
+  await expect(delegate.window.getByRole('cell', { name: 'parroco1' })).toBeVisible();
+  await expect(delegate.window.getByRole('checkbox', { name: 'Seleccionar usuario parroco1' })).toHaveCount(0);
+  await delegate.window.getByRole('button', { name: '+ Agregar' }).click();
+  await expect(delegate.window.getByRole('dialog', { name: 'Añadir nuevo usuario' }).getByLabel('Tipo de cuenta', { exact: true })).toHaveValue('Usuario');
+  await delegate.window.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await delegate.window.getByRole('button', { name: 'Sí, cancelar' }).click();
+
+  // El principal le pasa la marca: ahora el principal es el nuevo.
+  await principal.window.getByRole('checkbox', { name: `Seleccionar usuario ${username}` }).click();
+  await principal.window.getByRole('button', { name: 'Hacer principal' }).click();
+  await principal.window.getByRole('alertdialog').getByRole('button', { name: 'Sí, pasar la marca' }).click();
+  await expect(principal.window.getByRole('row', { name: new RegExp(username) })).toContainText('Principal');
+  await expect(principal.window.getByRole('checkbox', { name: `Seleccionar usuario ${username}` })).toHaveCount(0);
 });

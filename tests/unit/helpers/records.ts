@@ -1,8 +1,25 @@
-// Arma los models de shared/models.ts para las pruebas: cada función completa con valores vacíos lo que
-// no se indica, así cada prueba escribe solo los datos que le importan.
+// Arma los models de shared/models.ts para las pruebas: cada función completa lo que no se indica, así
+// cada prueba escribe solo los datos que le importan. La persona y el celebrante vienen con los datos
+// obligatorios ya llenos (el ministro 1, ver TEST_MINISTER); una prueba que quiera un dato vacío lo pasa.
 
 import type { Baptism, Marriage, Minister, Person, PersonChange, Sacrament } from '../../../shared/models';
-import type { SacramentType } from '../../../shared/sync';
+import type { MinisterData, SacramentType } from '../../../shared/sync';
+
+// El celebrante que usan las partidas de prueba: hay que cargarlo en la base (save_reference_data).
+export const TEST_MINISTER: MinisterData & { id: number } = {
+  id: 1,
+  client_id: 'ministro-1',
+  parroquia_id: 1,
+  titulo: null,
+  nombre: 'Manuel',
+  apellido_paterno: 'Torres',
+  apellido_materno: 'Rios',
+  activo: 1,
+  version: 1,
+};
+
+// Un celebrante de la parroquia 2, para las partidas de esa parroquia.
+export const TEST_MINISTER_2: MinisterData & { id: number } = { ...TEST_MINISTER, id: 2, client_id: 'ministro-2', parroquia_id: 2, nombre: 'Luis' };
 
 export interface BaptismValues {
   sacramento?: Partial<Sacrament>;
@@ -24,10 +41,10 @@ export function person(values: Partial<Person> = {}): Person {
     apellido_paterno: '',
     apellido_materno: '',
     fecha_nacimiento: null,
-    edad: null,
-    lugar_nacimiento: null,
-    padre: null,
-    madre: null,
+    fecha_aproximada: values.fecha_nacimiento ? null : '30 años',
+    lugar_nacimiento: 'Juli',
+    padre: 'Pedro Prueba',
+    madre: 'María Prueba',
     cambios: [],
     ...values,
   };
@@ -36,7 +53,7 @@ export function person(values: Partial<Person> = {}): Person {
 export function sacrament(tipo: SacramentType, values: Partial<Sacrament> = {}): Sacrament {
   return {
     tipo,
-    ministro_id: null,
+    ministro_id: TEST_MINISTER.id,
     libro: '',
     folio: '',
     numero: '',

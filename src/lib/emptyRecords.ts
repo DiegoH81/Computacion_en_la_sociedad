@@ -11,7 +11,7 @@ export function emptyPerson(): Person {
     apellido_paterno: '',
     apellido_materno: '',
     fecha_nacimiento: null,
-    edad: null,
+    fecha_aproximada: null,
     lugar_nacimiento: null,
     padre: null,
     madre: null,

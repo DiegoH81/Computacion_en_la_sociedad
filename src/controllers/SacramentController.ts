@@ -29,14 +29,15 @@ export async function searchSacraments<T extends SacramentRecord>(tipo: Sacramen
   }
 }
 
-/** Crea la partida si todavía no tiene id; si no, la edita. Un admin la crea en la parroquia activa. */
+/**
+ * Crea la partida si todavía no tiene id (siempre en la parroquia del usuario); si no, la edita.
+ * Un usuario (ayudante) no edita: Electron guarda solo la corrección que pide, que queda pendiente.
+ */
 export async function saveSacrament(record: SacramentRecord): Promise<MutationResult> {
   const isNew = record.sacramento.id === undefined;
   try {
     if (isNew) {
-      const { rol, parroquiaActivaId } = useSessionStore.getState();
-      const parroquia_id = rol === 'admin' ? (parroquiaActivaId ?? undefined) : undefined;
-      await SacramentService.create({ ...record, sacramento: { ...record.sacramento, parroquia_id } });
+      await SacramentService.create(record);
     } else {
       await SacramentService.update(record);
     }

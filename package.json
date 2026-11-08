@@ -1,20 +1,22 @@
 {
   "name": "computacion-en-la-sociedad",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "dist-electron/index.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dist": "npm run build && electron-builder --win"
   },
   "dependencies": {
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4",
+    "read-excel-file": "^9.3.14",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -41,5 +43,33 @@
     "vite-plugin-electron": "^1.1.2",
     "vite-plugin-electron-renderer": "^1.0.0",
     "vitest": "^5.0.2"
+  },
+  "build": {
+    "appId": "pe.prelatura.registro",
+    "productName": "Registro Sacramental",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/instalador",
+        "to": "instalador",
+        "filter": [
+          "**/*.json"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

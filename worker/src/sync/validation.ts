@@ -1,7 +1,10 @@
 // Check everything before sending online
 
-import type { MinisterData, PersonCorrection, PersonData, RecordData, SacramentType } from '../../../shared/sync';
-import { detail_columns, people_count } from '../models/sacrament';
+import { detail_columns, is_known_field } from '../../../shared/record_fields';
+import { HISTORY_EVENTS } from '../../../shared/sync';
+import type { ChangeRequestData, HistoryData, HistoryFieldData, MinisterData, PersonCorrection, PersonData, RecordData, RequestState, RequestType, SacramentType, UserData } from '../../../shared/sync';
+import { people_count } from '../models/sacrament';
+import { is_role, PASSWORD_HASH_PATTERN, USERNAME_PATTERN } from '../models/user';
 import type { JsonObject } from '../utils/helpers';
 
 export class RejectedChange extends Error {}
@@ -39,9 +42,6 @@ function check_person(value: unknown): PersonData
 {
 	const person = (value ?? {}) as JsonObject;
 
-	if (!is_missing(person.edad) && !(is_integer(person.edad) && person.edad >= 0))
-		throw new RejectedChange('La edad no es válida.');
-
 	let dni = optional_text(person.dni, 'dni');
 	if (dni === '')
 		dni = null;
@@ -54,12 +54,16 @@ function check_person(value: unknown): PersonData
 		apellido_paterno: optional_text(person.apellido_paterno, 'apellido_paterno') ?? '',
 		apellido_materno: optional_text(person.apellido_materno, 'apellido_materno') ?? '',
 		fecha_nacimiento: optional_text(person.fecha_nacimiento, 'fecha_nacimiento'),
-		edad: person.edad ?? null,
+		fecha_aproximada: optional_text(person.fecha_aproximada, 'fecha_aproximada'),
 		lugar_nacimiento: optional_text(person.lugar_nacimiento, 'lugar_nacimiento'),
 		padre: optional_text(person.padre, 'padre'),
 		madre: optional_text(person.madre, 'madre'),
 	};
 }
+
+const CORRECTION_STATES = ['aprobado', 'rechazado'];
+
+const OLD_APP = 'Esta PC tiene una versión anterior de la app: actualícela para sincronizar.';
 
 function check_correction(value: unknown): PersonCorrection
 {
@@ -67,6 +71,16 @@ function check_correction(value: unknown): PersonCorrection
 
 	if (!is_integer(correction.usuario_id))
 		throw new RejectedChange('El usuario de la corrección no es válido.');
+
+	const state = correction.estado ?? 'aprobado';
+	if (state === 'pendiente')
+		throw new RejectedChange(OLD_APP);
+
+	if (!CORRECTION_STATES.includes(state))
+		throw new RejectedChange('El estado de la corrección no es válido.');
+
+	if (!is_missing(correction.revisado_por_usuario_id) && !is_integer(correction.revisado_por_usuario_id))
+		throw new RejectedChange('El usuario que revisó la corrección no es válido.');
 
 	return {
 		client_id: required_text(correction.client_id, 'client_id de la corrección'),
@@ -76,6 +90,89 @@ function check_correction(value: unknown): PersonCorrection
 		valor_anterior: optional_text(correction.valor_anterior, 'valor_anterior'),
 		valor_nuevo: optional_text(correction.valor_nuevo, 'valor_nuevo'),
 		fecha_cambio: required_text(correction.fecha_cambio, 'fecha de la corrección'),
+		estado: state,
+		revisado_por_usuario_id: correction.revisado_por_usuario_id ?? null,
+		revisado_en: optional_text(correction.revisado_en, 'revisado_en'),
+	};
+}
+
+const REQUEST_TYPES: RequestType[] = ['digitacion', 'nota_marginal'];
+const REQUEST_STATES: RequestState[] = ['pendiente', 'aprobado', 'rechazado', 'descartado'];
+const NAME_FIELDS = ['nombres', 'apellido_paterno', 'apellido_materno'];
+
+function check_request(type: SacramentType, value: unknown): ChangeRequestData
+{
+	const request = (value ?? {}) as JsonObject;
+
+	if (!is_known_field(type, request.parte, request.campo))
+		throw new RejectedChange('El dato de una solicitud de cambio no es válido.');
+
+	if (!REQUEST_TYPES.includes(request.tipo))
+		throw new RejectedChange('El tipo de una solicitud de cambio no es válido.');
+
+	if (request.tipo === 'nota_marginal' && (!NAME_FIELDS.includes(request.campo) || request.parte === 'sacramento' || request.parte === 'detalle'))
+		throw new RejectedChange('Una corrección por nota marginal solo cambia nombres y apellidos.');
+
+	if (!REQUEST_STATES.includes(request.estado))
+		throw new RejectedChange('El estado de una solicitud de cambio no es válido.');
+
+	if (!is_integer(request.usuario_id))
+		throw new RejectedChange('El usuario de una solicitud de cambio no es válido.');
+
+	if (!is_missing(request.revisado_por_usuario_id) && !is_integer(request.revisado_por_usuario_id))
+		throw new RejectedChange('El usuario que revisó una solicitud no es válido.');
+
+	if (request.estado === 'pendiente' && !is_missing(request.revisado_por_usuario_id))
+		throw new RejectedChange('Una solicitud pendiente todavía no tiene quién la revise.');
+
+	return {
+		client_id: required_text(request.client_id, 'client_id de la solicitud'),
+		usuario_id: request.usuario_id,
+		parte: request.parte,
+		campo: request.campo,
+		tipo: request.tipo,
+		valor_anterior: optional_text(request.valor_anterior, 'valor_anterior'),
+		valor_nuevo: optional_text(request.valor_nuevo, 'valor_nuevo'),
+		estado: request.estado,
+		motivo: optional_text(request.motivo, 'motivo'),
+		revisado_por_usuario_id: request.revisado_por_usuario_id ?? null,
+		revisado_en: optional_text(request.revisado_en, 'revisado_en'),
+		creado_en: required_text(request.creado_en, 'fecha de la solicitud'),
+	};
+}
+
+function check_history_field(type: SacramentType, value: unknown): HistoryFieldData
+{
+	const field = (value ?? {}) as JsonObject;
+
+	if (!is_known_field(type, field.parte, field.campo))
+		throw new RejectedChange('Un dato del historial no es válido.');
+
+	return {
+		parte: field.parte,
+		campo: field.campo,
+		valor_anterior: optional_text(field.valor_anterior, 'valor_anterior'),
+		valor_nuevo: optional_text(field.valor_nuevo, 'valor_nuevo'),
+	};
+}
+
+function check_history(type: SacramentType, value: unknown): HistoryData
+{
+	const entry = (value ?? {}) as JsonObject;
+
+	if (!HISTORY_EVENTS.includes(entry.evento))
+		throw new RejectedChange('Un evento del historial no es válido.');
+
+	if (!is_integer(entry.usuario_id))
+		throw new RejectedChange('El usuario de un evento del historial no es válido.');
+
+	return {
+		client_id: required_text(entry.client_id, 'client_id del historial'),
+		usuario_id: entry.usuario_id,
+		evento: entry.evento,
+		motivo: optional_text(entry.motivo, 'motivo'),
+		fecha: required_text(entry.fecha, 'fecha del historial'),
+		campos: Array.isArray(entry.campos) ? entry.campos.map((field: unknown) => check_history_field(type, field)) : [],
 	};
 }
 
@@ -128,12 +225,51 @@ export function check_record(type: SacramentType, value: unknown): RecordData
 		personas: people,
 		detalle: detail,
 		cambios: [],
+		solicitudes: [],
+		historial: [],
 	};
 
 	if (Array.isArray(record.cambios))
 		clean.cambios = record.cambios.map(check_correction);
 
+	if (Array.isArray(record.solicitudes))
+		clean.solicitudes = record.solicitudes.map((request: unknown) => check_request(type, request));
+
+	if (Array.isArray(record.historial))
+		clean.historial = record.historial.map((entry: unknown) => check_history(type, entry));
+
 	return clean;
+}
+
+export function check_user(value: unknown): UserData
+{
+	const user = (value ?? {}) as JsonObject;
+
+	if (!is_role(user.rol))
+		throw new RejectedChange('El rol no es válido.');
+
+	if (!is_missing(user.parroquia_id) && !is_integer(user.parroquia_id))
+		throw new RejectedChange('La parroquia no es válida.');
+
+	const username = required_text(user.username, 'username');
+	if (!USERNAME_PATTERN.test(username))
+		throw new RejectedChange('El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.');
+
+	const password_hash = optional_text(user.password_hash, 'password_hash');
+	if (password_hash !== null && !PASSWORD_HASH_PATTERN.test(password_hash))
+		throw new RejectedChange('La contraseña no viene en un formato válido.');
+
+	return {
+		client_id: required_text(user.client_id, 'client_id'),
+		parroquia_id: user.parroquia_id ?? null,
+		username: username,
+		rol: user.rol,
+		nombre: required_text(user.nombre, 'nombre'),
+		apellido_paterno: required_text(user.apellido_paterno, 'apellido_paterno'),
+		apellido_materno: optional_text(user.apellido_materno, 'apellido_materno') ?? '',
+		activo: user.activo === 0 ? 0 : 1,
+		password_hash: password_hash,
+	};
 }
 
 export function check_minister(value: unknown): MinisterData
@@ -148,8 +284,8 @@ export function check_minister(value: unknown): MinisterData
 		parroquia_id: minister.parroquia_id,
 		titulo: optional_text(minister.titulo, 'titulo'),
 		nombre: required_text(minister.nombre, 'nombre'),
-		apellido_paterno: required_text(minister.apellido_paterno, 'apellido_paterno'),
-		apellido_materno: required_text(minister.apellido_materno, 'apellido_materno'),
+		apellido_paterno: optional_text(minister.apellido_paterno, 'apellido_paterno') ?? '',
+		apellido_materno: optional_text(minister.apellido_materno, 'apellido_materno') ?? '',
 		activo: minister.activo === 0 ? 0 : 1,
 	};
 }

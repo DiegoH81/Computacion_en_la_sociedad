@@ -174,13 +174,13 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 
 	const people = db
 		.prepare(
-			`SELECT s.tipo, ${EVENT_DATE} AS fecha, pe.fecha_nacimiento, pe.edad
+			`SELECT s.tipo, ${EVENT_DATE} AS fecha, pe.fecha_nacimiento
 			 FROM (${PEOPLE_OF_ALL_SACRAMENTS}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
 			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${HAS_YEAR} AND substr(${EVENT_DATE}, 1, 4) = ?`,
 		)
-		.all(parish_id, String(year)) as { tipo: SacramentType; fecha: string; fecha_nacimiento: string | null; edad: number | null }[];
+		.all(parish_id, String(year)) as { tipo: SacramentType; fecha: string; fecha_nacimiento: string | null }[];
 
 	const ages = {} as Record<SacramentType, { bandas: number[]; sinDato: number; promedio: number | null }>;
 
@@ -196,7 +196,7 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 			if (person.tipo !== type)
 				continue;
 
-			const age = age_at(person.fecha_nacimiento, person.fecha) ?? person.edad;
+			const age = age_at(person.fecha_nacimiento, person.fecha);
 			if (age === null)
 			{
 				without_age += 1;
@@ -232,12 +232,11 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 		.prepare(
 			`SELECT
 				COALESCE(SUM(s.estado = 'anulado'), 0) AS anuladas,
-				COALESCE(SUM(s.estado = 'vigente' AND s.ministro_id IS NULL), 0) AS sinCelebrante,
-				COALESCE(SUM(s.estado = 'vigente' AND EXISTS (SELECT 1 FROM cambios_persona c WHERE c.sacramento_id = s.id)), 0) AS conCorrecciones
+				COALESCE(SUM(s.estado = 'vigente' AND EXISTS (SELECT 1 FROM cambios_persona c WHERE c.sacramento_id = s.id AND c.estado = 'aprobado')), 0) AS conCorrecciones
 			 FROM sacramentos s
 			 WHERE s.parroquia_id = ? AND ${HAS_YEAR} AND substr(${EVENT_DATE}, 1, 4) = ?`,
 		)
-		.get(parish_id, String(year)) as { anuladas: number; sinCelebrante: number; conCorrecciones: number };
+		.get(parish_id, String(year)) as { anuladas: number; conCorrecciones: number };
 
 	return {
 		anios: years,

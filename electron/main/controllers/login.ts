@@ -100,41 +100,52 @@ async function login_online(response: LoginResponse, username: string, password:
 	return response;
 }
 
-async function login_offline(username: string, password: string): Promise<LoginResponse>
+// La sesión empieza con los datos de esta PC. La sincronización queda corriendo en segundo plano:
+// si hay internet, pide el token con la misma contraseña (auto_sync.ts) y sube y baja lo pendiente.
+function start_local_session(user: LoginResponse['usuario'], username: string, password: string): LoginResponse
 {
-	const result = await verify_offline(get_database(), username, password);
-
-	if (!result.ok)
-	{
-		if (result.reason === 'sin-credencial')
-			throw new ServiceError('Sin conexión: este usuario debe iniciar sesión con internet la primera vez en esta PC.', 401);
-
-		throw new ServiceError('Usuario o contraseña incorrectos.', 401);
-	}
-
-	const user = result.usuario;
 	start_session({ user_id: user.id, role: user.rol, parish_id: user.parroquia_id, token: '' }, username, password);
 	start_auto_sync('sin-conexion');
+	void sync_now();
 
 	return { token: OFFLINE_TOKEN, usuario: user };
 }
 
+export const NOT_IN_THIS_PC = 'Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.';
+
 export async function login(payload: { username: string; password: string }): Promise<LoginResponse>
 {
+	const username = typeof payload?.username === 'string' ? payload.username.trim() : '';
+	const password = typeof payload?.password === 'string' ? payload.password : '';
+
+	let local: OfflineLoginResult = { ok: false, reason: 'sin-credencial' };
+	if (!database_needs_recovery())
+	{
+		local = await verify_offline(get_database(), username, password);
+		if (local.ok)
+			return start_local_session(local.usuario, username, password);
+	}
+
 	let response: LoginResponse;
 	try
 	{
-		response = await request_login(remote_request, payload.username, payload.password);
+		response = await request_login(remote_request, username, password);
 	}
 	catch (error)
 	{
-		if (is_connection_error(error))
-			return login_offline(payload.username, payload.password);
+		if (!is_connection_error(error))
+			throw error;
 
-		throw error;
+		if (database_needs_recovery())
+			throw new ServiceError('La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.', 503);
+
+		if (local.reason === 'sin-credencial')
+			throw new ServiceError(NOT_IN_THIS_PC, 401);
+
+		throw new ServiceError('Usuario o contraseña incorrectos.', 401);
 	}
 
-	return login_online(response, payload.username, payload.password);
+	return login_online(response, username, password);
 }
 
 

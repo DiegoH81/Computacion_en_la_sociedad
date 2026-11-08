@@ -20,14 +20,14 @@ import { get_sync_value, set_sync_value } from '../../electron/main/sync/queue';
 import { read_local_record } from '../../electron/main/sync/records';
 import { PUSH_BATCH_SIZE } from '../../electron/main/utils/config';
 
-const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
+const parish1: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 't' };
 
 const reference: ReferenceData = {
   parroquias: [{ id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 }],
   ministros: [{ id: 7, client_id: 'ministro-1', parroquia_id: 1, titulo: null, nombre: 'Manuel', apellido_paterno: 'Torres', apellido_materno: 'Rios', activo: 1, version: 3 }],
   usuarios: [
-    { id: 1, parroquia_id: 1, username: 'parroco1', rol: 'usuario_parroquia', nombre: 'Uno', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 },
-    { id: 9, parroquia_id: null, username: 'admin', rol: 'admin', nombre: 'Admin', apellido_paterno: 'A', apellido_materno: 'B', activo: 1 },
+    { id: 1, parroquia_id: 1, username: 'parroco1', rol: 'admin_parroquia', nombre: 'Uno', apellido_paterno: 'P', apellido_materno: 'M', activo: 1 },
+    { id: 9, parroquia_id: null, username: 'admin', rol: 'admin_general', nombre: 'Admin', apellido_paterno: 'A', apellido_materno: 'B', activo: 1 },
   ],
 };
 
@@ -57,7 +57,7 @@ const remotePartida = (overrides: Partial<RecordData> = {}): RecordData => ({
   version: 4,
   updated_at: '2026-01-01T00:00:00.000Z',
   personas: [
-    { client_id: 'persona-remota', dni: null, nombres: 'Ana', apellido_paterno: 'Paz', apellido_materno: 'Rey', fecha_nacimiento: null, edad: 5, lugar_nacimiento: null, padre: null, madre: null },
+    { client_id: 'persona-remota', dni: null, nombres: 'Ana', apellido_paterno: 'Paz', apellido_materno: 'Rey', fecha_nacimiento: null, fecha_aproximada: '5 años', lugar_nacimiento: null, padre: null, madre: null },
   ],
   detalle: { padrino_1: 'Pedro', padrino_2: null },
   cambios: [],
@@ -446,7 +446,7 @@ describe('login sin internet', () => {
 
     expect(await verify_offline(db, 'parroco1', 'clave-larga')).toEqual({
       ok: true,
-      usuario: { id: 1, rol: 'usuario_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1', nombre_completo: 'Uno P M' },
+      usuario: { id: 1, rol: 'admin_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1', nombre_completo: 'Uno P M' },
     });
   });
 

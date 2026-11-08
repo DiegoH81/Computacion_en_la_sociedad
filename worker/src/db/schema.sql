@@ -1,4 +1,4 @@
--- Solo para desarrollo: admin/admin123 y parroco1/parroco123.
+-- Solo para desarrollo: admin/admin123 (admin_general) y parroco1/parroco123 (admin_parroquia).
 -- En producción no se usa este archivo (ver worker/DEPLOY.md).
 -- ============ TABLAS ============
 
@@ -10,14 +10,21 @@ CREATE TABLE parroquias (
 
 CREATE TABLE usuarios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id TEXT NOT NULL DEFAULT (lower(hex(randomblob(16)))),
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
-  rol TEXT NOT NULL CHECK (rol IN ('admin', 'usuario_parroquia')),
+  rol TEXT NOT NULL CHECK (rol IN ('admin_general', 'admin_parroquia', 'usuario')),
   parroquia_id INTEGER NULL REFERENCES parroquias(id),
   activo INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-, nombre TEXT NOT NULL DEFAULT '', apellido_paterno TEXT NOT NULL DEFAULT '', apellido_materno TEXT NOT NULL DEFAULT ''
-, principal INTEGER NOT NULL DEFAULT 0);
+  principal INTEGER NOT NULL DEFAULT 0,
+  nombre TEXT NOT NULL DEFAULT '',
+  apellido_paterno TEXT NOT NULL DEFAULT '',
+  apellido_materno TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL DEFAULT 1,
+  ultimo_cola_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
 
 CREATE TABLE ministros (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +50,7 @@ CREATE TABLE personas (
   apellido_paterno  TEXT    NOT NULL,
   apellido_materno  TEXT    NOT NULL DEFAULT '',
   fecha_nacimiento  TEXT,
-  edad              INTEGER CHECK (edad IS NULL OR edad >= 0),
+  fecha_aproximada  TEXT,
   lugar_nacimiento  TEXT,
   padre             TEXT,
   madre             TEXT,
@@ -128,8 +135,54 @@ CREATE TABLE cambios_persona (
   campo_cambio   TEXT    NOT NULL,
   valor_anterior TEXT,
   valor_nuevo    TEXT,
-  fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  estado         TEXT    NOT NULL DEFAULT 'aprobado' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado')),
+  revisado_por_usuario_id INTEGER REFERENCES usuarios(id),
+  revisado_en    TEXT
 );
+
+CREATE TABLE solicitudes_cambio (
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id               TEXT    NOT NULL UNIQUE,
+  sacramento_id           INTEGER NOT NULL REFERENCES sacramentos(id),
+  usuario_id              INTEGER NOT NULL REFERENCES usuarios(id),
+  parte                   TEXT    NOT NULL CHECK (parte IN ('sacramento', 'persona', 'conyuge_1', 'conyuge_2', 'detalle')),
+  campo                   TEXT    NOT NULL,
+  tipo                    TEXT    NOT NULL CHECK (tipo IN ('digitacion', 'nota_marginal')),
+  valor_anterior          TEXT,
+  valor_nuevo             TEXT,
+  estado                  TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'descartado')),
+  motivo                  TEXT,
+  revisado_por_usuario_id INTEGER REFERENCES usuarios(id),
+  revisado_en             TEXT,
+  creado_en               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX idx_solicitudes_sacramento ON solicitudes_cambio (sacramento_id);
+
+CREATE TABLE historial_partidas (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id     TEXT    NOT NULL UNIQUE,
+  sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
+  usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
+  evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
+                                                   'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),
+  motivo        TEXT,
+  fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);
+
+CREATE TABLE historial_campos (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  historial_id   INTEGER NOT NULL REFERENCES historial_partidas(id),
+  parte          TEXT    NOT NULL,
+  campo          TEXT    NOT NULL,
+  valor_anterior TEXT,
+  valor_nuevo    TEXT
+);
+
+CREATE INDEX idx_historial_campos ON historial_campos (historial_id);
 
 CREATE TABLE sync_feed (
   seq           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,10 +203,10 @@ CREATE TABLE dispositivos (
 INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (1, 'Parroquia 1', 1, NULL);
 INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (2, 'Parroquia 2', 1, NULL);
 INSERT INTO "parroquias" ("id", "nombre", "activa", "ubicacion") VALUES (3, 'Parroquia 3', 1, NULL);
-INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (1, 'admin', '100000:ONr8hN0xK3ji61Hi4jmtVQ==:ODk7gds76M2Wqs/FpbZ7Shvj4JpVdYiABTVmNnpVPSc=', 'admin', NULL, 1, '2026-11-01 01:20:10', 'Administrador', 'De', 'Prueba');
-INSERT INTO "usuarios" ("id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (2, 'parroco1', '100000:FG9geNY/YFbv7KyJsADGoQ==:L6CaX3WNHwLSu5PTOr82shmb32hpm5B3Qdaewe/0Q5s=', 'usuario_parroquia', 1, 1, '2026-11-01 01:20:10', 'Usuario', 'Parroquia', 'Uno');
--- El administrador de prueba es el principal (ver migración 0013).
-UPDATE "usuarios" SET "principal" = 1 WHERE "username" = 'admin';
+INSERT INTO "usuarios" ("id", "client_id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (1, 'servidor-1', 'admin', '100000:ONr8hN0xK3ji61Hi4jmtVQ==:ODk7gds76M2Wqs/FpbZ7Shvj4JpVdYiABTVmNnpVPSc=', 'admin_general', NULL, 1, '2026-11-01 01:20:10', 'Administrador', 'De', 'Prueba');
+INSERT INTO "usuarios" ("id", "client_id", "username", "password_hash", "rol", "parroquia_id", "activo", "created_at", "nombre", "apellido_paterno", "apellido_materno") VALUES (2, 'servidor-2', 'parroco1', '100000:FG9geNY/YFbv7KyJsADGoQ==:L6CaX3WNHwLSu5PTOr82shmb32hpm5B3Qdaewe/0Q5s=', 'admin_parroquia', 1, 1, '2026-11-01 01:20:10', 'Usuario', 'Parroquia', 'Uno');
+-- admin es el principal de los administradores generales y parroco1 el de Parroquia 1 (migraciones 0013 y 0018).
+UPDATE "usuarios" SET "principal" = 1 WHERE "username" IN ('admin', 'parroco1');
 INSERT INTO "ministros" ("id", "client_id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id") VALUES (1, '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a01', 'Braulio', 'Guido', 'Alvaro', 1);
 INSERT INTO "ministros" ("id", "client_id", "nombre", "apellido_paterno", "apellido_materno", "parroquia_id") VALUES (2, '7c1f0a52-3f3e-4b7e-9a51-0d2c8e6b1a02', 'Manuel', 'Torres', 'Rios', 2);
 
@@ -164,9 +217,12 @@ CREATE UNIQUE INDEX idx_ministros_client_id ON ministros (client_id);
 
 CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
 
+CREATE UNIQUE INDEX idx_usuarios_client_id ON usuarios (client_id);
+
 CREATE INDEX idx_usuarios_busqueda ON usuarios (nombre, apellido_paterno, apellido_materno);
 
-CREATE UNIQUE INDEX idx_usuarios_un_principal ON usuarios (principal) WHERE principal = 1;
+-- Un principal por parroquia y uno entre los administradores generales (migración 0018).
+CREATE UNIQUE INDEX idx_usuarios_un_principal ON usuarios (IFNULL(parroquia_id, 0)) WHERE principal = 1;
 
 CREATE UNIQUE INDEX idx_parroquias_nombre_unico ON parroquias (nombre COLLATE NOCASE);
 
@@ -201,6 +257,17 @@ FOR EACH ROW
 WHEN NEW.version = OLD.version
 BEGIN
   UPDATE ministros
+     SET version = OLD.version + 1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+   WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER trg_usuarios_touch
+AFTER UPDATE ON usuarios
+FOR EACH ROW
+WHEN NEW.version = OLD.version
+BEGIN
+  UPDATE usuarios
      SET version = OLD.version + 1,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
    WHERE id = NEW.id;

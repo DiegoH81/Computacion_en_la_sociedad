@@ -25,7 +25,7 @@ async function setup(): Promise<void> {
     .prepare(
       `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno,
                              rol, parroquia_id, activo)
-       VALUES (1, 'admin', 'hash', 'Administrador', 'De', 'Prueba', 'admin', NULL, 1)`,
+       VALUES (1, 'admin', 'hash', 'Administrador', 'De', 'Prueba', 'admin_general', NULL, 1)`,
     )
     .run();
 

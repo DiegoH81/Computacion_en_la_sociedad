@@ -34,15 +34,13 @@ export async function handleLogin(
       usuarioNombre: response.usuario.nombre_completo,
       rol: response.usuario.rol,
       parroquiaId: response.usuario.parroquia_id,
-      // Para un admin sin parroquia fija, no hay parroquia activa todavía;
-      // se resuelve en SelectParishPage (flujo obligatorio, Fase 1).
+      // El administrador general no es de ninguna parroquia: elige cuál consultar en SelectParishPage.
       parroquiaActivaId: response.usuario.parroquia_id ?? 0,
       parroquiaActivaNombre: response.usuario.parroquia_nombre ?? '',
     });
 
-    // Regla pendiente de Fase 4: admin siempre pasa primero por selección de parroquia.
     const redirectTo =
-      response.usuario.rol === 'admin' ? '/parroquias/seleccionar' : '/dashboard';
+      response.usuario.rol === 'admin_general' ? '/parroquias/seleccionar' : '/dashboard';
 
     return { success: true, redirectTo };
   } catch (error) {

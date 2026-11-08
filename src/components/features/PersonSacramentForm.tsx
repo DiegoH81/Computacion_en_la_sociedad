@@ -2,6 +2,9 @@ import { useState } from 'react';
 import type { Baptism, Minister } from '../../../shared/models';
 import { emptyBaptism } from '../../lib/emptyRecords';
 import { newChanges, personOptions, recordedChanges, type CorrectionDraft } from '../../lib/personCorrections';
+import { pendingRequests, requestedBy, usesRequestedValues, withRequestedValues } from '../../lib/changeRequests';
+import { ConfirmActionDialog } from '../ui/ConfirmActionDialog';
+import { ChangeRequestNotice } from './ChangeRequestNotice';
 import { FormDialog } from '../ui/FormDialog';
 import { DuplicateWarning } from './DuplicateWarning';
 import { MarginalNotesSection } from './MarginalNotesSection';
@@ -9,6 +12,7 @@ import { SacramentCelebrationFields } from './SacramentCelebrationFields';
 import { SacramentPersonPanel } from './SacramentPersonPanel';
 import { SacramentRegisterPanel } from './SacramentRegisterPanel';
 import { useDuplicateCheck } from './useDuplicateCheck';
+import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
 
 export type PersonSacramentType = 'bautismo' | 'confirmacion';
@@ -30,6 +34,8 @@ interface PersonSacramentFormProps {
   priestOptions: Minister[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
+  /** Un usuario (ayudante) que edita: no modifica la partida, pide los cambios. */
+  onlyCorrections?: boolean;
 }
 
 /** El formulario de una partida de bautismo o de confirmación: se guardan igual. */
@@ -44,12 +50,18 @@ export function PersonSacramentForm({
   priestOptions,
   onSearchPriest,
   isSearchingPriests,
+  onlyCorrections = false,
 }: PersonSacramentFormProps) {
   const [record, setRecord] = useState<Baptism>(initialRecord ?? emptyBaptism(tipo));
   const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
   const labels = LABELS[tipo];
   const recorded = recordedChanges(record.persona);
-  const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length));
+  const isEditing = initialRecord !== undefined;
+  const pending = isEditing ? pendingRequests(record) : [];
+  // Un usuario con un pedido esperando no puede pedir otro: el formulario queda solo para ver.
+  const lockFields = onlyCorrections && pending.length > 0;
+  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
+  const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
 
   const { persona } = record;
   const duplicates = useDuplicateCheck(tipo, record.sacramento.id, [{
@@ -63,20 +75,43 @@ export function PersonSacramentForm({
     madre: persona.madre,
   }]);
 
+  // Las correcciones nuevas se agregan a las ya registradas (que Electron no vuelve a guardar).
+  const toSave = (): Baptism => ({ ...record, persona: { ...persona, cambios: [...persona.cambios, ...newChanges(drafts)] } });
+
   function handleSave() {
-    // Las correcciones nuevas se agregan a las ya registradas (que Electron no vuelve a guardar).
-    onSave({ ...record, persona: { ...persona, cambios: [...persona.cambios, ...newChanges(drafts)] } });
+    // El administrador que guarda sin usar lo que pidió un usuario lo descarta: se le pregunta antes.
+    if (!onlyCorrections && pending.length > 0 && !usesRequestedValues(toSave(), drafts, pending)) {
+      setIsConfirmingDiscard(true);
+      return;
+    }
+    onSave(toSave());
+  }
+
+  function applyRequestedValues() {
+    const result = withRequestedValues(record, pending);
+    setRecord(result.record as Baptism);
+    setDrafts((prev) => [...prev, ...result.drafts]);
+    if (result.drafts.length > 0 && !notes.isOpen) notes.toggle();
   }
 
   return (
     <FormDialog
-      title={initialRecord ? 'Editar partida' : 'Agregar partida'}
+      title={!isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
       onSave={handleSave}
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
-      notice={<DuplicateWarning sacramento={labels.sacramento} matches={duplicates.matches} total={duplicates.total} />}
+      saveLabel={isEditing && onlyCorrections ? 'Pedir cambio' : undefined}
+      canSave={!lockFields}
+      notice={
+        <>
+          {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
+          <DuplicateWarning sacramento={labels.sacramento} matches={duplicates.matches} total={duplicates.total} />
+        </>
+      }
     >
+      {!lockFields && <RequiredNote />}
+      <fieldset disabled={lockFields} className="contents">
       <SacramentRegisterPanel
         sacramento={record.sacramento}
         onChange={(changes) => setRecord((prev) => ({ ...prev, sacramento: { ...prev.sacramento, ...changes } }))}
@@ -92,7 +127,6 @@ export function PersonSacramentForm({
           priestOptions={priestOptions}
           onSearchPriest={onSearchPriest}
           isSearchingPriests={isSearchingPriests}
-          priestParishId={record.sacramento.parroquia_id}
           notesOpen={notes.isOpen}
           onToggleNotes={notes.toggle}
         />
@@ -101,6 +135,7 @@ export function PersonSacramentForm({
           onChange={(changes) => setRecord((prev) => ({ ...prev, persona: { ...prev.persona, ...changes } }))}
         />
       </div>
+      </fieldset>
 
       {notes.isOpen && (
         <MarginalNotesSection
@@ -111,6 +146,20 @@ export function PersonSacramentForm({
           corrections={drafts}
           onCorrectionsChange={setDrafts}
           recorded={recorded}
+          correctionsLocked={lockFields}
+        />
+      )}
+
+      {isConfirmingDiscard && (
+        <ConfirmActionDialog
+          title="Descartar el cambio pedido"
+          description={`Hay un cambio pendiente de ${requestedBy(pending)}. Si guarda sin usar esos valores, el pedido se descarta.`}
+          confirmLabel="Guardar y descartar"
+          onConfirm={() => {
+            setIsConfirmingDiscard(false);
+            onSave(toSave());
+          }}
+          onDismiss={() => setIsConfirmingDiscard(false)}
         />
       )}
     </FormDialog>

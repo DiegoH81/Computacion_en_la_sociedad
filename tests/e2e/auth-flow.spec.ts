@@ -1,7 +1,8 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { launchApp } from './launch';
 
 const WORKER_HEALTH_CHECK_URL = `${process.env.PRELATURA_API_URL}/api/parishes`;
 
@@ -32,16 +33,14 @@ test.afterEach(() => {
   rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
-async function launchApp(): Promise<{ app: ElectronApplication; window: Page }> {
-  const app = await electron.launch({
-    args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-  });
+async function openApp(): Promise<{ app: ElectronApplication; window: Page }> {
+  const app = await launchApp(userData);
   const window = await app.firstWindow();
   return { app, window };
 }
 
 test('usuario de parroquia inicia sesión y llega directo al dashboard', async () => {
-  const { app, window } = await launchApp();
+  const { app, window } = await openApp();
 
   await window.getByPlaceholder('Nombre de usuario').fill('parroco1');
   await window.getByPlaceholder('Contraseña').fill('parroco123');
@@ -63,7 +62,7 @@ test('usuario de parroquia inicia sesión y llega directo al dashboard', async (
 });
 
 test('admin inicia sesión y debe seleccionar parroquia antes del dashboard', async () => {
-  const { app, window } = await launchApp();
+  const { app, window } = await openApp();
 
   await window.getByPlaceholder('Nombre de usuario').fill('admin');
   await window.getByPlaceholder('Contraseña').fill('admin123');
@@ -88,7 +87,7 @@ test('admin inicia sesión y debe seleccionar parroquia antes del dashboard', as
 });
 
 test('credenciales incorrectas muestran mensaje de error sin revelar el motivo', async () => {
-  const { app, window } = await launchApp();
+  const { app, window } = await openApp();
 
   await window.getByPlaceholder('Nombre de usuario').fill('admin');
   await window.getByPlaceholder('Contraseña').fill('password-incorrecta');

@@ -250,7 +250,8 @@ export function find_duplicates(db: LocalDatabase, type: SacramentType, exclude_
 	const corrections = db
 		.prepare(
 			`SELECT persona_id, campo_cambio, valor_anterior FROM cambios_persona
-			 WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_anterior IS NOT NULL`,
+			 WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_anterior IS NOT NULL
+			   AND estado = 'aprobado'`,
 		)
 		.all() as { persona_id: number; campo_cambio: string; valor_anterior: string }[];
 

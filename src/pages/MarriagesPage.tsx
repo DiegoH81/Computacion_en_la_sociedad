@@ -5,14 +5,17 @@ import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { SacramentSearchPanel } from '../components/features/SacramentSearchPanel';
 import { MarriageForm } from '../components/features/MarriageForm';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
+import { HistoryDialog } from '../components/features/HistoryDialog';
 import { MarriagePrintView } from '../components/features/MarriagePrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
-import { A4Page, A4PrintPreview } from '../components/print/A4PrintPreview';
+import { CertificatePrintPreview } from '../components/print/CertificatePrintPreview';
 import { useSessionStore } from '../store/sessionStore';
+import { usePermissions } from '../lib/permissions';
 import { annulSacrament, saveSacrament, searchSacraments } from '../controllers/SacramentController';
 import { searchPriests } from '../controllers/PriestController';
 import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
+import { marriagePrintValues } from '../lib/printFields';
 
 const personName = (person: Person) => `${person.nombres} ${person.apellido_paterno} ${person.apellido_materno}`;
 
@@ -20,7 +23,6 @@ const personName = (person: Person) => `${person.nombres} ${person.apellido_pate
 export function MarriagesPage() {
   const navigate = useNavigate();
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
-  const rol = useSessionStore((state) => state.rol);
   const parroquiaId = useSessionStore((state) => state.parroquiaId);
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
@@ -40,6 +42,7 @@ export function MarriagesPage() {
   const [formState, setFormState] = useState<{ mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: Marriage }>({ mode: 'closed' });
   const [formError, setFormError] = useState<string | null>(null);
   const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
+  const [historyTargetId, setHistoryTargetId] = useState<number | null>(null);
   const [printing, setPrinting] = useState<{ record: Marriage; logo: string | null } | null>(null);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<Minister[]>([]);
@@ -76,11 +79,11 @@ export function MarriagesPage() {
     };
   }, [filters, currentPage, sortBy, sortDirection, parroquiaActivaId, reloadCounter]);
 
-  const canWrite = rol === 'admin' || parroquiaActivaId === parroquiaId;
+  const permissions = usePermissions();
+  const canWrite = permissions.canWrite;
 
   function canManage(recordParroquiaId: number): boolean {
-    if (rol === 'admin') return true;
-    return parroquiaActivaId === parroquiaId && recordParroquiaId === parroquiaId;
+    return canWrite && recordParroquiaId === parroquiaId;
   }
 
   function handleSearch(newFilters: Pick<SearchFilters, NameColumn>) {
@@ -187,6 +190,9 @@ export function MarriagesPage() {
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
+        canAnnul={permissions.canAdminister}
+        editLabel={permissions.onlyRequestsCorrections ? 'Pedir cambio' : 'Editar'}
+        onHistory={permissions.canAdminister ? (id) => setHistoryTargetId(id) : undefined}
         onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
@@ -205,8 +211,11 @@ export function MarriagesPage() {
           priestOptions={priestOptions}
           onSearchPriest={handleSearchPriest}
           isSearchingPriests={isSearchingPriests}
+          onlyCorrections={permissions.onlyRequestsCorrections}
         />
       )}
+
+      {historyTargetId !== null && <HistoryDialog sacramentoId={historyTargetId} onClose={() => setHistoryTargetId(null)} />}
 
       {annulmentTargetId !== null && (
         <AnnulmentModal
@@ -217,14 +226,11 @@ export function MarriagesPage() {
       )}
 
       {printing && (
-        <A4PrintPreview
-          title="Imprimir constancia"
+        <CertificatePrintPreview
+          kind="matrimonio"
+          values={marriagePrintValues(printing.record)}
+          fullCertificate={<MarriagePrintView record={printing.record} logo={printing.logo} />}
           onClose={() => setPrinting(null)}
-          pages={[
-            <A4Page key="certificado">
-              <MarriagePrintView record={printing.record} logo={printing.logo} />
-            </A4Page>,
-          ]}
         />
       )}
 

@@ -14,6 +14,8 @@
     --color-icon-button: #377C81;
     --color-icon-button-light: #5F969A;
     --color-user-avatar: #E9DDFB;
+    --color-pending-soft: #FBF0CF;
+    --color-pending-ink: #6B4E00;
 }
 
 @layer base {
@@ -21,7 +23,6 @@
         font-size: clamp(20px, 1.1vw, 28px);
     }
 
-    /* En la vista previa A4 todo se mide igual que en el papel. */
     html.print-preview-open {
         font-size: 16px;
     }
@@ -36,6 +37,15 @@
 @page {
     size: A4;
     margin: 0;
+}
+
+.a4-overlay {
+    position: relative;
+    box-sizing: border-box;
+    width: 210mm;
+    height: 297mm;
+    overflow: hidden;
+    background: white;
 }
 
 .a4-page {
@@ -74,6 +84,10 @@
 
     .a4-page {
         min-height: 296mm;
+    }
+
+    .a4-overlay {
+        height: 296mm;
     }
 
     .a4-table-head {

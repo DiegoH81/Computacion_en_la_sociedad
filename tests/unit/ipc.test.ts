@@ -10,7 +10,7 @@ import { open_local_database, type LocalDatabase } from '../../electron/main/db/
 import { save_reference_data } from '../../electron/main/sync/sync';
 import type { LocalResponse } from '../../electron/shared';
 import type { Baptism, Marriage, Minister, SearchPage } from '../../shared/models';
-import { baptism, marriage, minister, type BaptismValues } from './helpers/records';
+import { baptism, marriage, minister, type BaptismValues, TEST_MINISTER } from './helpers/records';
 
 // La pantalla habla con la base local por un único canal IPC. Estas pruebas llaman a ese canal
 // como lo haría la pantalla, y revisan la forma de cada respuesta.
@@ -64,9 +64,9 @@ vi.mock('../../electron/main/sync/auto_sync', () => {
 const { register_routes } = await import('../../electron/main/app');
 register_routes();
 
-const parish1: Session = { user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 't' };
-const parish2: Session = { user_id: 2, role: 'usuario_parroquia', parish_id: 2, token: 't' };
-const admin: Session = { user_id: 3, role: 'admin', parish_id: null, token: 't' };
+const parish1: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 't' };
+const parish2: Session = { user_id: 2, role: 'admin_parroquia', parish_id: 2, token: 't' };
+const admin: Session = { user_id: 3, role: 'admin_general', parish_id: null, token: 't' };
 
 let dir: string;
 let db: LocalDatabase;
@@ -90,7 +90,7 @@ const partida = (tipo: 'bautismo' | 'confirmacion', values: BaptismValues = {}) 
 beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), 'prelatura-ipc-'));
   db = open_local_database(path.join(dir, 'local.db'), randomBytes(32).toString('hex'));
-  const user = (id: number, parroquia_id: number | null, rol: 'admin' | 'usuario_parroquia') => ({
+  const user = (id: number, parroquia_id: number | null, rol: 'admin_general' | 'admin_parroquia' | 'usuario') => ({
     id,
     parroquia_id,
     username: `user${id}`,
@@ -105,8 +105,8 @@ beforeEach(() => {
       { id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 },
       { id: 2, nombre: 'Parroquia 2', ubicacion: null, activa: 1 },
     ],
-    ministros: [],
-    usuarios: [user(1, 1, 'usuario_parroquia'), user(2, 2, 'usuario_parroquia'), user(3, null, 'admin')],
+    ministros: [TEST_MINISTER],
+    usuarios: [user(1, 1, 'admin_parroquia'), user(2, 2, 'admin_parroquia'), user(3, null, 'admin_general')],
   });
   state.db = db;
   state.session = parish1;
@@ -243,12 +243,10 @@ describe('canal IPC de la base local', () => {
     expect(await call('parishes.saveLogo', { parroquia_id: 1, logo: null })).toMatchObject({ ok: false, status: 403 });
   });
 
-  it('un admin tiene que elegir la parroquia al crear', async () => {
+  it('el administrador general solo consulta: no registra partidas', async () => {
     state.session = admin;
-    expect(await call('sacraments.create', partida('bautismo'))).toEqual({ ok: false, message: 'Debe especificar la parroquia.', status: 400 });
-
-    const { id } = await data<{ id: number }>('sacraments.create', partida('bautismo', { sacramento: { parroquia_id: 2 } }));
-    expect((await data<Baptism>('sacraments.get', { id })).sacramento.parroquia_id).toBe(2);
+    expect(await call('sacraments.create', partida('bautismo', { sacramento: { parroquia_id: 2 } }))).toMatchObject({ ok: false, status: 403 });
+    expect(await data('sacraments.search', { tipo: 'bautismo' })).toMatchObject({ resultados: [] });
   });
 
   it('parroquias, logo, índice, estadísticas y duplicados', async () => {

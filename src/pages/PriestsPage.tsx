@@ -5,6 +5,7 @@ import { ManagementPanel, ActiveStatus } from '../components/features/Management
 import { PriestFormModal } from '../components/features/PriestFormModal';
 import type { Minister, NameColumn, SearchFilters } from '../../shared/models';
 import { useSessionStore } from '../store/sessionStore';
+import { usePermissions } from '../lib/permissions';
 import { searchPriests, createPriest, updatePriest, togglePriestActive } from '../controllers/PriestController';
 
 type Filters = Pick<SearchFilters, NameColumn>;
@@ -12,7 +13,6 @@ type Filters = Pick<SearchFilters, NameColumn>;
 export function PriestsPage() {
   const navigate = useNavigate();
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
-  const rol = useSessionStore((state) => state.rol);
   const parroquiaId = useSessionStore((state) => state.parroquiaId);
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
@@ -71,12 +71,14 @@ export function PriestsPage() {
     };
   }, [filters, currentPage, sortBy, sortDirection, parroquiaActivaId, reloadCounter]);
 
+  // Un usuario (ayudante) registra ministros; editarlos o deshabilitarlos es del párroco.
+  const permissions = usePermissions();
+
   function canManage(priestParroquiaId: number): boolean {
-    if (rol === 'admin') return true;
-    return parroquiaActivaId === parroquiaId && priestParroquiaId === parroquiaId;
+    return permissions.canAdminister && priestParroquiaId === parroquiaId;
   }
 
-  const canAddPriest = rol === 'admin' || parroquiaActivaId === parroquiaId;
+  const canAddPriest = permissions.canWrite;
 
   function handleSearch(newFilters: Filters) {
     setFilters(newFilters);

@@ -8,6 +8,7 @@
 2. Crea la base:
    - **Si es nueva:** `npm run db:setup`. Crea el modelo final con los usuarios de prueba `admin/admin123` y `parroco1/parroco123`.
    - **Si ya la tenías:** ejecuta `npx wrangler d1 execute prelatura-db --local --file=src/db/migrations/0011_sincronizacion.sql` y luego lo mismo con `0012_ministros_restricciones.sql`. La primera elimina las tablas `*_legacy` con sus datos de prueba.
+   - **Después, en cualquier base que ya existía**, aplica también `0014_fecha_aproximada.sql` (la edad pasa a ser texto libre) y `0015_roles_y_correcciones.sql` (tres roles, usuarios que se crean sin internet y correcciones pendientes de aprobar), en ese orden y con el mismo comando. En la base del cliente: `npx wrangler d1 migrations apply prelatura-db --remote`. **Hay que aplicarlas antes de instalar la versión nueva de la app**: una PC actualizada sube correcciones con estado y usuarios, que un Worker sin migrar rechaza.
 3. Enciende el Worker con `npx wrangler dev` y, en otra terminal, la app con `npm run dev` desde la raíz del proyecto.
 
 Las pruebas E2E levantan su propio Worker con una base temporal, así que no tocan esta base.
@@ -24,7 +25,7 @@ npx wrangler login
 npx wrangler whoami
 ```
 
-**2. Crea la base y actualiza `wrangler.jsonc`.** Copia el `database_id` que muestra el comando. Cambia también `name`, que hoy es el genérico `worker`, porque de él depende la URL.
+**2. Crea la base y actualiza `wrangler.jsonc`.** Copia el `database_id` que muestra el comando. El Worker ya se llama `registro-sacramental` (`name` en `wrangler.jsonc`): de ese nombre depende la URL.
 
 ```powershell
 npx wrangler d1 create prelatura-db
@@ -53,7 +54,7 @@ npx wrangler secret put DEVICE_KEY_SECRET
 npx wrangler deploy
 ```
 
-**6. Compila la app apuntando a esa URL.** En la raíz del proyecto, copia `.env.example` como `.env.production.local`, pon la URL que mostró el despliegue y ejecuta `npm run build`.
+**6. Pon esa URL en la app.** Crea `resources/instalador/configuracion.json` con la URL que mostró el despliegue, `{ "servidor": "https://registro-sacramental.<subdominio>.workers.dev" }`, y arma el instalador. Si la URL cambia después, basta con editar ese archivo en las PCs (ver `resources/instalador/LEEME.md`); no hay que volver a compilar. También se puede compilar con la URL fija (`.env.production.local` con `VITE_WORKER_URL`), que se usa solo si no hay archivo.
 
 ## Límites a vigilar
 

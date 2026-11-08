@@ -9,7 +9,7 @@ declare global {
 
 /** Avisa que cambió algo por subir, para que el indicador de sincronización no espere a su próxima revisión. */
 export const LOCAL_CHANGE_EVENT = 'prelatura:cambio-local';
-const CHANGES_QUEUE = /\.(create|update|annul|toggleActive)$/;
+const CHANGES_QUEUE = /\.(create|update|annul|toggleActive|review|confirm)$/;
 
 /** Llama a la lógica que corre en Electron sobre la base local. */
 export async function localRequest<T>(method: string, payload?: unknown): Promise<T> {

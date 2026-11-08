@@ -1,7 +1,7 @@
 import type { Minister, NameColumn, SearchFilters, SearchPage } from '../../../shared/models';
 import type { LocalDatabase } from '../db/database';
 import { read_minister } from '../models/minister';
-import { check_parish_access, parish_for_new } from '../models/parish';
+import { check_parish_admin, parish_for_new } from '../models/parish';
 import type { Session } from '../models/session';
 import { add_to_queue } from '../sync/queue';
 import { PAGE_SIZE } from '../utils/config';
@@ -39,7 +39,7 @@ function check_can_manage_minister(db: LocalDatabase, session: Session, id: numb
 	if (!minister)
 		throw new ServiceError(NOT_FOUND, 404);
 
-	check_parish_access(session, minister.parroquia_id, 'No tiene permiso para modificar ministros de otra parroquia.');
+	check_parish_admin(session, minister.parroquia_id, 'No tiene permiso para modificar ministros de otra parroquia.', 'Solo el administrador de la parroquia puede modificar ministros.');
 }
 
 function queue_minister(db: LocalDatabase, id: number): void
@@ -96,7 +96,7 @@ export function search_ministers(db: LocalDatabase, filters: SearchFilters): Sea
 
 export function create_minister(db: LocalDatabase, session: Session, minister: Minister): number
 {
-	const parish_id = parish_for_new(session, minister?.parroquia_id);
+	const parish_id = parish_for_new(session);
 	const values = clean_minister(minister);
 	const client_id = crypto.randomUUID();
 

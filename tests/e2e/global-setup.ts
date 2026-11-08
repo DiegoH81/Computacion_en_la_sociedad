@@ -48,6 +48,8 @@ export default async function globalSetup() {
   await waitForWorker(url, server);
   process.env.PRELATURA_API_URL = url;
   process.env.PRELATURA_WORKER_URL = url;
+  // Las pruebas empiezan con una PC vacía: que no cargue el paquete de resources/instalador.
+  process.env.PRELATURA_SIN_PAQUETE = '1';
 
   return async () => {
     // shell: true crea un árbol de procesos: hay que cerrar también a wrangler y workerd.

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { ManagementPanel, RowBadge, ActiveStatus } from '../components/features/ManagementPanel';
 import type { NameColumn, SearchFilters, User } from '../../shared/models';
+import { cannot_make_principal, type Actor } from '../../shared/users';
 import { UserFormModal } from '../components/features/UserFormModal';
 import { ConfirmActionDialog } from '../components/ui/ConfirmActionDialog';
 import { useSessionStore } from '../store/sessionStore';
@@ -16,6 +17,7 @@ import {
   makePrincipal,
 } from '../controllers/UserController';
 import type { Parish } from '../services/AuthService';
+import { ROLE_LABELS } from '../lib/permissions';
 
 type Filters = Pick<SearchFilters, NameColumn>;
 
@@ -23,7 +25,11 @@ export function UsersPage() {
   const navigate = useNavigate();
   const usuarioId = useSessionStore((state) => state.usuarioId);
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
+  const rol = useSessionStore((state) => state.rol);
+  const parroquiaId = useSessionStore((state) => state.parroquiaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
+  // El administrador de una parroquia solo gestiona los usuarios de la suya.
+  const isGeneralAdmin = rol === 'admin_general';
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,13 +44,13 @@ export function UsersPage() {
   // Se incrementa tras guardar o deshabilitar para volver a pedir la lista.
   const [reloadCounter, setReloadCounter] = useState(0);
 
-  // Si esta cuenta es el administrador principal. Se vuelve a preguntar tras cada cambio.
+  // Si esta cuenta es la principal (general, o de su parroquia). Se vuelve a preguntar tras cada cambio.
   const [isPrincipal, setIsPrincipal] = useState(false);
+  const actor: Actor = { id: usuarioId ?? 0, rol: rol ?? 'usuario', parroquia_id: parroquiaId ?? null, principal: isPrincipal };
   // El admin al que se le pasaría la marca, mientras se pide confirmar.
   const [newPrincipal, setNewPrincipal] = useState<User | null>(null);
 
   const [parishes, setParishes] = useState<Parish[]>([]);
-  const [parishesVersion, setParishesVersion] = useState(0);
 
   const [modalState, setModalState] = useState<
     { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; user: User }
@@ -117,7 +123,7 @@ export function UsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [parishesVersion]);
+  }, []);
 
   function handleSearch(newFilters: Filters) {
     setFilters(newFilters);
@@ -143,8 +149,6 @@ export function UsersPage() {
   async function handleSave(user: User, confirmPassword: string) {
     if (modalState.mode === 'closed') return;
 
-    const wasCreating = modalState.mode === 'create';
-
     setIsSaving(true);
     setModalError(null);
 
@@ -163,9 +167,6 @@ export function UsersPage() {
 
     closeModal();
     setReloadCounter((count) => count + 1);
-    if (wasCreating) {
-      setParishesVersion((version) => version + 1);
-    }
   }
 
   async function handleToggleActive(userId: number) {
@@ -185,7 +186,7 @@ export function UsersPage() {
     if (!newPrincipal) return;
 
     setErrorMessage(null);
-    const result = await makePrincipal(newPrincipal.id as number);
+    const result = await makePrincipal(newPrincipal.username);
     setNewPrincipal(null);
 
     if (!result.success) {
@@ -223,11 +224,11 @@ export function UsersPage() {
           { header: 'Nombre', render: (user) => user.nombre },
           { header: 'Apellido paterno', render: (user) => user.apellido_paterno },
           { header: 'Apellido materno', render: (user) => user.apellido_materno },
-          // Esta pantalla solo la ve un administrador, y el Worker revisa el rol en cada petición:
+          // Esta pantalla solo la ven los administradores, y Electron revisa el rol en cada operación:
           // mostrarlo no le da a nadie un permiso que no tenga.
-          { header: 'Tipo', render: (user) => (user.rol === 'admin' ? 'Administrador' : 'Usuario de parroquia') },
-          // Un administrador no es de ninguna parroquia.
-          { header: 'Parroquia', render: (user) => (user.rol === 'admin' ? '—' : (user.parroquia_nombre ?? '—')) },
+          { header: 'Tipo', render: (user) => ROLE_LABELS[user.rol] },
+          // Un administrador general no es de ninguna parroquia.
+          { header: 'Parroquia', render: (user) => (user.rol === 'admin_general' ? '—' : (user.parroquia_nombre ?? '—')) },
           { header: 'Estado', render: (user) => <ActiveStatus isActive={user.activo === 1} /> },
         ]}
         emptyText="No se encontraron usuarios."
@@ -245,19 +246,27 @@ export function UsersPage() {
           currentPage,
           totalPages,
           onPageChange: setCurrentPage,
-          parishFilter: {
-            parishes,
-            value: parishFilter,
-            onChange: (parishId) => {
-              setParishFilter(parishId);
-              setCurrentPage(1);
-            },
-          },
+          parishFilter: isGeneralAdmin
+            ? {
+                parishes,
+                value: parishFilter,
+                onChange: (parishId) => {
+                  setParishFilter(parishId);
+                  setCurrentPage(1);
+                },
+              }
+            : undefined,
         }}
         onAdd={openCreate}
-        // El Worker repite esta regla: aquí solo se evita marcar lo que rechazaría.
-        // A otro administrador solo lo modifica el principal.
-        isSelectable={(user) => user.id === usuarioId || user.rol !== 'admin' || isPrincipal}
+        // Electron y el Worker repiten esta regla (shared/users.ts): aquí solo se evita marcar lo que rechazarían.
+        // A otro administrador general solo lo modifica el principal; en una parroquia, a los usuarios los
+        // modifica cualquier administrador de ella, y a los administradores, solo su principal.
+        isSelectable={(user) => {
+          if (user.id === usuarioId) return true;
+          if (isGeneralAdmin) return user.rol !== 'admin_general' || isPrincipal;
+          if (user.parroquia_id !== parroquiaId) return false;
+          return user.rol === 'usuario' || (user.rol === 'admin_parroquia' && isPrincipal);
+        }}
         actions={[
           {
             label: () => 'Editar',
@@ -271,16 +280,16 @@ export function UsersPage() {
           {
             label: (user) => (user?.activo === 0 ? 'Habilitar' : 'Deshabilitar'),
             color: 'bg-solid-red',
-            // Nadie se deshabilita a sí mismo: así siempre queda alguien que administre.
-            isEnabled: (user) => user.id !== usuarioId,
+            // Nadie se deshabilita a sí mismo, ni al principal (primero se pasa la marca): siempre queda quien administre.
+            isEnabled: (user) => user.id !== usuarioId && !(user.principal === 1 && user.activo === 1),
             onClick: (user) => handleToggleActive(user.id as number),
           },
-          ...(isPrincipal
+          ...(isPrincipal || isGeneralAdmin
             ? [
                 {
                   label: () => 'Hacer principal',
                   color: 'bg-amber-600',
-                  isEnabled: (user: User) => user.rol === 'admin' && user.id !== usuarioId && user.activo === 1,
+                  isEnabled: (user: User) => user.activo === 1 && cannot_make_principal(actor, { id: user.id, rol: user.rol, parroquia_id: user.parroquia_id, principal: user.principal === 1 }) === null,
                   onClick: setNewPrincipal,
                 },
               ]
@@ -291,7 +300,11 @@ export function UsersPage() {
       {newPrincipal && (
         <ConfirmActionDialog
           title={`¿Hacer principal a ${newPrincipal.username}?`}
-          description="Esa cuenta pasa a ser la única que crea y modifica administradores. Usted queda como administrador común y no puede recuperar la marca por su cuenta."
+          description={
+            newPrincipal.rol === 'admin_general'
+              ? 'Esa cuenta pasa a ser la única que crea y modifica administradores generales. Usted queda como administrador general común y no puede recuperar la marca por su cuenta. Necesita internet.'
+              : 'Esa cuenta pasa a ser el administrador principal de su parroquia: la única que crea, modifica y deshabilita a los demás administradores de ella. El principal actual queda como administrador común. Necesita internet.'
+          }
           confirmLabel="Sí, pasar la marca"
           onConfirm={handleMakePrincipal}
           onDismiss={() => setNewPrincipal(null)}
@@ -303,7 +316,10 @@ export function UsersPage() {
           mode={modalState.mode}
           parishes={parishes}
           initialValues={modalState.mode === 'edit' ? modalState.user : undefined}
-          canCreateAdmin={isPrincipal}
+          actorRole={rol ?? 'usuario'}
+          actorParishName={parishes.find((parish) => parish.id === parroquiaId)?.nombre ?? ''}
+          canCreateGeneralAdmin={isGeneralAdmin && isPrincipal}
+          canCreateParishAdmin={!isGeneralAdmin && isPrincipal}
           onSave={handleSave}
           onCancel={closeModal}
           isLoading={isSaving}

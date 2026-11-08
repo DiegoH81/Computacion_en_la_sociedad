@@ -4,7 +4,7 @@ import type { LocalDatabase } from '../db/database';
 import { ServiceError } from '../utils/errors';
 import { clean_text } from '../utils/helpers';
 import { read_minister } from './minister';
-import { check_parish_access, read_parish } from './parish';
+import { check_parish_admin, read_parish } from './parish';
 import type { Session } from './session';
 
 export function is_sacrament_type(value: unknown): value is SacramentType
@@ -85,14 +85,23 @@ function clean_sacrament(sacrament: Sacrament): SacramentColumns
 	};
 }
 
-export function check_can_manage(db: LocalDatabase, session: Session, sacrament_id: number, type: SacramentType): void
+export function sacrament_parish(db: LocalDatabase, sacrament_id: number, type: SacramentType): number
 {
 	const sacrament = db.prepare('SELECT parroquia_id FROM sacramentos WHERE id = ? AND tipo = ?').get(sacrament_id, type) as { parroquia_id: number } | undefined;
 
 	if (!sacrament)
 		throw new ServiceError('Partida no encontrada.', 404);
 
-	check_parish_access(session, sacrament.parroquia_id, 'No tiene permiso para modificar partidas de otra parroquia.');
+	return sacrament.parroquia_id;
+}
+
+export const OTHER_PARISH_RECORD = 'No tiene permiso para modificar partidas de otra parroquia.';
+
+// Editar directamente o anular: solo el párroco. Un usuario pide la corrección (ver request_corrections).
+export function check_can_manage(db: LocalDatabase, session: Session, sacrament_id: number, type: SacramentType): void
+{
+	const parish_id = sacrament_parish(db, sacrament_id, type);
+	check_parish_admin(session, parish_id, OTHER_PARISH_RECORD, 'Solo el administrador de la parroquia puede modificar o anular una partida. Pida la corrección con una nota marginal.');
 }
 
 function check_minister_parish(db: LocalDatabase, minister_id: number | null, parish_id: number): void

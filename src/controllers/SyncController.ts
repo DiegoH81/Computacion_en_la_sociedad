@@ -6,6 +6,9 @@ import { useSessionStore } from '../store/sessionStore';
 import { useSyncStore } from '../store/syncStore';
 
 const POLL_INTERVAL_MS = 5_000;
+// Mientras una sincronización está en curso (por ejemplo, la que arranca sola al iniciar sesión),
+// se revisa más seguido para no dejar "Sincronizando…" en pantalla cuando ya terminó.
+const BUSY_POLL_INTERVAL_MS = 1_000;
 
 function publish(status: SyncStatus): void {
   useSyncStore.getState().setStatus(status);
@@ -17,17 +20,32 @@ function publish(status: SyncStatus): void {
 /** Mantiene el estado al día. Lo usa solo el indicador, que está en todas las pantallas con sesión. */
 export function useSyncPolling(): void {
   useEffect(() => {
-    const refresh = () => {
-      SyncService.status()
-        .then(publish)
-        .catch(() => useSyncStore.getState().setStatus(null));
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let stopped = false;
+
+    const schedule = (busy: boolean) => {
+      if (stopped) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(refresh, busy ? BUSY_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
     };
 
+    function refresh() {
+      SyncService.status()
+        .then((status) => {
+          publish(status);
+          schedule(status.en_curso);
+        })
+        .catch(() => {
+          useSyncStore.getState().setStatus(null);
+          schedule(false);
+        });
+    }
+
     refresh();
-    const interval = setInterval(refresh, POLL_INTERVAL_MS);
     window.addEventListener(LOCAL_CHANGE_EVENT, refresh);
     return () => {
-      clearInterval(interval);
+      stopped = true;
+      if (timer) clearTimeout(timer);
       window.removeEventListener(LOCAL_CHANGE_EVENT, refresh);
     };
   }, []);

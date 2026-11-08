@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import type { Role } from '../../shared/sync';
 
-export type Rol = 'admin' | 'usuario_parroquia';
+export type Rol = Role;
 
 interface SessionState {
   isAuthenticated: boolean;

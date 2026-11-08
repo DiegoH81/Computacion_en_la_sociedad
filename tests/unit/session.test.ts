@@ -8,7 +8,7 @@ import { OFFLINE_TOKEN } from '../../electron/shared';
 import { ServiceError } from '../../electron/main/utils/errors';
 import { open_local_database, type LocalDatabase } from '../../electron/main/db/database';
 import { create_person_sacrament } from '../../electron/main/controllers/sacraments';
-import { baptism } from './helpers/records';
+import { baptism, TEST_MINISTER } from './helpers/records';
 import type { RemoteOptions } from '../../electron/main/sync/online';
 
 // La sesión con un servidor falso: login con y sin internet, token vencido y sincronización.
@@ -59,8 +59,8 @@ let db: LocalDatabase;
 
 const REFERENCE = {
   parroquias: [{ id: 1, nombre: 'Parroquia 1', ubicacion: null, activa: 1 }],
-  ministros: [],
-  usuarios: [{ id: 1, parroquia_id: 1, username: 'ana', rol: 'usuario_parroquia', nombre: 'Ana', apellido_paterno: 'Rojas', apellido_materno: 'Paz', activo: 1 }],
+  ministros: [TEST_MINISTER],
+  usuarios: [{ id: 1, parroquia_id: 1, username: 'ana', rol: 'admin_parroquia', nombre: 'Ana', apellido_paterno: 'Rojas', apellido_materno: 'Paz', activo: 1 }],
 };
 
 function require_token(options: RemoteOptions): void {
@@ -76,7 +76,7 @@ function default_routes(): Record<string, Route> {
       valid_tokens.add(token);
       return {
         token,
-        usuario: { id: 1, nombre_completo: 'Ana Rojas Paz', rol: 'usuario_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1' },
+        usuario: { id: 1, nombre_completo: 'Ana Rojas Paz', rol: 'admin_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1' },
       };
     },
     '/api/reference': (options) => {
@@ -125,7 +125,7 @@ describe('sesión', () => {
 
     expect(response.token).toBe('token-1');
     expect(response.usuario.nombre_completo).toBe('Ana Rojas Paz');
-    expect(session.require_session()).toEqual({ user_id: 1, role: 'usuario_parroquia', parish_id: 1, token: 'token-1' });
+    expect(session.require_session()).toEqual({ user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 'token-1' });
     expect(db.prepare('SELECT COUNT(*) FROM credenciales_locales WHERE usuario_id = 1').pluck().get()).toBe(1);
     expect(paths()).toEqual(['/api/auth/login', '/api/reference', '/api/reference', '/api/sync/pull']);
 
@@ -143,13 +143,22 @@ describe('sesión', () => {
     expect(() => session.require_session()).toThrow('Sesión no válida.');
   });
 
-  it('sin internet: exige un primer ingreso con conexión', async () => {
+  it('sin internet: un usuario que esta PC no conoce no entra, y se le dice cómo', async () => {
     state.offline = true;
-    // El usuario existe en la base, pero nunca entró con internet en esta PC.
-    await session.login({ username: 'ana', password: PASSWORD }).catch(() => undefined);
-    await expect(session.login({ username: 'ana', password: PASSWORD })).rejects.toThrow(
-      'Sin conexión: este usuario debe iniciar sesión con internet la primera vez en esta PC.',
-    );
+    await expect(session.login({ username: 'ana', password: PASSWORD })).rejects.toThrow(session.NOT_IN_THIS_PC);
+  });
+
+  it('con la contraseña guardada en esta PC entra sin preguntar al servidor, y sincroniza después', async () => {
+    await session.login({ username: 'ana', password: PASSWORD });
+    session.logout();
+    state.calls = [];
+
+    const response = await session.login({ username: 'ana', password: PASSWORD });
+
+    expect(response.token).toBe(OFFLINE_TOKEN);
+    expect(paths()[0]).not.toBe('/api/reference');
+    await session.sync_now();
+    expect(session.get_sync_status().modo).toBe('en-linea');
   });
 
   it('sin internet, después de un ingreso con conexión, valida contra lo guardado', async () => {

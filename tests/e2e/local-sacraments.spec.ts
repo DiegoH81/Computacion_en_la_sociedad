@@ -1,8 +1,11 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { open_local_database } from '../../electron/main/db/database';
+import { chooseYear, completeRequired, field, saveRecord } from './form-helpers';
+import { write_legacy_excel, write_xlsx } from './xlsx-fixture';
+import { launchApp } from './launch';
 
 // El primer login y los datos de referencia vienen del Worker de pruebas (global-setup.ts).
 
@@ -10,9 +13,7 @@ let userData: string;
 let app: ElectronApplication | null = null;
 
 async function launchAndLogin(): Promise<Page> {
-  app = await electron.launch({
-    args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-  });
+  app = await launchApp(userData);
   const window = await app.firstWindow();
   await window.getByPlaceholder('Nombre de usuario').fill('parroco1');
   await window.getByPlaceholder('Contraseña').fill('parroco123');
@@ -21,8 +22,6 @@ async function launchAndLogin(): Promise<Page> {
   return window;
 }
 
-const field = (window: Page, label: string) => window.locator(`label:text-is("${label}") + input`).last();
-
 async function fillRegister(window: Page, registro: string, labelPrefix = 'N°') {
   await field(window, 'Fecha del sacramento').fill('2020-05-10');
   await field(window, `${labelPrefix} libro`).fill('7');
@@ -30,10 +29,7 @@ async function fillRegister(window: Page, registro: string, labelPrefix = 'N°')
   await field(window, `${labelPrefix} registro`).fill(registro);
 }
 
-async function save(window: Page) {
-  await window.getByRole('button', { name: 'Guardar cambios' }).click();
-  await expect(window.getByRole('button', { name: 'Guardar cambios' })).toBeHidden();
-}
+const save = saveRecord;
 
 test.beforeEach(() => {
   userData = mkdtempSync(path.join(tmpdir(), 'prelatura-sacraments-'));
@@ -55,8 +51,8 @@ test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras r
   await field(window, 'Nombres').fill('Diago');
   await field(window, 'Apellido paterno').fill('Quispe');
   await field(window, 'Apellido materno').fill('Mamani');
-  await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
-  await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('30');
+  await window.getByRole('checkbox', { name: 'Prefiere fecha aproximada', exact: true }).check();
+  await window.getByRole('textbox', { name: 'Fecha aproximada', exact: true }).fill('30');
   await window.getByRole('combobox', { name: 'Fecha de bautizo: año' }).selectOption('2001');
   await window.getByRole('combobox', { name: 'Fecha de bautizo: mes' }).selectOption('08');
   await window.getByRole('combobox', { name: 'Fecha de bautizo: día' }).selectOption('15');
@@ -70,7 +66,7 @@ test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras r
   await window.getByRole('checkbox', { name: 'Seleccionar partida 501' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
   await expect(field(window, 'DNI')).toHaveValue('12345678');
-  await expect(window.getByRole('spinbutton', { name: 'Edad', exact: true })).toHaveValue('30');
+  await expect(window.getByRole('textbox', { name: 'Fecha aproximada', exact: true })).toHaveValue('30');
   await expect(window.getByRole('combobox', { name: 'Fecha de bautizo: mes' })).toHaveValue('08');
   await expect(window.getByPlaceholder('Buscar celebrante...')).toHaveValue(/Braulio Guido/);
   await expect(window.getByRole('textbox', { name: 'Anotaciones', exact: true })).toHaveValue('Nota de bautismo');
@@ -97,7 +93,7 @@ test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras r
   await expect(window.getByText('No se encontraron partidas.')).toBeVisible();
 });
 
-test('confirmación: conserva edad y DNI, y se puede anular con motivo', async () => {
+test('confirmación: conserva fecha aproximada y DNI, y se puede anular con motivo', async () => {
   const window = await launchAndLogin();
   await window.getByRole('button', { name: 'Índice y partida de confirmación' }).click();
 
@@ -107,8 +103,8 @@ test('confirmación: conserva edad y DNI, y se puede anular con motivo', async (
   await field(window, 'Nombres').fill('Lucia');
   await field(window, 'Apellido paterno').fill('Flores');
   await field(window, 'Apellido materno').fill('Rojas');
-  await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
-  await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('15');
+  await window.getByRole('checkbox', { name: 'Prefiere fecha aproximada', exact: true }).check();
+  await window.getByRole('textbox', { name: 'Fecha aproximada', exact: true }).fill('15');
   await window.getByRole('combobox', { name: 'Fecha de confirmación: año' }).selectOption('2015');
   await window.getByRole('combobox', { name: 'Fecha de confirmación: mes' }).selectOption('11');
   await window.getByRole('combobox', { name: 'Fecha de confirmación: día' }).selectOption('20');
@@ -122,7 +118,7 @@ test('confirmación: conserva edad y DNI, y se puede anular con motivo', async (
   await window.getByRole('checkbox', { name: 'Seleccionar partida 502' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
   await expect(field(window, 'DNI')).toHaveValue('87654321');
-  await expect(window.getByRole('spinbutton', { name: 'Edad', exact: true })).toHaveValue('15');
+  await expect(window.getByRole('textbox', { name: 'Fecha aproximada', exact: true })).toHaveValue('15');
   await expect(window.getByRole('combobox', { name: 'Fecha de confirmación: mes' })).toHaveValue('11');
   await expect(window.getByPlaceholder('Buscar celebrante...')).toHaveValue(/Braulio Guido/);
   await expect(field(window, 'Padrino')).toHaveValue('Mario');
@@ -226,9 +222,9 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
   await window.getByRole('textbox', { name: 'Nombres del esposo' }).fill('Carlos');
   await window.getByRole('textbox', { name: 'Nombres de la esposa' }).fill('Elena');
 
-  // La partida física puede traer solo la edad: se registra una de las dos.
-  await window.getByRole('checkbox', { name: 'Prefiere edad del esposo' }).check();
-  await window.getByRole('spinbutton', { name: 'Edad del esposo' }).fill('30');
+  // La partida física puede traer solo una fecha aproximada: se registra una de las dos.
+  await window.getByRole('checkbox', { name: 'Prefiere fecha aproximada del esposo' }).check();
+  await window.getByRole('textbox', { name: 'Fecha aproximada del esposo' }).fill('30');
   await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: año' }).selectOption('1996');
   await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: mes' }).selectOption('02');
   await window.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' }).selectOption('29');
@@ -245,6 +241,7 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
   await window.getByRole('textbox', { name: 'Campo nuevo' }).nth(1).fill('Elenita');
 
   // Una fila sin valor nuevo no se guarda, y el aviso se ve dentro de la ventana.
+  await completeRequired(window);
   await window.getByRole('button', { name: 'Guardar cambios' }).click();
   await expect(window.getByRole('dialog').getByRole('alert')).toContainText('Indique el valor nuevo');
   await window.getByRole('button', { name: 'Quitar' }).first().click();
@@ -258,7 +255,7 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
   const dialog = window.getByRole('dialog', { name: 'Editar partida' });
   await expect(dialog.getByRole('textbox', { name: 'Nombres de la esposa' })).toHaveValue('Elenita');
   await expect(dialog.getByRole('region', { name: 'Anotaciones marginales' })).toContainText('Nombres de la esposa: Elena → Elenita');
-  await expect(dialog.getByRole('spinbutton', { name: 'Edad del esposo' })).toHaveValue('30');
+  await expect(dialog.getByRole('textbox', { name: 'Fecha aproximada del esposo' })).toHaveValue('30');
   await expect(dialog.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' })).toHaveValue('29');
   await expect(dialog.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: año' })).toHaveValue('1996');
   await expect(dialog.getByRole('textbox', { name: 'Anotaciones', exact: true })).toHaveValue('Nota de prueba');
@@ -346,6 +343,8 @@ test('constancias: el logo registrado en esta PC sale en las tres, con los datos
   const printLatest = async (registro: string) => {
     await window.getByRole('checkbox', { name: `Seleccionar partida ${registro}` }).click();
     await window.getByRole('button', { name: 'Imprimir', exact: true }).click();
+    // Primero se ofrece imprimir sobre el formato; la constancia completa es la segunda opción.
+    await window.getByRole('button', { name: 'Constancia completa' }).click();
     await expect(window.locator('.a4-page img[alt="Logo de la parroquia"]')).toBeVisible();
     return window.locator('.a4-page');
   };
@@ -393,15 +392,16 @@ test('constancias: el logo registrado en esta PC sale en las tres, con los datos
   await fillRegister(window, '603', 'N° de');
   await window.getByRole('textbox', { name: 'Nombres del esposo' }).fill('Carlos');
   await window.getByRole('textbox', { name: 'Nombres de la esposa' }).fill('Elena');
-  await window.getByRole('checkbox', { name: 'Prefiere edad del esposo' }).check();
-  await window.getByRole('spinbutton', { name: 'Edad del esposo' }).fill('30');
+  await window.getByRole('checkbox', { name: 'Prefiere fecha aproximada del esposo' }).check();
+  await window.getByRole('textbox', { name: 'Fecha aproximada del esposo' }).fill('(30 AÑOS AL DIA DE BODA)');
   await save(window);
 
   page = await printLatest('603');
   await expect(page).toContainText('Constancia de Matrimonio');
   await expect(page).toContainText('Carlos');
   await expect(page).toContainText('Elena');
-  await expect(page).toContainText('30 años');
+  // La fecha aproximada es texto libre: sale tal como se escribió.
+  await expect(page).toContainText('(30 AÑOS AL DIA DE BODA)');
 });
 
 test('duplicados: avisa al llenar si la persona ya tiene ese sacramento, sin impedir guardar', async () => {
@@ -518,13 +518,13 @@ test('estadísticas: resumen por año de la parroquia, con su tabla', async () =
   await field(window, 'Nombres').fill('Eusebia');
   await field(window, 'Apellido paterno').fill('Pari');
   await field(window, 'Apellido materno').fill('Luque');
-  await window.getByRole('checkbox', { name: 'Prefiere edad', exact: true }).check();
-  await window.getByRole('spinbutton', { name: 'Edad', exact: true }).fill('35');
+  await window.getByRole('checkbox', { name: 'Prefiere fecha aproximada', exact: true }).check();
+  await window.getByRole('textbox', { name: 'Fecha aproximada', exact: true }).fill('35 años');
   await save(window);
   await window.getByRole('button', { name: 'Volver' }).first().click();
 
   await window.getByRole('button', { name: 'Estadísticas' }).click();
-  await window.getByLabel('Año', { exact: true }).selectOption('1951');
+  await chooseYear(window, 1951);
 
   await expect(window.getByTestId('stat-bautismo')).toHaveText('1');
   await expect(window.getByTestId('stat-confirmacion')).toHaveText('0');
@@ -539,10 +539,10 @@ test('estadísticas: resumen por año de la parroquia, con su tabla', async () =
   await monthly.getByLabel('marzo: 1 partidas').focus();
   await expect(window.getByRole('status').filter({ hasText: 'marzo de 1951' })).toContainText('Bautismos');
 
+  // Una fecha aproximada es texto libre: no se puede calcular la edad y cuenta como sin dato.
   const ages = window.getByRole('region', { name: 'Edad al recibir el sacramento' });
-  await ages.getByText('Ver como tabla').click();
-  await expect(ages.getByRole('row', { name: '30 a 49 años 1 0 0' })).toBeVisible();
-  await expect(ages).toContainText('Promedio: 35 años');
+  await expect(ages).toContainText('Sin dato de edad: Bautismos: 1');
+  await expect(ages).toContainText('Sin edades registradas');
 
   // La tendencia se puede ver dentro del año elegido, mes a mes.
   const trend = window.getByRole('region', { name: 'Tendencia' });
@@ -553,6 +553,228 @@ test('estadísticas: resumen por año de la parroquia, con su tabla', async () =
   await expect(trend.getByRole('row', { name: 'marzo de 1951 1 0 0' })).toBeVisible();
 
   // Otro año no cuenta esa partida.
-  await window.getByLabel('Año', { exact: true }).selectOption(String(new Date().getFullYear()));
+  await chooseYear(window, new Date().getFullYear());
   await expect(window.getByRole('region', { name: 'Partidas por mes en 1951' })).toHaveCount(0);
+});
+
+test('datos obligatorios: todos los de la persona menos el DNI, y el celebrante', async () => {
+  const window = await launchAndLogin();
+  await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  const dialog = window.getByRole('dialog', { name: 'Agregar partida' });
+  await expect(dialog).toContainText('Los campos con * son obligatorios.');
+
+  await fillRegister(window, '701', 'N° de');
+  await field(window, 'Nombres').fill('Obligada');
+  await field(window, 'Apellido paterno').fill('Campos');
+  await field(window, 'Apellido materno').fill('Llenos');
+  await window.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Faltan datos: fecha de nacimiento (o fecha aproximada), lugar de nacimiento, padre, madre.');
+
+  await field(window, 'Lugar de nacimiento').fill('Juli');
+  await field(window, 'Padre').fill('Pedro Campos');
+  await field(window, 'Madre').fill('Rosa Llenos');
+  await window.getByRole('checkbox', { name: 'Prefiere fecha aproximada', exact: true }).check();
+  await window.getByRole('textbox', { name: 'Fecha aproximada', exact: true }).fill('(2 AÑOS)');
+  await window.getByRole('button', { name: 'Guardar cambios' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Seleccione el celebrante.');
+
+  // Sin DNI se puede guardar.
+  await expect(field(window, 'DNI')).toHaveValue('');
+  await save(window);
+  await expect(window.getByRole('cell', { name: 'Obligada' })).toBeVisible();
+});
+
+test('contraseñas: el ojo muestra y oculta lo que se escribe', async () => {
+  app = await launchApp(userData);
+  const window = await app.firstWindow();
+  const password = window.getByPlaceholder('Contraseña');
+
+  await password.fill('parroco123');
+  await expect(password).toHaveAttribute('type', 'password');
+  await window.getByRole('button', { name: 'Mostrar contraseña' }).click();
+  await expect(password).toHaveAttribute('type', 'text');
+  await expect(password).toHaveValue('parroco123');
+  await window.getByRole('button', { name: 'Ocultar contraseña' }).click();
+  await expect(password).toHaveAttribute('type', 'password');
+
+  // También al crear una cuenta: cada campo tiene su propio ojo.
+  await window.getByPlaceholder('Nombre de usuario').fill('parroco1');
+  await window.getByRole('button', { name: 'Iniciar sesión' }).click();
+  await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Agregar usuario' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  const form = window.getByRole('dialog', { name: 'Añadir nuevo usuario' });
+  await form.getByLabel('Contraseña', { exact: true }).fill('clave-nueva');
+  await form.getByLabel('Repetir contraseña', { exact: true }).fill('clave-nueva');
+  await expect(form.getByRole('button', { name: 'Mostrar contraseña' })).toHaveCount(2);
+  await form.getByRole('button', { name: 'Mostrar contraseña' }).first().click();
+  await expect(form.getByLabel('Contraseña', { exact: true })).toHaveAttribute('type', 'text');
+  await expect(form.getByLabel('Repetir contraseña', { exact: true })).toHaveAttribute('type', 'password');
+});
+
+test('importación: el Excel del sistema anterior se revisa, se importa una sola vez y rechaza otro formato', async () => {
+  const window = await launchAndLogin();
+  const excel = path.join(userData, 'feligres.xlsx');
+  const wrong = path.join(userData, 'otro.xlsx');
+  write_legacy_excel(excel);
+  write_xlsx(wrong, [{ name: 'Hoja1', rows: [['NOMBRE', 'APELLIDO'], ['JUANA', 'MAMANI']] }]);
+  // El selector de archivos de Windows no se puede manejar: se responde con el archivo elegido.
+  const choose = (file: string) =>
+    app!.evaluate(({ dialog }, chosen) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [chosen] })) as typeof dialog.showOpenDialog;
+    }, file);
+
+  await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Importar Excel del sistema anterior' }).click();
+  const dialog = window.getByRole('dialog', { name: 'Importar Excel del sistema anterior' });
+
+  // Un archivo que no es el del sistema anterior no se importa.
+  await choose(wrong);
+  await dialog.getByRole('button', { name: 'Elegir archivo' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('no tiene la hoja "parroquialibros"');
+
+  await choose(excel);
+  await dialog.getByRole('button', { name: 'Elegir archivo' }).click();
+  await expect(dialog).toContainText('Nuevas, se van a importar: 3');
+  await expect(dialog).toContainText('Filas que no se pudieron leer: 1');
+  await expect(dialog).toContainText('Falta el nombre');
+  await dialog.getByRole('button', { name: 'Importar 3 partidas' }).click();
+  await expect(dialog.getByRole('status')).toContainText('Se importaron 3 partidas.');
+
+  // Otra vez el mismo archivo: ya están todas.
+  await dialog.getByRole('button', { name: /Elegir/ }).click();
+  await expect(dialog).toContainText('Ya están en el sistema, no se importan: 3');
+  await expect(dialog.getByRole('button', { name: 'Importar 0 partidas' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cerrar' }).click();
+
+  // El matrimonio queda en el libro con su nombre ("M61"), con el celebrante del Excel.
+  await window.getByRole('button', { name: 'Volver' }).first().click();
+  await window.getByRole('button', { name: 'Índice y partida de matrimonio' }).click();
+  await window.locator('form').getByRole('textbox').first().fill('TOMAS');
+  await window.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await expect(window.getByRole('row', { name: /TOMAS/ })).toContainText('M61');
+  await window.getByRole('checkbox', { name: 'Seleccionar partida 9003' }).click();
+  await window.getByRole('button', { name: 'Editar' }).click();
+  await expect(window.getByPlaceholder('Buscar celebrante...')).toHaveValue(/PEDRO RAMOS DIAZ/);
+});
+
+test('imprimir sobre el formato: solo los datos, en su lugar, con el ajuste de esta PC', async () => {
+  const window = await launchAndLogin();
+  await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  await fillRegister(window, '661', 'N° de');
+  await field(window, 'Nombres').fill('Formatina');
+  await field(window, 'Padrino').fill('Dionisio Quispe');
+  await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
+  await window.getByRole('textbox', { name: 'Anotaciones', exact: true }).fill('Nota marginal larga. '.repeat(20));
+  await save(window);
+
+  const openPrint = async () => {
+    const box = window.getByRole('checkbox', { name: 'Seleccionar partida 661' });
+    if (!(await box.isChecked())) await box.click();
+    await window.getByRole('button', { name: 'Imprimir', exact: true }).click();
+  };
+  await openPrint();
+
+  // Por defecto: sobre el formato. Solo los datos, sin escudo ni rótulos; el formato se ve de fondo.
+  await expect(window.getByRole('button', { name: 'Sobre el formato' })).toHaveAttribute('aria-pressed', 'true');
+  const sheet = window.locator('.a4-overlay');
+  await expect(sheet.locator('[data-slot="nombres"]')).toHaveText('Formatina');
+  await expect(sheet.locator('[data-slot="padrino"]')).toHaveText('Dionisio Quispe');
+  await expect(sheet.locator('[data-slot="dia"]')).toHaveText(String(new Date().getDate()));
+  await expect(sheet).not.toContainText('Notario Eclesiástico');
+  await expect(sheet.locator('img')).toHaveClass(/print:hidden/);
+
+  // Lo largo se corta: las anotaciones no pasan de sus 4 renglones.
+  const notes = sheet.locator('[data-slot="anotaciones"]');
+  expect(await notes.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  // El ajuste mueve todo junto y queda guardado en esta PC.
+  // Horizontal: + a la derecha. Vertical: + hacia arriba (en la pantalla, y negativa).
+  const horizontal = window.getByLabel('Horizontal', { exact: true });
+  const vertical = window.getByLabel('Vertical', { exact: true });
+  await horizontal.fill('2.5');
+  await vertical.fill('1');
+  await expect(sheet.locator('[data-slot="nombres"]').locator('..')).toHaveAttribute('style', /translate\(2\.5mm, -1mm\)/);
+  await window.getByRole('button', { name: 'Volver' }).last().click();
+  await openPrint();
+  await expect(horizontal).toHaveValue('2.5');
+  await expect(vertical).toHaveValue('1');
+  await window.getByRole('button', { name: 'Mover a la derecha' }).click();
+  await window.getByRole('button', { name: 'Mover hacia abajo' }).click();
+  await expect(horizontal).toHaveValue('3');
+  await expect(vertical).toHaveValue('0.5');
+  await expect(sheet.locator('[data-slot="nombres"]').locator('..')).toHaveAttribute('style', /translate\(3mm, -0\.5mm\)/);
+
+  // El fondo se puede ocultar.
+  await window.getByLabel('Ver el formato').uncheck();
+  await expect(sheet.locator('img')).toHaveCount(0);
+
+  // La constancia completa sigue disponible, y los botones de la barra no se mueven al cambiar.
+  const printButton = window.getByRole('button', { name: 'Imprimir', exact: true }).last();
+  const before = await printButton.boundingBox();
+  await window.getByRole('button', { name: 'Constancia completa' }).click();
+  await expect(window.locator('.a4-page')).toContainText('Notario Eclesiástico');
+  expect(await printButton.boundingBox()).toEqual(before);
+});
+
+test('respaldo: se exporta con contraseña y, en una PC nueva, se restaura desde el login con lo que faltaba subir', async () => {
+  const window = await launchAndLogin();
+  const backupFile = path.join(userData, 'prueba.respaldo');
+
+  await window.getByRole('button', { name: 'Índice y partida de matrimonio' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  await fillRegister(window, '901', 'N° de');
+  await window.getByRole('textbox', { name: 'Nombres del esposo' }).fill('Respaldino');
+  await window.getByRole('textbox', { name: 'Apellido paterno del esposo' }).fill('Copia');
+  await window.getByRole('textbox', { name: 'Nombres de la esposa' }).fill('Guardada');
+  await window.getByRole('textbox', { name: 'Apellido paterno de la esposa' }).fill('Segura');
+  await save(window);
+
+  await app!.evaluate(({ dialog }, file) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
+  }, backupFile);
+  await window.getByRole('button', { name: 'Volver' }).first().click();
+  await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Exportar respaldo' }).click();
+  const exportDialog = window.getByRole('dialog', { name: 'Exportar respaldo' });
+  await exportDialog.getByLabel('Contraseña del respaldo').fill('clave-respaldo');
+  await exportDialog.getByLabel('Repetir contraseña').fill('clave-respaldo');
+  await exportDialog.getByRole('button', { name: 'Elegir dónde guardar' }).click();
+  await expect(exportDialog.getByText(/Respaldo guardado: \d+ partidas\. Incluye 1 cambio pendiente de subir/)).toBeVisible();
+  expect(readFileSync(backupFile, 'utf8')).not.toContain('Respaldino');
+  await app!.close();
+
+  // Otra PC, vacía: restaura desde el login y entra con la misma cuenta.
+  const otherPc = mkdtempSync(path.join(tmpdir(), 'prelatura-sacraments-'));
+  try {
+    app = await launchApp(otherPc);
+    const fresh = await app.firstWindow();
+    await app.evaluate(({ dialog }, file) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
+    }, backupFile);
+    await fresh.getByRole('button', { name: 'Restaurar respaldo' }).click();
+    const restoreDialog = fresh.getByRole('dialog', { name: 'Restaurar respaldo' });
+
+    await restoreDialog.getByLabel('Contraseña del respaldo').fill('otra-clave');
+    await restoreDialog.getByRole('button', { name: 'Elegir el respaldo' }).click();
+    await expect(restoreDialog.getByRole('alert')).toContainText('La contraseña no es la del respaldo');
+
+    await restoreDialog.getByLabel('Contraseña del respaldo').fill('clave-respaldo');
+    await restoreDialog.getByRole('button', { name: 'Elegir el respaldo' }).click();
+    await expect(restoreDialog.getByText(/Respaldo restaurado: \d+ partidas\. Incluye 1 cambio pendiente de subir/)).toBeVisible();
+    await restoreDialog.getByRole('button', { name: 'Ir al inicio de sesión' }).click();
+    await expect(fresh.getByRole('button', { name: 'Restaurar respaldo' })).toBeHidden();
+
+    await fresh.getByPlaceholder('Nombre de usuario').fill('parroco1');
+    await fresh.getByPlaceholder('Contraseña').fill('parroco123');
+    await fresh.getByRole('button', { name: 'Iniciar sesión' }).click();
+    await fresh.getByRole('button', { name: 'Índice y partida de matrimonio' }).click();
+    await expect(fresh.getByRole('cell', { name: /Respaldino/ })).toBeVisible();
+  } finally {
+    await app?.close();
+    app = null;
+    rmSync(otherPc, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
 });

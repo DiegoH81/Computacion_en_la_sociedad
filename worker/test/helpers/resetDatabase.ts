@@ -7,6 +7,8 @@
 //   sync_feed                                -> sacramentos
 //   dispositivos                             -> parroquias
 //   cambios_persona                          -> personas, sacramentos, usuarios
+//   historial_campos                         -> historial_partidas
+//   historial_partidas, solicitudes_cambio   -> sacramentos, usuarios
 //   matrimonios, bautismos, confirmaciones   -> sacramentos, personas
 //   sacramentos                              -> parroquias, ministros, usuarios
 //   personas                                 -> parroquias
@@ -16,6 +18,9 @@ const TABLES_IN_DELETE_ORDER = [
   'sync_feed',
   'dispositivos',
   'cambios_persona',
+  'historial_campos',
+  'historial_partidas',
+  'solicitudes_cambio',
   'matrimonios',
   'bautismos',
   'confirmaciones',

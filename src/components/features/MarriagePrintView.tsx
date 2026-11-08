@@ -10,8 +10,8 @@ const ROWS: { label: string; value: (record: Marriage, spouse: Spouse) => string
   { label: 'Apellidos', value: (m, s) => fullName(m[s].apellido_paterno, m[s].apellido_materno) },
   { label: 'Nombres', value: (m, s) => m[s].nombres },
   { label: 'Lugar de Nacimiento', value: (m, s) => printText(m[s].lugar_nacimiento) },
-  // Fecha larga o, si la partida solo trae la edad, "30 años".
-  { label: 'Fecha de Nacimiento', value: (m, s) => birthValue(m[s].fecha_nacimiento, m[s].edad) },
+  // Fecha larga o, si la partida solo trae una fecha aproximada, ese texto tal cual.
+  { label: 'Fecha de Nacimiento', value: (m, s) => birthValue(m[s].fecha_nacimiento, m[s].fecha_aproximada) },
   { label: 'Documento de identidad', value: (m, s) => printText(m[s].dni) },
   { label: 'Parroquia de Bautismo', value: (m, s) => printText(m[`${s}_bautismo_parroquia` as const]) },
   { label: 'Fecha de Bautismo', value: (m, s) => formatLongDate(printText(m[`${s}_bautismo_fecha` as const])) },

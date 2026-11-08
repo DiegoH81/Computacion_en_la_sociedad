@@ -1,6 +1,5 @@
 export const LOCAL_REQUEST_CHANNEL = 'local:request';
 
-/** Marca una sesión iniciada sin internet: aún no hay token del servidor. */
 export const OFFLINE_TOKEN = 'sin-conexion';
 
 export type LocalResponse =
