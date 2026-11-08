@@ -13,6 +13,7 @@ function renderCreate(overrides: Partial<Parameters<typeof UserFormModal>[0]> = 
     <UserFormModal
       mode="create"
       parishes={PARISHES}
+      actorRole="admin_general"
       onSave={onSave}
       onCancel={onCancel}
       isLoading={false}
@@ -29,12 +30,16 @@ function renderEdit() {
     <UserFormModal
       mode="edit"
       parishes={PARISHES}
+      actorRole="admin_general"
       initialValues={{
-        nombre: 'Ana',
-        apellidoPaterno: 'Quispe',
-        apellidoMaterno: 'Mamani',
+        id: 7,
         username: 'ana.quispe',
-        parroquiaNombre: 'Parroquia 2',
+        rol: 'usuario',
+        parroquia_id: 2,
+        nombre: 'Ana',
+        apellido_paterno: 'Quispe',
+        apellido_materno: 'Mamani',
+        parroquia_nombre: 'Parroquia 2',
       }}
       onSave={onSave}
       onCancel={vi.fn()}
@@ -55,24 +60,14 @@ function submit() {
 
 describe('UserFormModal', () => {
   describe('modo alta', () => {
-    it('ofrece las parroquias existentes y la opción de crear una nueva', () => {
+    it('ofrece las parroquias existentes; una parroquia nueva se crea en otra pantalla', () => {
       renderCreate();
 
       const options = screen.getAllByRole('option').map((o) => o.textContent);
 
       expect(options).toContain('Parroquia 1');
       expect(options).toContain('Parroquia 2');
-      expect(options).toContain('+ Crear parroquia nueva…');
-    });
-
-    it('no muestra el campo de parroquia nueva hasta elegir esa opción', () => {
-      renderCreate();
-
-      expect(screen.queryByLabelText('Nombre de la parroquia nueva')).toBeNull();
-
-      fireEvent.change(screen.getByLabelText('Parroquia'), { target: { value: '__new__' } });
-
-      expect(screen.getByLabelText('Nombre de la parroquia nueva')).toBeInTheDocument();
+      expect(options.some((option) => option?.includes('nueva'))).toBe(false);
     });
 
     it('entrega una parroquia existente con su id', () => {
@@ -92,32 +87,57 @@ describe('UserFormModal', () => {
           nombre: 'Ana',
           username: 'ana.quispe',
           password: 'passwordNueva123',
-          confirmPassword: 'passwordNueva123',
-          parroquia: { kind: 'existing', parroquiaId: 2 },
+          parroquia_id: 2,
         }),
+        'passwordNueva123',
       );
+      expect(onSave.mock.calls[0][0]).not.toHaveProperty('parroquia_nueva');
     });
 
-    it('entrega una parroquia nueva con el nombre escrito', () => {
-      const { onSave } = renderCreate();
-
-      fireEvent.change(screen.getByLabelText('Parroquia'), { target: { value: '__new__' } });
-      type('Nombre de la parroquia nueva', 'Parroquia Nueva');
-      submit();
-
-      expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ parroquia: { kind: 'new', nombre: 'Parroquia Nueva' } }),
-      );
-    });
-
-    it('sin elegir parroquia entrega parroquiaId null (el Controller lo rechaza)', () => {
+    it('sin elegir parroquia entrega parroquia_id null (el Controller lo rechaza)', () => {
       const { onSave } = renderCreate();
 
       submit();
 
-      expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ parroquia: { kind: 'existing', parroquiaId: null } }),
-      );
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ parroquia_id: null }), '');
+    });
+
+    it('el admin general elige el rol; solo el principal puede crear otro admin general', () => {
+      renderCreate();
+      const roles = () => Array.from((screen.getByLabelText('Tipo de cuenta') as HTMLSelectElement).options).map((o) => o.value);
+      expect(roles()).toEqual(['usuario', 'admin_parroquia']);
+    });
+
+    it('un administrador general no lleva parroquia: se oculta el selector y se entrega parroquia_id null', () => {
+      const { onSave } = renderCreate({ canCreateGeneralAdmin: true });
+
+      fireEvent.change(screen.getByLabelText('Parroquia'), { target: { value: '2' } });
+      fireEvent.change(screen.getByLabelText('Tipo de cuenta'), { target: { value: 'admin_general' } });
+
+      expect(screen.queryByLabelText('Parroquia')).toBeNull();
+      submit();
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ rol: 'admin_general', parroquia_id: null }), '');
+    });
+
+    it('el administrador de una parroquia solo crea usuarios de la suya: no elige rol ni parroquia', () => {
+      const { onSave } = renderCreate({ actorRole: 'admin_parroquia', actorParishName: 'Parroquia 1' });
+
+      expect(screen.getByLabelText('Tipo de cuenta')).toHaveValue('Usuario');
+      expect(screen.getByLabelText('Parroquia')).toHaveValue('Parroquia 1');
+      submit();
+      expect(onSave.mock.calls[0][0]).toMatchObject({ rol: 'usuario' });
+      expect(onSave.mock.calls[0][0]).not.toHaveProperty('parroquia_nueva');
+    });
+
+    it('el principal de una parroquia elige entre usuario y administrador, sin elegir parroquia', () => {
+      const { onSave } = renderCreate({ actorRole: 'admin_parroquia', actorParishName: 'Parroquia 1', canCreateParishAdmin: true });
+      const roles = Array.from((screen.getByLabelText('Tipo de cuenta') as HTMLSelectElement).options).map((o) => o.value);
+
+      expect(roles).toEqual(['usuario', 'admin_parroquia']);
+      expect(screen.getByLabelText('Parroquia')).toHaveValue('Parroquia 1');
+      fireEvent.change(screen.getByLabelText('Tipo de cuenta'), { target: { value: 'admin_parroquia' } });
+      submit();
+      expect(onSave.mock.calls[0][0]).toMatchObject({ rol: 'admin_parroquia' });
     });
 
     it('el campo de contraseña oculta lo escrito y evita el autocompletado de contraseñas viejas', () => {
@@ -171,7 +191,8 @@ describe('UserFormModal', () => {
       submit();
 
       expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ nombre: 'Ana María', password: '', confirmPassword: '' }),
+        expect.objectContaining({ id: 7, nombre: 'Ana María', parroquia_id: 2, password: '' }),
+        '',
       );
     });
   });
@@ -196,11 +217,19 @@ describe('UserFormModal', () => {
       expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
     });
 
-    it('Cancelar avisa al padre', () => {
+    it('Cancelar pide confirmación y solo entonces avisa al padre', () => {
       const { onCancel } = renderCreate();
 
       fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      expect(onCancel).not.toHaveBeenCalled();
 
+      fireEvent.click(screen.getByRole('button', { name: 'Seguir editando' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(onCancel).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Sí, cancelar' }));
       expect(onCancel).toHaveBeenCalledTimes(1);
     });
 

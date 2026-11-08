@@ -1,6 +1,7 @@
 import { AuthService } from '../services/AuthService';
 import { ApiError } from '../lib/apiClient';
 import { useSessionStore } from '../store/sessionStore';
+import { useSyncStore } from '../store/syncStore';
 
 export interface LoginControllerResult {
   success: boolean;
@@ -30,18 +31,16 @@ export async function handleLogin(
     useSessionStore.getState().setSession({
       token: response.token,
       usuarioId: response.usuario.id,
-      usuarioNombre: response.usuario.nombreCompleto,
+      usuarioNombre: response.usuario.nombre_completo,
       rol: response.usuario.rol,
-      parroquiaId: response.usuario.parroquiaId,
-      // Para un admin sin parroquia fija, no hay parroquia activa todavía;
-      // se resuelve en SelectParishPage (flujo obligatorio, Fase 1).
-      parroquiaActivaId: response.usuario.parroquiaId ?? 0,
-      parroquiaActivaNombre: response.usuario.parroquiaNombre ?? '',
+      parroquiaId: response.usuario.parroquia_id,
+      // El administrador general no es de ninguna parroquia: elige cuál consultar en SelectParishPage.
+      parroquiaActivaId: response.usuario.parroquia_id ?? 0,
+      parroquiaActivaNombre: response.usuario.parroquia_nombre ?? '',
     });
 
-    // Regla pendiente de Fase 4: admin siempre pasa primero por selección de parroquia.
     const redirectTo =
-      response.usuario.rol === 'admin' ? '/parroquias/seleccionar' : '/dashboard';
+      response.usuario.rol === 'admin_general' ? '/parroquias/seleccionar' : '/dashboard';
 
     return { success: true, redirectTo };
   } catch (error) {
@@ -49,5 +48,17 @@ export async function handleLogin(
       return { success: false, errorMessage: error.message };
     }
     return { success: false, errorMessage: 'Ocurrió un error inesperado.' };
+  }
+}
+
+/** Aunque falle el cierre en Electron, la pantalla no debe seguir mostrando la sesión. */
+export async function handleLogout(): Promise<void> {
+  try {
+    await AuthService.logout();
+  } catch (error) {
+    console.error('No se pudo cerrar la sesión local:', error);
+  } finally {
+    useSyncStore.getState().setStatus(null);
+    useSessionStore.getState().clearSession();
   }
 }

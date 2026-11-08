@@ -1,0 +1,2 @@
+JWT_SECRET=cambia-esto-en-desarrollo
+DEVICE_KEY_SECRET=cambia-esto-en-desarrollo

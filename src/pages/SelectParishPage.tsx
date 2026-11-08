@@ -12,14 +12,15 @@ export function SelectParishPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const token = useSessionStore((state) => state.token);
+  const parroquiaId = useSessionStore((state) => state.parroquiaId);
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const setParroquiaActiva = useSessionStore((state) => state.setParroquiaActiva);
 
   useEffect(() => {
     if (!token) return;
 
-    AuthService.getParishes(token)
-      .then((response) => setParishes(response.parishes))
+    AuthService.getParishes()
+      .then((response) => setParishes(response.parroquias))
       .catch((error) => {
         setErrorMessage(
           error instanceof ApiError ? error.message : 'No se pudieron cargar las parroquias.',
@@ -46,6 +47,7 @@ export function SelectParishPage() {
         <ParishSelector
           parishes={parishes}
           currentParishId={parroquiaActivaId || null}
+          ownParishId={parroquiaId}
           onSelect={handleSelect}
           isLoading={isLoading}
         />

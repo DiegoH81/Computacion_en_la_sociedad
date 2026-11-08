@@ -1,26 +1,26 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { resetDatabase } from './helpers/resetDatabase';
-import { signJwt } from '../src/lib/jwt';
+import { sign_jwt } from '../src/utils/crypto';
 
 const ADMIN_ID = 1;
 const PARISH_USER_ID = 2;
 
 const NEW_USER_BODY = {
   nombre: 'Ana',
-  apellidoPaterno: 'Quispe',
-  apellidoMaterno: 'Mamani',
+  apellido_paterno: 'Quispe',
+  apellido_materno: 'Mamani',
   username: 'ana.quispe',
   password: 'passwordNueva123',
-  parroquia: { kind: 'new', nombre: 'Parroquia Nueva' },
+  parroquia_nueva: 'Parroquia Nueva',
 };
 
 function tokenFor(
   userId: number,
-  rol: 'admin' | 'usuario_parroquia',
+  rol: 'admin_general' | 'admin_parroquia' | 'usuario',
   parroquiaId: number | null,
 ): Promise<string> {
-  return signJwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
+  return sign_jwt({ usuarioId: userId, rol, parroquiaId }, env.JWT_SECRET);
 }
 
 async function api(
@@ -53,14 +53,14 @@ describe('rutas /api/users (Worker real + D1)', () => {
       .prepare(
         `INSERT INTO usuarios (id, username, password_hash, nombre, apellido_paterno, apellido_materno,
                                rol, parroquia_id, activo)
-         VALUES (?, 'admin', 'hash', 'Administrador', 'De', 'Prueba', 'admin', NULL, 1),
-                (?, 'parroco1', 'hash', 'Usuario', 'Parroquia', 'Uno', 'usuario_parroquia', 1, 1)`,
+         VALUES (?, 'admin', 'hash', 'Administrador', 'De', 'Prueba', 'admin_general', NULL, 1),
+                (?, 'parroco1', 'hash', 'Usuario', 'Parroquia', 'Uno', 'usuario', 1, 1)`,
       )
       .bind(ADMIN_ID, PARISH_USER_ID)
       .run();
 
-    adminToken = await tokenFor(ADMIN_ID, 'admin', null);
-    parishUserToken = await tokenFor(PARISH_USER_ID, 'usuario_parroquia', 1);
+    adminToken = await tokenFor(ADMIN_ID, 'admin_general', null);
+    parishUserToken = await tokenFor(PARISH_USER_ID, 'usuario', 1);
   });
 
   describe('autenticación y autorización', () => {
@@ -73,11 +73,11 @@ describe('rutas /api/users (Worker real + D1)', () => {
     const ENDPOINTS: Array<[string, string, unknown]> = [
       ['GET', '/api/users', undefined],
       ['POST', '/api/users', NEW_USER_BODY],
-      ['PUT', '/api/users/1', { nombre: 'X', apellidoPaterno: 'Y' }],
+      ['PUT', '/api/users/1', { nombre: 'X', apellido_paterno: 'Y' }],
       ['PATCH', '/api/users/1/toggle-active', undefined],
     ];
 
-    it.each(ENDPOINTS)('%s %s responde 403 a un usuario_parroquia', async (method, path, body) => {
+    it.each(ENDPOINTS)('%s %s responde 403 a un usuario (ayudante)', async (method, path, body) => {
       const response = await api(path, { method, token: parishUserToken, body });
 
       expect(response.status).toBe(403);
@@ -91,13 +91,13 @@ describe('rutas /api/users (Worker real + D1)', () => {
 
       expect(response.status).toBe(200);
       expect(raw).not.toContain('password_hash');
-      const data = JSON.parse(raw) as { users: unknown[]; totalPages: number };
-      expect(data.users).toHaveLength(2);
-      expect(data.totalPages).toBe(1);
+      const data = JSON.parse(raw) as { resultados: unknown[]; total_paginas: number };
+      expect(data.resultados).toHaveLength(2);
+      expect(data.total_paginas).toBe(1);
     });
 
     it('parámetros de paginación inválidos no provocan un error 500', async () => {
-      const response = await api('/api/users?page=abc&pageSize=-5&sortBy=cualquiera', {
+      const response = await api('/api/users?pagina=abc&por_pagina=-5&orden=cualquiera', {
         token: adminToken,
       });
 
@@ -164,12 +164,12 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const { id: newUserId } = (await created.json()) as { id: number };
 
       // 2. Aparece en la búsqueda, con su parroquia.
-      const search = await api('/api/users?apellidoPaterno=Quispe', { token: adminToken });
+      const search = await api('/api/users?apellido_paterno=Quispe', { token: adminToken });
       const found = (await search.json()) as {
-        users: Array<{ id: number; username: string; parroquia_nombre: string }>;
+        resultados: Array<{ id: number; username: string; parroquia_nombre: string }>;
       };
-      expect(found.users).toHaveLength(1);
-      expect(found.users[0]).toMatchObject({
+      expect(found.resultados).toHaveLength(1);
+      expect(found.resultados[0]).toMatchObject({
         id: newUserId,
         username: 'ana.quispe',
         parroquia_nombre: 'Parroquia Nueva',
@@ -184,7 +184,7 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const { token: newUserToken } = (await loginResponse.json()) as { token: string };
 
       // 4. Con ese token puede usar el sistema.
-      const before = await api('/api/priests', { token: newUserToken });
+      const before = await api('/api/sync/pull', { token: newUserToken });
       expect(before.status).toBe(200);
 
       // 5. El admin la deshabilita.
@@ -195,7 +195,7 @@ describe('rutas /api/users (Worker real + D1)', () => {
       expect(toggled.status).toBe(200);
 
       // 6. El token que ya tenía deja de funcionar al instante, y no puede volver a entrar.
-      const after = await api('/api/priests', { token: newUserToken });
+      const after = await api('/api/sync/pull', { token: newUserToken });
       expect(after.status).toBe(401);
 
       const relogin = await api('/api/auth/login', {
@@ -209,11 +209,11 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const response = await api(`/api/users/${PARISH_USER_ID}`, {
         method: 'PUT',
         token: adminToken,
-        body: { nombre: 'Usuario', apellidoPaterno: 'Parroquia', password: 'contraseñaNueva456' },
+        body: { nombre: 'Usuario', apellido_paterno: 'Parroquia', password: 'contraseñaNueva456' },
       });
       expect(response.status).toBe(200);
 
-      const afterEdit = await api('/api/users?apellidoPaterno=Parroquia', { token: adminToken });
+      const afterEdit = await api('/api/users?apellido_paterno=Parroquia', { token: adminToken });
       expect(afterEdit.status).toBe(200);
     });
   });

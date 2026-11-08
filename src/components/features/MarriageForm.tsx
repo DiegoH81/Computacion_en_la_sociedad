@@ -1,302 +1,200 @@
 import { useState } from 'react';
-import { MarriagePersonFields } from './MarriagePersonFields';
+import type { Marriage, Minister, Person } from '../../../shared/models';
+import { emptyMarriage } from '../../lib/emptyRecords';
+import { newChanges, personOptions, recordedChanges, type CorrectionDraft } from '../../lib/personCorrections';
+import { pendingRequests, requestedBy, usesRequestedValues, withRequestedValues } from '../../lib/changeRequests';
+import { ConfirmActionDialog } from '../ui/ConfirmActionDialog';
+import { ChangeRequestNotice } from './ChangeRequestNotice';
+import { DateSelect } from '../ui/DateSelect';
+import { FormDialog } from '../ui/FormDialog';
+import { FormInput } from '../ui/FormInput';
+import { FormSectionTitle } from '../ui/FormSectionTitle';
+import { InlineFormField } from '../ui/InlineFormField';
+import { DuplicateWarning } from './DuplicateWarning';
+import { MarginalNotesButton } from './MarginalNotesButton';
+import { MarginalNotesSection } from './MarginalNotesSection';
+import { MarriageFamilyFields, MarriagePersonFields } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
+import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { useDuplicateCheck } from './useDuplicateCheck';
+import { RequiredNote } from '../ui/RequiredMark';
+import { useMarginalNotes } from './useMarginalNotes';
 
-interface PersonMarriageData {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  lugarNacimiento: string;
-  fechaNacimiento: string;
-  parroquiaBautismo: string;
-  fechaBautismo: string;
-  padreNombre: string;
-  padreApellido: string;
-  padreDni: string;
-  madreNombre: string;
-  madreApellido: string;
-  madreDni: string;
-}
-
-const EMPTY_PERSON: PersonMarriageData = {
-  nombre: '',
-  apellidoPaterno: '',
-  apellidoMaterno: '',
-  lugarNacimiento: '',
-  fechaNacimiento: '',
-  parroquiaBautismo: '',
-  fechaBautismo: '',
-  padreNombre: '',
-  padreApellido: '',
-  padreDni: '',
-  madreNombre: '',
-  madreApellido: '',
-  madreDni: '',
-};
-
-export interface MarriageFormValues {
-  fechaSacramento: string;
-  numeroLibro: string;
-  numeroFolio: string;
-  numeroRegistro: string;
-  esposo: PersonMarriageData;
-  esposa: PersonMarriageData;
-  fechaMatrimonio: string;
-  celebranteId: number | null;
-  lugarMatrimonio: string;
-  testigo1: string;
-  testigo2: string;
-  testigo3: string;
-  testigo4: string;
-  notasMarginales: string;
-}
-
-const EMPTY_VALUES: MarriageFormValues = {
-  fechaSacramento: '',
-  numeroLibro: '',
-  numeroFolio: '',
-  numeroRegistro: '',
-  esposo: EMPTY_PERSON,
-  esposa: EMPTY_PERSON,
-  fechaMatrimonio: '',
-  celebranteId: null,
-  lugarMatrimonio: '',
-  testigo1: '',
-  testigo2: '',
-  testigo3: '',
-  testigo4: '',
-  notasMarginales: '',
-};
-
-interface PriestOption {
-  id: number;
-  nombreCompleto: string;
-  parroquiaNombre: string;
-}
+const TESTIGOS = [
+  { key: 'testigo_1', label: 'Testigo 1:' },
+  { key: 'testigo_2', label: 'Testigo 2:' },
+  { key: 'testigo_3', label: 'Testigo 3:' },
+  { key: 'testigo_4', label: 'Testigo 4:' },
+] as const;
 
 interface MarriageFormProps {
-  mode: 'create' | 'edit';
-  initialValues?: MarriageFormValues;
-  onSave: (values: MarriageFormValues) => void;
+  /** La partida que se edita, tal como llegó de Electron. Sin ella, se crea una nueva. */
+  initialRecord?: Marriage;
+  parroquiaNombre: string;
+  errorMessage?: string | null;
+  onSave: (record: Marriage) => void;
   onCancel: () => void;
   isLoading: boolean;
-  priestOptions: PriestOption[];
+  priestOptions: Minister[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
+  /** Un usuario (ayudante) que edita: no modifica la partida, pide los cambios. */
+  onlyCorrections?: boolean;
+}
+
+function duplicateQuery(para: string, person: Person) {
+  return {
+    para,
+    dni: person.dni,
+    nombres: person.nombres,
+    apellido_paterno: person.apellido_paterno,
+    apellido_materno: person.apellido_materno,
+    fecha_nacimiento: person.fecha_nacimiento,
+    padre: person.padre,
+    madre: person.madre,
+  };
 }
 
 export function MarriageForm({
-  mode,
-  initialValues,
+  initialRecord,
+  parroquiaNombre,
+  errorMessage,
   onSave,
   onCancel,
   isLoading,
   priestOptions,
   onSearchPriest,
   isSearchingPriests,
+  onlyCorrections = false,
 }: MarriageFormProps) {
-  const [values, setValues] = useState<MarriageFormValues>(initialValues ?? EMPTY_VALUES);
+  const [record, setRecord] = useState<Marriage>(initialRecord ?? emptyMarriage());
+  const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
+  const recorded = [...recordedChanges(record.conyuge_1, 'conyuge_1'), ...recordedChanges(record.conyuge_2, 'conyuge_2')];
+  const isEditing = initialRecord !== undefined;
+  const pending = isEditing ? pendingRequests(record) : [];
+  // Un usuario con un pedido esperando no puede pedir otro: el formulario queda solo para ver.
+  const lockFields = onlyCorrections && pending.length > 0;
+  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
+  const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
 
-  function update<K extends keyof MarriageFormValues>(key: K, value: MarriageFormValues[K]) {
-    setValues((prev) => ({ ...prev, [key]: value }));
+  const duplicates = useDuplicateCheck('matrimonio', record.sacramento.id, [
+    duplicateQuery('Esposo', record.conyuge_1),
+    duplicateQuery('Esposa', record.conyuge_2),
+  ]);
+
+  const sacramento = record.sacramento;
+  const updateSacrament = (changes: Partial<Marriage['sacramento']>) =>
+    setRecord((prev) => ({ ...prev, sacramento: { ...prev.sacramento, ...changes } }));
+
+  // Las correcciones nuevas de cada cónyuge se agregan a las ya registradas (que Electron no vuelve a guardar).
+  const toSave = (): Marriage => ({
+    ...record,
+    conyuge_1: { ...record.conyuge_1, cambios: [...record.conyuge_1.cambios, ...newChanges(drafts, 'conyuge_1')] },
+    conyuge_2: { ...record.conyuge_2, cambios: [...record.conyuge_2.cambios, ...newChanges(drafts, 'conyuge_2')] },
+  });
+
+  function handleSave() {
+    // El administrador que guarda sin usar lo que pidió un usuario lo descarta: se le pregunta antes.
+    if (!onlyCorrections && pending.length > 0 && !usesRequestedValues(toSave(), drafts, pending)) {
+      setIsConfirmingDiscard(true);
+      return;
+    }
+    onSave(toSave());
   }
 
-  function handleSubmit() {
-    onSave(values);
+  function applyRequestedValues() {
+    const result = withRequestedValues(record, pending);
+    setRecord(result.record as Marriage);
+    setDrafts((prev) => [...prev, ...result.drafts]);
+    if (result.drafts.length > 0 && !notes.isOpen) notes.toggle();
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-lg bg-white shadow-lg">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-800">
-            {mode === 'create' ? 'Agregar partida' : 'Editar partida'}
-          </h2>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isLoading}
-              className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
-            >
-              Volver
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isLoading}
-              className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {isLoading ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
+    <FormDialog
+      title={!isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
+      onSave={handleSave}
+      onCancel={onCancel}
+      isLoading={isLoading}
+      errorMessage={errorMessage}
+      saveLabel={isEditing && onlyCorrections ? 'Pedir cambio' : undefined}
+      canSave={!lockFields}
+      notice={
+        <>
+          {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
+          <DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />
+        </>
+      }
+    >
+      {!lockFields && <RequiredNote />}
+      <fieldset disabled={lockFields} className="contents">
+      <FormSectionTitle>Datos de registro en el libro</FormSectionTitle>
+      <SacramentRegisterPanel sacramento={sacramento} onChange={updateSacrament} parroquiaNombre={parroquiaNombre} />
+
+      <FormSectionTitle>Datos personales de los cónyuges</FormSectionTitle>
+      <MarriagePersonFields marriage={record} onChange={setRecord} />
+
+      <FormSectionTitle>Familiares</FormSectionTitle>
+      <MarriageFamilyFields marriage={record} onChange={setRecord} />
+
+      <div className="grid grid-cols-1 gap-x-6 gap-y-3 rounded-xl bg-table-panel p-4 sm:grid-cols-2">
+        <InlineFormField label="Fecha de matrimonio:" isGroup>
+          <DateSelect
+            ariaLabel="Fecha de matrimonio"
+            value={sacramento.fecha_evento ?? ''}
+            onChange={(v) => updateSacrament({ fecha_evento: v })}
+          />
+        </InlineFormField>
+        <InlineFormField label="Lugar de matrimonio:">
+          <FormInput value={record.lugar ?? ''} onChange={(e) => setRecord((prev) => ({ ...prev, lugar: e.target.value }))} />
+        </InlineFormField>
+        <div className="sm:col-span-2">
+          <InlineFormField label="Celebrante:" required>
+            <PriestSelector
+              value={sacramento.ministro_id}
+              onSelect={(id) => updateSacrament({ ministro_id: id })}
+              onSearch={onSearchPriest}
+              options={priestOptions}
+              isLoading={isSearchingPriests}
+            />
+          </InlineFormField>
         </div>
+        {TESTIGOS.map(({ key, label }) => (
+          <InlineFormField key={key} label={label}>
+            <FormInput value={record[key] ?? ''} onChange={(e) => setRecord((prev) => ({ ...prev, [key]: e.target.value }))} />
+          </InlineFormField>
+        ))}
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <section className="mb-6">
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">
-              Datos de registro en el libro
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Fecha del sacramento
-                </label>
-                <input
-                  type="date"
-                  value={values.fechaSacramento}
-                  onChange={(e) => update('fechaSacramento', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    N° de libro
-                  </label>
-                  <input
-                    type="text"
-                    value={values.numeroLibro}
-                    onChange={(e) => update('numeroLibro', e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    N° de folio
-                  </label>
-                  <input
-                    type="text"
-                    value={values.numeroFolio}
-                    onChange={(e) => update('numeroFolio', e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">
-                    N° de registro
-                  </label>
-                  <input
-                    type="text"
-                    value={values.numeroRegistro}
-                    onChange={(e) => update('numeroRegistro', e.target.value)}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="mb-6">
-            <MarriagePersonFields
-              label="Esposo"
-              values={values.esposo}
-              onChange={(v) => update('esposo', v)}
-            />
-          </section>
-
-          <section className="mb-6">
-            <MarriagePersonFields
-              label="Esposa"
-              values={values.esposa}
-              onChange={(v) => update('esposa', v)}
-            />
-          </section>
-
-          <section>
-            <h3 className="mb-3 text-sm font-semibold text-slate-700">
-              Datos de la celebración del Matrimonio
-            </h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Fecha de matrimonio
-                </label>
-                <input
-                  type="date"
-                  value={values.fechaMatrimonio}
-                  onChange={(e) => update('fechaMatrimonio', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Celebrante
-                </label>
-                <PriestSelector
-                  value={values.celebranteId}
-                  onSelect={(id) => update('celebranteId', id)}
-                  onSearch={onSearchPriest}
-                  options={priestOptions}
-                  isLoading={isSearchingPriests}
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Lugar de matrimonio
-                </label>
-                <input
-                  type="text"
-                  value={values.lugarMatrimonio}
-                  onChange={(e) => update('lugarMatrimonio', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Testigo 1</label>
-                <input
-                  type="text"
-                  value={values.testigo1}
-                  onChange={(e) => update('testigo1', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Testigo 2</label>
-                <input
-                  type="text"
-                  value={values.testigo2}
-                  onChange={(e) => update('testigo2', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Testigo 3</label>
-                <input
-                  type="text"
-                  value={values.testigo3}
-                  onChange={(e) => update('testigo3', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Testigo 4</label>
-                <input
-                  type="text"
-                  value={values.testigo4}
-                  onChange={(e) => update('testigo4', e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-slate-600">
-                  Notas marginales
-                </label>
-                <textarea
-                  value={values.notasMarginales}
-                  onChange={(e) => update('notasMarginales', e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                />
-              </div>
-            </div>
-          </section>
+        <div className="sm:col-span-2">
+          <MarginalNotesButton isOpen={notes.isOpen} onToggle={notes.toggle} />
         </div>
       </div>
-    </div>
+      </fieldset>
+
+      {notes.isOpen && (
+        <MarginalNotesSection
+          sectionRef={notes.sectionRef}
+          notes={sacramento.anotaciones ?? ''}
+          onNotesChange={(anotaciones) => updateSacrament({ anotaciones })}
+          options={[...personOptions(record.conyuge_1, 'conyuge_1'), ...personOptions(record.conyuge_2, 'conyuge_2')]}
+          corrections={drafts}
+          onCorrectionsChange={setDrafts}
+          recorded={recorded}
+          correctionsLocked={lockFields}
+        />
+      )}
+
+      {isConfirmingDiscard && (
+        <ConfirmActionDialog
+          title="Descartar el cambio pedido"
+          description={`Hay un cambio pendiente de ${requestedBy(pending)}. Si guarda sin usar esos valores, el pedido se descarta.`}
+          confirmLabel="Guardar y descartar"
+          onConfirm={() => {
+            setIsConfirmingDiscard(false);
+            onSave(toSave());
+          }}
+          onDismiss={() => setIsConfirmingDiscard(false)}
+        />
+      )}
+    </FormDialog>
   );
 }

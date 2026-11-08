@@ -1,17 +1,18 @@
-import { useState, type FormEvent } from 'react';
-
-interface PriestFormValues {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-}
+import { useState } from 'react';
+import type { Minister } from '../../../shared/models';
+import { emptyMinister } from '../../lib/emptyRecords';
+import { FormDialog } from '../ui/FormDialog';
+import { FormPanel } from '../ui/FormPanel';
+import { Field } from '../ui/Field';
 
 interface PriestFormModalProps {
   mode: 'create' | 'edit';
-  initialValues?: PriestFormValues;
-  onSave: (values: PriestFormValues) => void;
+  /** El ministro que se edita; al crear, se puede traer ya el nombre escrito. */
+  initialValues?: Minister;
+  onSave: (minister: Minister) => void;
   onCancel: () => void;
   isLoading: boolean;
+  errorMessage?: string | null;
 }
 
 export function PriestFormModal({
@@ -20,84 +21,38 @@ export function PriestFormModal({
   onSave,
   onCancel,
   isLoading,
+  errorMessage,
 }: PriestFormModalProps) {
-  const [nombre, setNombre] = useState(initialValues?.nombre ?? '');
-  const [apellidoPaterno, setApellidoPaterno] = useState(
-    initialValues?.apellidoPaterno ?? '',
-  );
-  const [apellidoMaterno, setApellidoMaterno] = useState(
-    initialValues?.apellidoMaterno ?? '',
-  );
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSave({ nombre, apellidoPaterno, apellidoMaterno });
-  }
+  const [minister, setMinister] = useState<Minister>(initialValues ?? emptyMinister());
+  const update = (changes: Partial<Minister>) => setMinister((prev) => ({ ...prev, ...changes }));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">
-          {mode === 'create' ? 'Añadir nuevo sacerdote' : 'Editar sacerdote'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Nombre</label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Apellido paterno
-            </label>
-            <input
-              type="text"
-              value={apellidoPaterno}
-              onChange={(e) => setApellidoPaterno(e.target.value)}
-              required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">
-              Apellido materno
-            </label>
-            <input
-              type="text"
-              value={apellidoMaterno}
-              onChange={(e) => setApellidoMaterno(e.target.value)}
-              required
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-            />
-          </div>
-
-          <div className="mt-2 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isLoading}
-              className="rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {isLoading ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <FormDialog
+      title={mode === 'create' ? 'Añadir nuevo ministro' : 'Editar ministro'}
+      onSave={() => onSave(minister)}
+      onCancel={onCancel}
+      isLoading={isLoading}
+      errorMessage={errorMessage}
+      size="small"
+    >
+      <FormPanel title="Datos del ministro">
+        <div className="grid grid-cols-2 gap-3">
+          <Field variant="panel" label="Título" value={minister.titulo ?? ''} onChange={(v) => update({ titulo: v })} />
+          <Field variant="panel" label="Nombre" value={minister.nombre} onChange={(v) => update({ nombre: v })} />
+          <Field
+            variant="panel"
+            label="Apellido paterno"
+            value={minister.apellido_paterno}
+            onChange={(v) => update({ apellido_paterno: v })}
+          />
+          <Field
+            variant="panel"
+            label="Apellido materno"
+            value={minister.apellido_materno}
+            onChange={(v) => update({ apellido_materno: v })}
+          />
+        </div>
+      </FormPanel>
+    </FormDialog>
   );
 }

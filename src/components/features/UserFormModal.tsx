@@ -1,219 +1,204 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useState } from 'react';
+import type { User } from '../../../shared/models';
+import type { Role } from '../../../shared/sync';
+import { ROLE_LABELS } from '../../lib/permissions';
+import { FormDialog } from '../ui/FormDialog';
+import { FormPanel } from '../ui/FormPanel';
+import { FormInput, FORM_CONTROL_CLASS } from '../ui/FormInput';
 import { Field } from '../ui/Field';
+import { PasswordInput } from '../ui/PasswordInput';
 
-export interface UserFormValues {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  username: string; // solo se captura en alta
-  password: string; // en edición, vacío = no cambiar
-  confirmPassword: string;
-  parroquia: // solo se usa en alta
-    | { kind: 'existing'; parroquiaId: number | null }
-    | { kind: 'new'; nombre: string };
-}
+const EMPTY_USER: User = {
+  username: '',
+  rol: 'usuario',
+  parroquia_id: null,
+  nombre: '',
+  apellido_paterno: '',
+  apellido_materno: '',
+};
+
+const ROLE_HELP: Record<Role, string> = {
+  admin_general: 'Gestiona parroquias y cuentas, y consulta todas las parroquias. No registra ni modifica partidas.',
+  admin_parroquia: 'Registra y corrige las partidas de su parroquia, aprueba los cambios pedidos y crea usuarios. El principal de la parroquia también gestiona a los demás administradores.',
+  usuario: 'Registra partidas. En una ya guardada, pide los cambios y un administrador de la parroquia los aprueba.',
+};
 
 interface UserFormModalProps {
   mode: 'create' | 'edit';
   parishes: Array<{ id: number; nombre: string }>;
-  initialValues?: {
-    nombre: string;
-    apellidoPaterno: string;
-    apellidoMaterno: string;
-    username: string;
-    parroquiaNombre: string | null;
-  };
-  onSave: (values: UserFormValues) => void;
+  /** La cuenta que se edita, tal como llegó de Electron. */
+  initialValues?: User;
+  /** Quién crea la cuenta: el admin general elige rol y parroquia; el de parroquia solo crea usuarios de la suya. */
+  actorRole: Role;
+  /** La parroquia de quien crea, si es el administrador de una parroquia. */
+  actorParishName?: string;
+  /** Solo el administrador general principal puede crear otros administradores generales. */
+  canCreateGeneralAdmin?: boolean;
+  /** El principal de una parroquia también crea administradores de ella; los demás, solo usuarios. */
+  canCreateParishAdmin?: boolean;
+  /** confirmPassword solo sirve para validar: no es parte de la cuenta. */
+  onSave: (user: User, confirmPassword: string) => void;
   onCancel: () => void;
   isLoading: boolean;
   errorMessage: string | null;
 }
 
-// Valor reservado del <select> para la opción "crear parroquia nueva".
-// No colisiona con ids reales, que son números.
-const NEW_PARISH_OPTION = '__new__';
+const LABEL = 'mb-1 block text-xs font-bold text-slate-800';
+const SELECT = `w-full px-3 py-1.5 ${FORM_CONTROL_CLASS}`;
 
 export function UserFormModal({
   mode,
   parishes,
   initialValues,
+  actorRole,
+  actorParishName = '',
+  canCreateGeneralAdmin = false,
+  canCreateParishAdmin = false,
   onSave,
   onCancel,
   isLoading,
   errorMessage,
 }: UserFormModalProps) {
-  const [nombre, setNombre] = useState(initialValues?.nombre ?? '');
-  const [apellidoPaterno, setApellidoPaterno] = useState(initialValues?.apellidoPaterno ?? '');
-  const [apellidoMaterno, setApellidoMaterno] = useState(initialValues?.apellidoMaterno ?? '');
-  const [username, setUsername] = useState(initialValues?.username ?? '');
+  const [user, setUser] = useState<User>(initialValues ?? EMPTY_USER);
+  const update = (changes: Partial<User>) => setUser((prev) => ({ ...prev, ...changes }));
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [parishSelection, setParishSelection] = useState<string>('');
-  const [newParishName, setNewParishName] = useState('');
 
   const parishSelectId = useId();
-  const isCreating = parishSelection === NEW_PARISH_OPTION;
+  const roleSelectId = useId();
+  const isGeneralAdminAccount = user.rol === 'admin_general';
+  const isGeneralActor = actorRole === 'admin_general';
+  const choosesRole = mode === 'create' && (isGeneralActor || canCreateParishAdmin);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const roles: Role[] = isGeneralActor && canCreateGeneralAdmin ? ['usuario', 'admin_parroquia', 'admin_general'] : ['usuario', 'admin_parroquia'];
 
-    onSave({
-      nombre,
-      apellidoPaterno,
-      apellidoMaterno,
-      username,
-      password,
-      confirmPassword,
-      parroquia: isCreating
-        ? { kind: 'new', nombre: newParishName }
-        : { kind: 'existing', parroquiaId: parishSelection ? Number(parishSelection) : null },
-    });
+  function handleSave() {
+    // Al crear: el admin general elige la parroquia; para el de parroquia la pone Electron (la suya).
+    // Un administrador general no es de ninguna parroquia.
+    const parish =
+      mode === 'edit' || actorRole !== 'admin_general'
+        ? {}
+        : { parroquia_id: isGeneralAdminAccount || !parishSelection ? null : Number(parishSelection) };
+
+    onSave({ ...user, ...parish, password }, confirmPassword);
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="user-form-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+    <FormDialog
+      title={mode === 'create' ? 'Añadir nuevo usuario' : 'Editar usuario'}
+      onSave={handleSave}
+      onCancel={onCancel}
+      isLoading={isLoading}
+      errorMessage={errorMessage}
+      size="medium"
     >
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col rounded-lg bg-white shadow-lg">
-        <h2
-          id="user-form-title"
-          className="border-b border-slate-200 px-6 py-4 text-lg font-semibold text-slate-800"
-        >
-          {mode === 'create' ? 'Añadir nuevo usuario' : 'Editar usuario'}
-        </h2>
+      <div className="grid grid-cols-2 gap-4">
+        <FormPanel title="Datos personales">
+          <Field variant="panel" label="Nombre" value={user.nombre} onChange={(v) => update({ nombre: v })} />
+          <Field
+            variant="panel"
+            label="Apellido paterno"
+            value={user.apellido_paterno}
+            onChange={(v) => update({ apellido_paterno: v })}
+          />
+          <Field
+            variant="panel"
+            label="Apellido materno"
+            value={user.apellido_materno}
+            onChange={(v) => update({ apellido_materno: v })}
+          />
+        </FormPanel>
 
-        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
-          <div className="flex flex-col gap-3 overflow-y-auto px-6 py-4">
-            <Field label="Nombre" value={nombre} onChange={setNombre} />
-            <Field
-              label="Apellido paterno"
-              value={apellidoPaterno}
-              onChange={setApellidoPaterno}
-            />
-            <Field
-              label="Apellido materno"
-              value={apellidoMaterno}
-              onChange={setApellidoMaterno}
-            />
+        <FormPanel title="Cuenta">
+          {mode === 'create' ? (
+            <Field variant="panel" label="Nombre de usuario" value={user.username} onChange={(v) => update({ username: v })} />
+          ) : (
+            <ReadOnlyField label="Nombre de usuario" value={user.username} />
+          )}
 
-            {mode === 'create' ? (
-              <Field label="Nombre de usuario" value={username} onChange={setUsername} />
-            ) : (
-              <ReadOnlyField label="Nombre de usuario" value={initialValues?.username ?? ''} />
-            )}
-
-            {mode === 'create' ? (
-              <div>
-                <label
-                  htmlFor={parishSelectId}
-                  className="mb-1 block text-xs font-medium text-slate-600"
-                >
-                  Parroquia
-                </label>
-                <select
-                  id={parishSelectId}
-                  value={parishSelection}
-                  onChange={(e) => setParishSelection(e.target.value)}
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-                >
-                  <option value="" disabled>
-                    Seleccione una parroquia
+          {choosesRole ? (
+            <div>
+              <label htmlFor={roleSelectId} className={LABEL}>
+                Tipo de cuenta
+              </label>
+              <select
+                id={roleSelectId}
+                value={user.rol}
+                onChange={(e) => update({ rol: e.target.value as Role })}
+                className={SELECT}
+              >
+                {roles.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
                   </option>
-                  {parishes.map((parish) => (
-                    <option key={parish.id} value={parish.id}>
-                      {parish.nombre}
-                    </option>
-                  ))}
-                  <option value={NEW_PARISH_OPTION}>+ Crear parroquia nueva…</option>
-                </select>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-600">{ROLE_HELP[user.rol]}</p>
+            </div>
+          ) : (
+            <ReadOnlyField label="Tipo de cuenta" value={ROLE_LABELS[user.rol]} />
+          )}
 
-                {isCreating && (
-                  <div className="mt-2">
-                    <Field
-                      label="Nombre de la parroquia nueva"
-                      value={newParishName}
-                      onChange={setNewParishName}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <ReadOnlyField
-                label="Parroquia"
-                value={initialValues?.parroquiaNombre ?? '—'}
-              />
-            )}
+          {mode === 'create' && actorRole === 'admin_general' && !isGeneralAdminAccount && (
+            <div>
+              <label htmlFor={parishSelectId} className={LABEL}>
+                Parroquia
+              </label>
+              <select
+                id={parishSelectId}
+                value={parishSelection}
+                onChange={(e) => setParishSelection(e.target.value)}
+                className={SELECT}
+              >
+                <option value="" disabled>
+                  Seleccione una parroquia
+                </option>
+                {parishes.map((parish) => (
+                  <option key={parish.id} value={parish.id}>
+                    {parish.nombre}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-600">Una parroquia nueva se crea en Configuración → Parroquias.</p>
+            </div>
+          )}
 
-            <PasswordField
-              label={mode === 'create' ? 'Contraseña' : 'Contraseña nueva (opcional)'}
-              value={password}
-              onChange={setPassword}
-            />
-            <PasswordField
-              label="Repetir contraseña"
-              value={confirmPassword}
-              onChange={setConfirmPassword}
-            />
+          {mode === 'create' && actorRole !== 'admin_general' && <ReadOnlyField label="Parroquia" value={actorParishName} />}
 
-            {mode === 'edit' && (
-              <p className="text-xs text-slate-500">
-                Si deja la contraseña vacía, se conserva la actual.
-              </p>
-            )}
+          {mode === 'edit' && (
+            <ReadOnlyField label="Parroquia" value={isGeneralAdminAccount ? 'Todas (administrador general)' : (user.parroquia_nombre ?? '—')} />
+          )}
 
-            {errorMessage && (
-              <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-                {errorMessage}
-              </p>
-            )}
-          </div>
+          <PasswordField
+            label={mode === 'create' ? 'Contraseña' : 'Contraseña nueva (opcional)'}
+            value={password}
+            onChange={setPassword}
+          />
+          <PasswordField label="Repetir contraseña" value={confirmPassword} onChange={setConfirmPassword} />
 
-          <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
-            <button
-              type="button"
-              onClick={onCancel}
-              disabled={isLoading}
-              className="rounded-md bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-300"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="rounded-md bg-emerald-900 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-            >
-              {isLoading ? 'Guardando...' : 'Guardar cambios'}
-            </button>
-          </div>
-        </form>
+          {mode === 'edit' && (
+            <p className="text-xs text-slate-600">Si deja la contraseña vacía, se conserva la actual.</p>
+          )}
+        </FormPanel>
       </div>
-    </div>
+    </FormDialog>
   );
 }
 
 // Campos auxiliares privados: solo tienen sentido dentro de este formulario.
-// `Field` genérico (ui/) no sirve para estos dos casos: uno es de solo lectura
-// y el otro necesita type="password" con autocomplete de contraseña nueva.
+// `Field` genérico (ui/) no sirve para estos dos casos: uno está deshabilitado
+// y el otro es una contraseña nueva (con el botón para verla).
 
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   const id = useId();
 
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600">
+      <label htmlFor={id} className={LABEL}>
         {label}
       </label>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        readOnly
-        disabled
-        className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500"
-      />
+      <FormInput id={id} type="text" value={value} readOnly disabled />
     </div>
   );
 }
@@ -231,16 +216,15 @@ function PasswordField({
 
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-slate-600">
+      <label htmlFor={id} className={LABEL}>
         {label}
       </label>
-      <input
+      <PasswordInput
         id={id}
-        type="password"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete="new-password"
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+        inputClassName={`w-full px-3 py-1.5 ${FORM_CONTROL_CLASS}`}
       />
     </div>
   );

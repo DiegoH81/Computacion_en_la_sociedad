@@ -7,7 +7,12 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "db:setup": "wrangler d1 execute prelatura-db --local --file=src/db/schema.sql",
+    "db:seed": "node src/scripts/seed-dev.mjs",
+    "db:migrate:remote": "wrangler d1 migrations apply prelatura-db --remote",
+    "db:demo": "node src/scripts/seed-demo.mjs",
+    "package:build": "node src/scripts/build-package.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.0.0",
@@ -17,6 +22,7 @@
     "wrangler": "^4.141.0"
   },
   "dependencies": {
+    "hono": "^4.13.16",
     "jose": "^6.2.12"
   }
 }

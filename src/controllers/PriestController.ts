@@ -1,20 +1,10 @@
-import { PriestService, type PriestFormValues } from '../services/PriestService';
+import type { Minister, SearchFilters } from '../../shared/models';
 import { ApiError } from '../lib/apiClient';
-import { useSessionStore } from '../store/sessionStore';
-
-export interface PriestRowUI {
-  id: number;
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  parroquiaNombre: string;
-  parroquiaId: number;
-  activo: boolean;
-}
+import { PriestService } from '../services/PriestService';
 
 export interface SearchResult {
   success: boolean;
-  priests?: PriestRowUI[];
+  priests?: Minister[];
   totalPages?: number;
   errorMessage?: string;
 }
@@ -24,95 +14,52 @@ export interface MutationResult {
   errorMessage?: string;
 }
 
-function requireToken(): string {
-  const token = useSessionStore.getState().token;
-  if (!token) throw new ApiError('Sesión no válida.', 401);
-  return token;
+/** "Manuel Torres Rios": como se muestra un ministro en las listas. */
+export function ministerName(minister: Minister): string {
+  return [minister.nombre, minister.apellido_paterno, minister.apellido_materno].filter(Boolean).join(' ');
 }
 
-export async function searchPriests(params: {
-  nombre?: string;
-  apellidoPaterno?: string;
-  apellidoMaterno?: string;
-  sortBy: 'nombre' | 'apellidoPaterno' | 'apellidoMaterno';
-  sortDirection: 'asc' | 'desc';
-  page: number;
-}): Promise<SearchResult> {
+/** Con parroquia_id busca solo en esa parroquia; sin él, en todas. */
+export async function searchPriests(filters: SearchFilters): Promise<SearchResult> {
   try {
-    const token = requireToken();
-
-    // Traduce el nombre de campo de UI (camelCase) al que espera el backend (snake_case).
-    const sortByBackend =
-      params.sortBy === 'apellidoPaterno'
-        ? 'apellido_paterno'
-        : params.sortBy === 'apellidoMaterno'
-          ? 'apellido_materno'
-          : 'nombre';
-
-    const response = await PriestService.search(
-      { ...params, sortBy: sortByBackend },
-      token,
-    );
-
-    const priests: PriestRowUI[] = response.priests.map((p) => ({
-      id: p.id,
-      nombre: p.nombre,
-      apellidoPaterno: p.apellido_paterno,
-      apellidoMaterno: p.apellido_materno,
-      parroquiaNombre: p.parroquia_nombre,
-      parroquiaId: p.parroquia_id,
-      activo: p.activo === 1,
-    }));
-
-    return { success: true, priests, totalPages: response.totalPages };
+    const page = await PriestService.search(filters);
+    return { success: true, priests: page.resultados, totalPages: page.total_paginas };
   } catch (error) {
     return {
       success: false,
-      errorMessage: error instanceof ApiError ? error.message : 'Error al buscar sacerdotes.',
+      errorMessage: error instanceof ApiError ? error.message : 'Error al buscar ministros.',
     };
   }
 }
 
-export async function createPriest(values: PriestFormValues): Promise<MutationResult> {
+/** Se crea siempre en la parroquia del usuario (lo decide Electron). */
+export async function createPriest(minister: Minister): Promise<MutationResult & { id?: number }> {
   try {
-    const token = requireToken();
-    const parroquiaActivaId = useSessionStore.getState().parroquiaActivaId;
-    const rol = useSessionStore.getState().rol;
-
-    // Solo se envía parroquiaId explícito cuando el rol es admin (§5, confirmado);
-    // para usuario_parroquia el Worker ignora este campo y usa el del JWT.
-    const parroquiaId = rol === 'admin' ? (parroquiaActivaId ?? undefined) : undefined;
-
-    await PriestService.create(values, parroquiaId, token);
-    return { success: true };
+    const { id } = await PriestService.create(minister);
+    return { success: true, id };
   } catch (error) {
     return {
       success: false,
-      errorMessage: error instanceof ApiError ? error.message : 'Error al crear el sacerdote.',
+      errorMessage: error instanceof ApiError ? error.message : 'Error al crear el ministro.',
     };
   }
 }
 
-export async function updatePriest(
-  priestId: number,
-  values: PriestFormValues,
-): Promise<MutationResult> {
+export async function updatePriest(minister: Minister): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await PriestService.update(priestId, values, token);
+    await PriestService.update(minister);
     return { success: true };
   } catch (error) {
     return {
       success: false,
-      errorMessage: error instanceof ApiError ? error.message : 'Error al editar el sacerdote.',
+      errorMessage: error instanceof ApiError ? error.message : 'Error al editar el ministro.',
     };
   }
 }
 
 export async function togglePriestActive(priestId: number): Promise<MutationResult> {
   try {
-    const token = requireToken();
-    await PriestService.toggleActive(priestId, token);
+    await PriestService.toggleActive(priestId);
     return { success: true };
   } catch (error) {
     return {

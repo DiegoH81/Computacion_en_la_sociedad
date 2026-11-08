@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import type { Role } from '../../shared/sync';
 
-export type Rol = 'admin' | 'usuario_parroquia';
+export type Rol = Role;
 
 interface SessionState {
   isAuthenticated: boolean;
@@ -23,6 +24,8 @@ interface SessionState {
   }) => void;
 
   setParroquiaActiva: (id: number, nombre: string) => void;
+
+  setToken: (token: string) => void;
 
   clearSession: () => void;
 }
@@ -51,6 +54,8 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setParroquiaActiva: (id, nombre) =>
     set({ parroquiaActivaId: id, parroquiaActivaNombre: nombre }),
+
+  setToken: (token) => set({ token }),
 
   clearSession: () =>
     set({

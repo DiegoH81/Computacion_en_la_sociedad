@@ -1,78 +1,60 @@
+import type { Baptism, Minister } from '../../../shared/models';
+import { DateSelect } from '../ui/DateSelect';
 import { Field } from '../ui/Field';
+import { FormPanel } from '../ui/FormPanel';
+import { StackedFormField } from '../ui/StackedFormField';
+import { MarginalNotesButton } from './MarginalNotesButton';
 import { PriestSelector } from './PriestSelector';
-
-export interface SacramentCelebrationData {
-  fechaCelebracion: string;
-  celebranteId: number | null;
-  padrino: string;
-  madrina: string;
-  anotaciones: string;
-}
-
-interface PriestOption {
-  id: number;
-  nombreCompleto: string;
-  parroquiaNombre: string;
-}
 
 interface SacramentCelebrationFieldsProps {
   title: string; // ej. "Datos de bautismo" o "Datos de confirmación"
-  fechaLabel: string; // ej. "Fecha del bautizo" o "Fecha de confirmación"
-  values: SacramentCelebrationData;
-  onChange: (values: SacramentCelebrationData) => void;
-  priestOptions: PriestOption[];
+  fechaLabel: string; // ej. "Fecha de bautizo" o "Fecha de confirmación"
+  record: Baptism;
+  onChange: (record: Baptism) => void;
+  priestOptions: Minister[];
   onSearchPriest: (query: string) => void;
   isSearchingPriests: boolean;
+  notesOpen: boolean;
+  onToggleNotes: () => void;
 }
 
+/** La celebración de un bautismo o una confirmación: fecha, celebrante y padrinos. */
 export function SacramentCelebrationFields({
   title,
   fechaLabel,
-  values,
+  record,
   onChange,
   priestOptions,
   onSearchPriest,
   isSearchingPriests,
+  notesOpen,
+  onToggleNotes,
 }: SacramentCelebrationFieldsProps) {
-  function update<K extends keyof SacramentCelebrationData>(
-    key: K,
-    value: SacramentCelebrationData[K],
-  ) {
-    onChange({ ...values, [key]: value });
-  }
+  const sacramento = record.sacramento;
 
   return (
-    <section>
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">{title}</h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label={fechaLabel}
-          type="date"
-          value={values.fechaCelebracion}
-          onChange={(v) => update('fechaCelebracion', v)}
+    <FormPanel title={title}>
+      <StackedFormField label={fechaLabel} isGroup>
+        <DateSelect
+          ariaLabel={fechaLabel}
+          value={sacramento.fecha_evento ?? ''}
+          onChange={(v) => onChange({ ...record, sacramento: { ...sacramento, fecha_evento: v } })}
         />
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Celebrante</label>
-          <PriestSelector
-            value={values.celebranteId}
-            onSelect={(id) => update('celebranteId', id)}
-            onSearch={onSearchPriest}
-            options={priestOptions}
-            isLoading={isSearchingPriests}
-          />
-        </div>
-        <Field label="Padrino" value={values.padrino} onChange={(v) => update('padrino', v)} />
-        <Field label="Madrina" value={values.madrina} onChange={(v) => update('madrina', v)} />
-        <div className="sm:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Anotaciones</label>
-          <textarea
-            value={values.anotaciones}
-            onChange={(e) => update('anotaciones', e.target.value)}
-            rows={3}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
-          />
-        </div>
+      </StackedFormField>
+      <StackedFormField label="Celebrante" required>
+        <PriestSelector
+          value={sacramento.ministro_id}
+          onSelect={(id) => onChange({ ...record, sacramento: { ...sacramento, ministro_id: id } })}
+          onSearch={onSearchPriest}
+          options={priestOptions}
+          isLoading={isSearchingPriests}
+        />
+      </StackedFormField>
+      <Field variant="panel" label="Padrino" value={record.padrino_1 ?? ''} onChange={(v) => onChange({ ...record, padrino_1: v })} />
+      <Field variant="panel" label="Madrina" value={record.padrino_2 ?? ''} onChange={(v) => onChange({ ...record, padrino_2: v })} />
+      <div className="mt-auto pt-3">
+        <MarginalNotesButton isOpen={notesOpen} onToggle={onToggleNotes} />
       </div>
-    </section>
+    </FormPanel>
   );
 }

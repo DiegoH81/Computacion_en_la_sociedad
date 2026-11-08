@@ -1,80 +1,121 @@
-interface PersonMarriageData {
-  nombre: string;
-  apellidoPaterno: string;
-  apellidoMaterno: string;
-  lugarNacimiento: string;
-  fechaNacimiento: string;
-  parroquiaBautismo: string;
-  fechaBautismo: string;
-  padreNombre: string;
-  padreApellido: string;
-  padreDni: string;
-  madreNombre: string;
-  madreApellido: string;
-  madreDni: string;
+import type { Marriage, Person } from '../../../shared/models';
+import { BirthDateOrApproximate } from '../ui/BirthDateOrApproximate';
+import { DateSelect } from '../ui/DateSelect';
+import { FormInput } from '../ui/FormInput';
+import { MirroredColumnTitles, MirroredFormRow } from '../ui/MirroredFormRow';
+
+/** Los datos de texto de una persona que se escriben en una fila (esposo a la izquierda, esposa a la derecha). */
+type TextField = 'dni' | 'nombres' | 'apellido_paterno' | 'apellido_materno' | 'lugar_nacimiento' | 'padre' | 'madre';
+
+interface SpousesProps {
+  marriage: Marriage;
+  onChange: (marriage: Marriage) => void;
 }
 
-interface MarriagePersonFieldsProps {
-  label: 'Esposo' | 'Esposa';
-  values: PersonMarriageData;
-  onChange: (values: PersonMarriageData) => void;
+function updatePerson(props: SpousesProps, spouse: 'conyuge_1' | 'conyuge_2', changes: Partial<Person>) {
+  props.onChange({ ...props.marriage, [spouse]: { ...props.marriage[spouse], ...changes } });
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  type = 'text',
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
+function TextRow(props: SpousesProps & { label: string; field: TextField; required?: boolean }) {
+  const { label, field, marriage, required = false } = props;
+
   return (
-    <div>
-      <label className="mb-1 block text-xs font-medium text-slate-600">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
+    <MirroredFormRow
+      label={label}
+      required={required}
+      left={
+        <FormInput
+          aria-label={`${label} del esposo`}
+          value={marriage.conyuge_1[field] ?? ''}
+          onChange={(e) => updatePerson(props, 'conyuge_1', { [field]: e.target.value })}
+        />
+      }
+      right={
+        <FormInput
+          aria-label={`${label} de la esposa`}
+          value={marriage.conyuge_2[field] ?? ''}
+          onChange={(e) => updatePerson(props, 'conyuge_2', { [field]: e.target.value })}
+        />
+      }
+    />
+  );
+}
+
+export function MarriagePersonFields(props: SpousesProps) {
+  const { marriage, onChange } = props;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <MirroredColumnTitles left="Esposo" right="Esposa" />
+      <TextRow {...props} label="DNI" field="dni" />
+      <TextRow {...props} label="Nombres" field="nombres" required />
+      <TextRow {...props} label="Apellido paterno" field="apellido_paterno" required />
+      <TextRow {...props} label="Apellido materno" field="apellido_materno" required />
+      <TextRow {...props} label="Lugar de nacimiento" field="lugar_nacimiento" required />
+      <MirroredFormRow
+        label="Fecha de nacimiento"
+        required
+        left={
+          <BirthDateOrApproximate
+            personLabel="del esposo"
+            fecha={marriage.conyuge_1.fecha_nacimiento}
+            fechaAproximada={marriage.conyuge_1.fecha_aproximada}
+            onChange={({ fecha, fechaAproximada }) => updatePerson(props, 'conyuge_1', { fecha_nacimiento: fecha, fecha_aproximada: fechaAproximada })}
+          />
+        }
+        right={
+          <BirthDateOrApproximate
+            personLabel="de la esposa"
+            fecha={marriage.conyuge_2.fecha_nacimiento}
+            fechaAproximada={marriage.conyuge_2.fecha_aproximada}
+            onChange={({ fecha, fechaAproximada }) => updatePerson(props, 'conyuge_2', { fecha_nacimiento: fecha, fecha_aproximada: fechaAproximada })}
+          />
+        }
+      />
+      <MirroredFormRow
+        label="Parroquia de bautismo"
+        left={
+          <FormInput
+            aria-label="Parroquia de bautismo del esposo"
+            value={marriage.conyuge_1_bautismo_parroquia ?? ''}
+            onChange={(e) => onChange({ ...marriage, conyuge_1_bautismo_parroquia: e.target.value })}
+          />
+        }
+        right={
+          <FormInput
+            aria-label="Parroquia de bautismo de la esposa"
+            value={marriage.conyuge_2_bautismo_parroquia ?? ''}
+            onChange={(e) => onChange({ ...marriage, conyuge_2_bautismo_parroquia: e.target.value })}
+          />
+        }
+      />
+      <MirroredFormRow
+        label="Fecha de bautismo"
+        left={
+          <DateSelect
+            ariaLabel="Fecha de bautismo del esposo"
+            value={marriage.conyuge_1_bautismo_fecha ?? ''}
+            onChange={(value) => onChange({ ...marriage, conyuge_1_bautismo_fecha: value })}
+          />
+        }
+        right={
+          <DateSelect
+            ariaLabel="Fecha de bautismo de la esposa"
+            value={marriage.conyuge_2_bautismo_fecha ?? ''}
+            onChange={(value) => onChange({ ...marriage, conyuge_2_bautismo_fecha: value })}
+          />
+        }
       />
     </div>
   );
 }
 
-export function MarriagePersonFields({ label, values, onChange }: MarriagePersonFieldsProps) {
-  function update<K extends keyof PersonMarriageData>(key: K, value: PersonMarriageData[K]) {
-    onChange({ ...values, [key]: value });
-  }
-
+export function MarriageFamilyFields(props: SpousesProps) {
   return (
-    <div className="rounded-lg bg-purple-50 p-4">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">Datos personales — {label}</h3>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label={`Nombre ${label.toLowerCase()}`} value={values.nombre} onChange={(v) => update('nombre', v)} />
-        <Field label="Apellido paterno" value={values.apellidoPaterno} onChange={(v) => update('apellidoPaterno', v)} />
-        <Field label="Apellido materno" value={values.apellidoMaterno} onChange={(v) => update('apellidoMaterno', v)} />
-
-        <Field label="Lugar de nacimiento" value={values.lugarNacimiento} onChange={(v) => update('lugarNacimiento', v)} />
-        <Field label="Fecha de nacimiento" type="date" value={values.fechaNacimiento} onChange={(v) => update('fechaNacimiento', v)} />
-
-        <Field label="Parroquia de bautismo" value={values.parroquiaBautismo} onChange={(v) => update('parroquiaBautismo', v)} />
-        <Field label="Fecha de bautismo" type="date" value={values.fechaBautismo} onChange={(v) => update('fechaBautismo', v)} />
-      </div>
-
-      <h4 className="mb-2 mt-4 text-sm font-semibold text-slate-700">Familiares</h4>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Field label="Nombre padre" value={values.padreNombre} onChange={(v) => update('padreNombre', v)} />
-        <Field label="Apellido padre" value={values.padreApellido} onChange={(v) => update('padreApellido', v)} />
-        <Field label="DNI padre" value={values.padreDni} onChange={(v) => update('padreDni', v)} />
-
-        <Field label="Nombre madre" value={values.madreNombre} onChange={(v) => update('madreNombre', v)} />
-        <Field label="Apellido madre" value={values.madreApellido} onChange={(v) => update('madreApellido', v)} />
-        <Field label="DNI madre" value={values.madreDni} onChange={(v) => update('madreDni', v)} />
-      </div>
+    <div className="flex flex-col gap-2">
+      <MirroredColumnTitles left="Esposo" right="Esposa" />
+      <TextRow {...props} label="Padre" field="padre" required />
+      <TextRow {...props} label="Madre" field="madre" required />
     </div>
   );
 }
