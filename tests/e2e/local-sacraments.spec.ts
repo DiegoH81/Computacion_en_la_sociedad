@@ -1,10 +1,11 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { open_local_database } from '../../electron/main/db/database';
 import { chooseYear, completeRequired, field, saveRecord } from './form-helpers';
 import { write_legacy_excel, write_xlsx } from './xlsx-fixture';
+import { launchApp } from './launch';
 
 // El primer login y los datos de referencia vienen del Worker de pruebas (global-setup.ts).
 
@@ -12,9 +13,7 @@ let userData: string;
 let app: ElectronApplication | null = null;
 
 async function launchAndLogin(): Promise<Page> {
-  app = await electron.launch({
-    args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-  });
+  app = await launchApp(userData);
   const window = await app.firstWindow();
   await window.getByPlaceholder('Nombre de usuario').fill('parroco1');
   await window.getByPlaceholder('Contraseña').fill('parroco123');
@@ -587,9 +586,7 @@ test('datos obligatorios: todos los de la persona menos el DNI, y el celebrante'
 });
 
 test('contraseñas: el ojo muestra y oculta lo que se escribe', async () => {
-  app = await electron.launch({
-    args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-  });
+  app = await launchApp(userData);
   const window = await app.firstWindow();
   const password = window.getByPlaceholder('Contraseña');
 
@@ -752,7 +749,7 @@ test('respaldo: se exporta con contraseña y, en una PC nueva, se restaura desde
   // Otra PC, vacía: restaura desde el login y entra con la misma cuenta.
   const otherPc = mkdtempSync(path.join(tmpdir(), 'prelatura-sacraments-'));
   try {
-    app = await electron.launch({ args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${otherPc}`] });
+    app = await launchApp(otherPc);
     const fresh = await app.firstWindow();
     await app.evaluate(({ dialog }, file) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;

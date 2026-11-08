@@ -1,22 +1,19 @@
-import { createRequire } from "node:module";
-import { BrowserWindow, app, dialog, ipcMain, safeStorage, screen } from "electron";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import fs, { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { gunzipSync, gzipSync } from "node:zlib";
-import Database from "better-sqlite3-multiple-ciphers";
-import { createCipheriv, createDecipheriv, pbkdf2, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
-import { Worker } from "node:worker_threads";
-import zlib from "zlib";
-import { Duplex, PassThrough, Transform, pipeline } from "stream";
-import { Blob } from "node:buffer";
-import Stream, { Readable, Transform as Transform$1 } from "node:stream";
-import { createRequire as createRequire$1 } from "module";
-var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
-var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
-//#endregion
-//#region shared/record_fields.ts
-var SACRAMENT_FIELDS = [
+import { createRequire as e } from "node:module";
+import { BrowserWindow as t, app as n, dialog as r, ipcMain as i, safeStorage as a, screen as o } from "electron";
+import s from "node:path";
+import { fileURLToPath as c } from "node:url";
+import l, { existsSync as u, mkdirSync as d, readFileSync as f, readdirSync as p, renameSync as m, rmSync as h, statSync as g, writeFileSync as _ } from "node:fs";
+import { gunzipSync as v, gzipSync as y } from "node:zlib";
+import b from "better-sqlite3-multiple-ciphers";
+import { createCipheriv as x, createDecipheriv as S, pbkdf2 as C, randomBytes as w, randomUUID as ee, scrypt as T, timingSafeEqual as E } from "node:crypto";
+import { Worker as D } from "node:worker_threads";
+import O from "zlib";
+import { Duplex as k, PassThrough as te, Transform as A, pipeline as ne } from "stream";
+import { Blob as re } from "node:buffer";
+import j, { Readable as M, Transform as ie } from "node:stream";
+import { createRequire as N } from "module";
+//#region \0rolldown/runtime.js
+var P = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), F = /* @__PURE__ */ e(import.meta.url), ae = [
 	{
 		campo: "libro",
 		label: "Libro"
@@ -45,8 +42,7 @@ var SACRAMENT_FIELDS = [
 		campo: "anotaciones",
 		label: "Nota marginal"
 	}
-];
-var PERSON_FIELDS = [
+], I = [
 	{
 		campo: "dni",
 		label: "DNI"
@@ -83,15 +79,13 @@ var PERSON_FIELDS = [
 		campo: "madre",
 		label: "Madre"
 	}
-];
-var BAPTISM_FIELDS = [{
+], oe = [{
 	campo: "padrino_1",
 	label: "Padrino"
 }, {
 	campo: "padrino_2",
 	label: "Madrina"
-}];
-var MARRIAGE_FIELDS = [
+}], se = [
 	{
 		campo: "lugar",
 		label: "Lugar del matrimonio"
@@ -128,93 +122,78 @@ var MARRIAGE_FIELDS = [
 		campo: "conyuge_2_bautismo_fecha",
 		label: "Fecha de bautismo de la esposa"
 	}
-];
-var PERSON_COLUMNS = PERSON_FIELDS.map((field) => field.campo);
-function detail_fields(in_type) {
-	if (in_type === "matrimonio") return MARRIAGE_FIELDS;
-	return BAPTISM_FIELDS;
+], L = I.map((e) => e.campo);
+function ce(e) {
+	return e === "matrimonio" ? se : oe;
 }
-function detail_columns(in_type) {
-	return detail_fields(in_type).map((field) => field.campo);
+function le(e) {
+	return ce(e).map((e) => e.campo);
 }
-function person_parts(in_type) {
-	if (in_type === "matrimonio") return ["conyuge_1", "conyuge_2"];
-	return ["persona"];
+function ue(e) {
+	return e === "matrimonio" ? ["conyuge_1", "conyuge_2"] : ["persona"];
 }
-function fields_of(in_part, in_type) {
-	if (in_part === "sacramento") return SACRAMENT_FIELDS;
-	if (in_part === "detalle") return detail_fields(in_type);
-	return PERSON_FIELDS;
+function de(e, t) {
+	return e === "sacramento" ? ae : e === "detalle" ? ce(t) : I;
 }
-function part_object(in_record, in_part) {
-	if (in_part === "sacramento") return in_record.sacramento;
-	if (in_part === "persona") return in_record.persona;
-	if (in_part === "conyuge_1" || in_part === "conyuge_2") return in_record[in_part];
-	return in_record;
+function fe(e, t) {
+	return t === "sacramento" ? e.sacramento : t === "persona" ? e.persona : t === "conyuge_1" || t === "conyuge_2" ? e[t] : e;
 }
-function person_at(in_record, in_part) {
-	return part_object(in_record, in_part);
+function R(e, t) {
+	return fe(e, t);
 }
-function field_text(in_value) {
-	if (in_value === null || in_value === void 0) return null;
-	const text = String(in_value).trim();
-	return text === "" ? null : text;
+function pe(e) {
+	if (e == null) return null;
+	let t = String(e).trim();
+	return t === "" ? null : t;
 }
-function get_field(in_record, in_part, in_field) {
-	return field_text(part_object(in_record, in_part)?.[in_field]);
+function me(e, t, n) {
+	return pe(fe(e, t)?.[n]);
 }
-function set_field(in_record, in_part, in_field, in_value) {
-	const value = in_field === "ministro_id" && in_value !== null ? Number(in_value) : in_value;
-	if (in_part === "detalle") return {
-		...in_record,
-		[in_field]: value
+function he(e, t, n, r) {
+	let i = n === "ministro_id" && r !== null ? Number(r) : r;
+	if (t === "detalle") return {
+		...e,
+		[n]: i
 	};
-	if (in_part === "sacramento") return {
-		...in_record,
+	if (t === "sacramento") return {
+		...e,
 		sacramento: {
-			...in_record.sacramento,
-			[in_field]: value
+			...e.sacramento,
+			[n]: i
 		}
 	};
-	const person = part_object(in_record, in_part);
+	let a = fe(e, t);
 	return {
-		...in_record,
-		[in_part]: {
-			...person,
-			[in_field]: value
+		...e,
+		[t]: {
+			...a,
+			[n]: i
 		}
 	};
 }
-function changed_fields(in_saved, in_new) {
-	const out_changes = [];
-	const type = in_saved.sacramento.tipo;
-	const parts = [
+function ge(e, t) {
+	let n = [], r = e.sacramento.tipo, i = [
 		"sacramento",
-		...person_parts(type),
+		...ue(r),
 		"detalle"
 	];
-	for (const part of parts) for (const field of fields_of(part, type)) {
-		const old_value = get_field(in_saved, part, field.campo);
-		const new_value = get_field(in_new, part, field.campo);
-		if (old_value !== new_value) out_changes.push({
-			parte: part,
-			campo: field.campo,
-			valor_anterior: old_value,
-			valor_nuevo: new_value
+	for (let a of i) for (let i of de(a, r)) {
+		let r = me(e, a, i.campo), o = me(t, a, i.campo);
+		r !== o && n.push({
+			parte: a,
+			campo: i.campo,
+			valor_anterior: r,
+			valor_nuevo: o
 		});
 	}
-	return out_changes;
+	return n;
 }
-var LOGIN_TIMEOUT_MS = 1e4;
-var SYNC_INTERVAL_MS = 3e5;
-var QUIT_SYNC_LIMIT_MS = 5e3;
-var SYNC_KEYS = {
+var _e = 1e4, ve = 3e5, ye = 5e3, z = {
 	cursor: "cursor",
 	last_sync: "ultima_sync",
 	notice: "aviso",
 	key_registered: "clave_registrada"
-};
-var FILE_NAMES = {
+}, be = {
 	database: "prelatura-local.db",
 	key: "prelatura-local.key",
 	device: "prelatura-dispositivo.id",
@@ -222,213 +201,169 @@ var FILE_NAMES = {
 	temp_key: "prelatura-reconstruccion.key",
 	set_aside_folder: "bases-apartadas",
 	logos_folder: "logos"
-};
-var SET_ASIDE_DAYS_MS = 2592e6;
-//#endregion
-//#region electron/main/utils/errors.ts
-var ServiceError = class extends Error {
+}, xe = 2592e6, B = class extends Error {
 	status;
-	constructor(message, status) {
-		super(message);
-		this.name = "ServiceError";
-		this.status = status;
+	constructor(e, t) {
+		super(e), this.name = "ServiceError", this.status = t;
 	}
 };
 //#endregion
 //#region electron/main/utils/helpers.ts
-function clean_text(value) {
-	if (typeof value !== "string") return null;
-	const trimmed = value.trim();
-	if (trimmed === "") return null;
-	return trimmed;
+function V(e) {
+	if (typeof e != "string") return null;
+	let t = e.trim();
+	return t === "" ? null : t;
 }
-function positive_id(value, not_found_message = "Partida no encontrada.") {
-	if (!Number.isInteger(value) || value <= 0) throw new ServiceError(not_found_message, 404);
-	return value;
+function H(e, t = "Partida no encontrada.") {
+	if (!Number.isInteger(e) || e <= 0) throw new B(t, 404);
+	return e;
 }
-function page_of(filters, total_rows) {
-	let page = 1;
-	if (Number.isInteger(filters.pagina) && filters.pagina > 0) page = filters.pagina;
-	return {
-		offset: (page - 1) * 20,
-		total_pages: Math.max(1, Math.ceil(total_rows / 20))
+function Se(e, t) {
+	let n = 1;
+	return Number.isInteger(e.pagina) && e.pagina > 0 && (n = e.pagina), {
+		offset: (n - 1) * 20,
+		total_pages: Math.max(1, Math.ceil(t / 20))
 	};
 }
-function sort_direction(filters) {
-	if (filters.direccion === "desc") return "DESC";
-	return "ASC";
+function Ce(e) {
+	return e.direccion === "desc" ? "DESC" : "ASC";
 }
-function full_name$1(first_name, father_last_name, mother_last_name) {
+function we(e, t, n) {
 	return [
-		first_name,
-		father_last_name,
-		mother_last_name
-	].filter((part) => part).join(" ");
+		e,
+		t,
+		n
+	].filter((e) => e).join(" ");
 }
 //#endregion
 //#region electron/main/models/field_values.ts
-var MINISTER = "ministro_id";
-function stored_value(db, field, value) {
-	if (field !== MINISTER || value === null) return value;
-	return db.prepare("SELECT client_id FROM ministros WHERE id = ?").get(Number(value))?.client_id ?? null;
+var Te = "ministro_id";
+function Ee(e, t, n) {
+	return t !== Te || n === null ? n : e.prepare("SELECT client_id FROM ministros WHERE id = ?").get(Number(n))?.client_id ?? null;
 }
-function local_value(db, field, value) {
-	if (field !== MINISTER || value === null) return value;
-	const row = db.prepare("SELECT id FROM ministros WHERE client_id = ?").get(value);
-	return row ? String(row.id) : null;
+function De(e, t, n) {
+	if (t !== Te || n === null) return n;
+	let r = e.prepare("SELECT id FROM ministros WHERE client_id = ?").get(n);
+	return r ? String(r.id) : null;
 }
-function display_text(db, field, value) {
-	if (field !== MINISTER || value === null) return value;
-	const row = db.prepare("SELECT titulo, nombre, apellido_paterno, apellido_materno FROM ministros WHERE client_id = ?").get(value);
-	if (!row) return "Celebrante desconocido";
-	return [row.titulo, full_name$1(row.nombre, row.apellido_paterno, row.apellido_materno)].filter(Boolean).join(" ");
+function Oe(e, t, n) {
+	if (t !== Te || n === null) return n;
+	let r = e.prepare("SELECT titulo, nombre, apellido_paterno, apellido_materno FROM ministros WHERE client_id = ?").get(n);
+	return r ? [r.titulo, we(r.nombre, r.apellido_paterno, r.apellido_materno)].filter(Boolean).join(" ") : "Celebrante desconocido";
 }
 //#endregion
 //#region electron/main/models/change_request.ts
-function has_pending_request(db, sacrament_id) {
-	return db.prepare(`SELECT 1 FROM solicitudes_cambio WHERE sacramento_id = ? AND estado = 'pendiente'`).get(sacrament_id) !== void 0;
+function ke(e, t) {
+	return e.prepare("SELECT 1 FROM solicitudes_cambio WHERE sacramento_id = ? AND estado = 'pendiente'").get(t) !== void 0;
 }
-function pending_requests(db, sacrament_id) {
-	return db.prepare(`SELECT id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo FROM solicitudes_cambio
-			 WHERE sacramento_id = ? AND estado = 'pendiente' ORDER BY id`).all(sacrament_id).map((row) => ({
-		...row,
-		valor_anterior: local_value(db, row.campo, row.valor_anterior),
-		valor_nuevo: local_value(db, row.campo, row.valor_nuevo)
+function Ae(e, t) {
+	return e.prepare("SELECT id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo FROM solicitudes_cambio\n			 WHERE sacramento_id = ? AND estado = 'pendiente' ORDER BY id").all(t).map((t) => ({
+		...t,
+		valor_anterior: De(e, t.campo, t.valor_anterior),
+		valor_nuevo: De(e, t.campo, t.valor_nuevo)
 	}));
 }
-function insert_requests(db, sacrament_id, user_id, requests) {
-	const insert = db.prepare(`INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-	const now = (/* @__PURE__ */ new Date()).toISOString();
-	for (const request of requests) insert.run(crypto.randomUUID(), sacrament_id, user_id, request.parte, request.campo, request.tipo, stored_value(db, request.campo, request.valor_anterior), stored_value(db, request.campo, request.valor_nuevo), now);
+function je(e, t, n, r) {
+	let i = e.prepare("INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)\n		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"), a = (/* @__PURE__ */ new Date()).toISOString();
+	for (let o of r) i.run(crypto.randomUUID(), t, n, o.parte, o.campo, o.tipo, Ee(e, o.campo, o.valor_anterior), Ee(e, o.campo, o.valor_nuevo), a);
 }
-function close_requests(db, sacrament_id, state, reviewer_id, reason = null) {
-	db.prepare(`UPDATE solicitudes_cambio SET estado = ?, motivo = ?, revisado_por_usuario_id = ?, revisado_en = ?
-		 WHERE sacramento_id = ? AND estado = 'pendiente'`).run(state, reason, reviewer_id, (/* @__PURE__ */ new Date()).toISOString(), sacrament_id);
+function Me(e, t, n, r, i = null) {
+	e.prepare("UPDATE solicitudes_cambio SET estado = ?, motivo = ?, revisado_por_usuario_id = ?, revisado_en = ?\n		 WHERE sacramento_id = ? AND estado = 'pendiente'").run(n, i, r, (/* @__PURE__ */ new Date()).toISOString(), t);
 }
-function read_requests(db, sacrament_id) {
-	return db.prepare(`SELECT s.id, s.parte, s.campo, s.tipo, s.valor_anterior, s.valor_nuevo, s.estado, s.motivo, s.creado_en, s.revisado_en,
-				p.nombre AS pide_nombre, p.apellido_paterno AS pide_paterno, p.apellido_materno AS pide_materno,
-				r.nombre AS revisa_nombre, r.apellido_paterno AS revisa_paterno, r.apellido_materno AS revisa_materno
-			 FROM solicitudes_cambio s
-			 LEFT JOIN usuarios p ON p.id = s.usuario_id
-			 LEFT JOIN usuarios r ON r.id = s.revisado_por_usuario_id
-			 WHERE s.sacramento_id = ?
-			 ORDER BY s.creado_en DESC, s.id`).all(sacrament_id).map((row) => ({
-		id: row.id,
-		parte: row.parte,
-		campo: row.campo,
-		tipo: row.tipo,
-		valor_anterior: local_value(db, row.campo, row.valor_anterior),
-		valor_nuevo: local_value(db, row.campo, row.valor_nuevo),
-		texto_anterior: display_text(db, row.campo, row.valor_anterior),
-		texto_nuevo: display_text(db, row.campo, row.valor_nuevo),
-		estado: row.estado,
-		motivo: row.motivo,
-		solicitado_por: full_name$1(row.pide_nombre, row.pide_paterno, row.pide_materno) || "Un usuario",
-		creado_en: row.creado_en,
-		revisado_por: row.revisa_nombre ? full_name$1(row.revisa_nombre, row.revisa_paterno, row.revisa_materno) : null,
-		revisado_en: row.revisado_en
+function Ne(e, t) {
+	return e.prepare("SELECT s.id, s.parte, s.campo, s.tipo, s.valor_anterior, s.valor_nuevo, s.estado, s.motivo, s.creado_en, s.revisado_en,\n				p.nombre AS pide_nombre, p.apellido_paterno AS pide_paterno, p.apellido_materno AS pide_materno,\n				r.nombre AS revisa_nombre, r.apellido_paterno AS revisa_paterno, r.apellido_materno AS revisa_materno\n			 FROM solicitudes_cambio s\n			 LEFT JOIN usuarios p ON p.id = s.usuario_id\n			 LEFT JOIN usuarios r ON r.id = s.revisado_por_usuario_id\n			 WHERE s.sacramento_id = ?\n			 ORDER BY s.creado_en DESC, s.id").all(t).map((t) => ({
+		id: t.id,
+		parte: t.parte,
+		campo: t.campo,
+		tipo: t.tipo,
+		valor_anterior: De(e, t.campo, t.valor_anterior),
+		valor_nuevo: De(e, t.campo, t.valor_nuevo),
+		texto_anterior: Oe(e, t.campo, t.valor_anterior),
+		texto_nuevo: Oe(e, t.campo, t.valor_nuevo),
+		estado: t.estado,
+		motivo: t.motivo,
+		solicitado_por: we(t.pide_nombre, t.pide_paterno, t.pide_materno) || "Un usuario",
+		creado_en: t.creado_en,
+		revisado_por: t.revisa_nombre ? we(t.revisa_nombre, t.revisa_paterno, t.revisa_materno) : null,
+		revisado_en: t.revisado_en
 	}));
 }
-function read_request_data(db, sacrament_id) {
-	return db.prepare(`SELECT client_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, estado, motivo,
-				revisado_por_usuario_id, revisado_en, creado_en
-			 FROM solicitudes_cambio WHERE sacramento_id = ? ORDER BY id`).all(sacrament_id);
+function Pe(e, t) {
+	return e.prepare("SELECT client_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, estado, motivo,\n				revisado_por_usuario_id, revisado_en, creado_en\n			 FROM solicitudes_cambio WHERE sacramento_id = ? ORDER BY id").all(t);
 }
-function save_downloaded_requests(db, sacrament_id, requests) {
-	const save = db.prepare(`INSERT INTO solicitudes_cambio
-			(client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, estado, motivo,
-			 revisado_por_usuario_id, revisado_en, creado_en)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (client_id) DO UPDATE SET
-			estado = excluded.estado,
-			motivo = excluded.motivo,
-			revisado_por_usuario_id = excluded.revisado_por_usuario_id,
-			revisado_en = excluded.revisado_en`);
-	for (const request of requests) save.run(request.client_id, sacrament_id, request.usuario_id, request.parte, request.campo, request.tipo, request.valor_anterior, request.valor_nuevo, request.estado, request.motivo, request.revisado_por_usuario_id, request.revisado_en, request.creado_en);
+function Fe(e, t, n) {
+	let r = e.prepare("INSERT INTO solicitudes_cambio\n			(client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, estado, motivo,\n			 revisado_por_usuario_id, revisado_en, creado_en)\n		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n		 ON CONFLICT (client_id) DO UPDATE SET\n			estado = excluded.estado,\n			motivo = excluded.motivo,\n			revisado_por_usuario_id = excluded.revisado_por_usuario_id,\n			revisado_en = excluded.revisado_en");
+	for (let e of n) r.run(e.client_id, t, e.usuario_id, e.parte, e.campo, e.tipo, e.valor_anterior, e.valor_nuevo, e.estado, e.motivo, e.revisado_por_usuario_id, e.revisado_en, e.creado_en);
 }
-function discard_unsent_requests(db, sacrament_id, kept) {
-	const kept_ids = JSON.stringify(kept.map((request) => request.client_id));
-	db.prepare("DELETE FROM solicitudes_cambio WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(sacrament_id, kept_ids);
+function Ie(e, t, n) {
+	let r = JSON.stringify(n.map((e) => e.client_id));
+	e.prepare("DELETE FROM solicitudes_cambio WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(t, r);
 }
 //#endregion
 //#region electron/main/models/history.ts
-function add_history(db, sacrament_id, user_id, event, fields = [], reason = null) {
-	const result = db.prepare("INSERT INTO historial_partidas (client_id, sacramento_id, usuario_id, evento, motivo, fecha) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), sacrament_id, user_id, event, reason, (/* @__PURE__ */ new Date()).toISOString());
-	const history_id = Number(result.lastInsertRowid);
-	const insert_field = db.prepare("INSERT INTO historial_campos (historial_id, parte, campo, valor_anterior, valor_nuevo) VALUES (?, ?, ?, ?, ?)");
-	for (const field of fields) insert_field.run(history_id, field.parte, field.campo, stored_value(db, field.campo, field.valor_anterior), stored_value(db, field.campo, field.valor_nuevo));
+function U(e, t, n, r, i = [], a = null) {
+	let o = e.prepare("INSERT INTO historial_partidas (client_id, sacramento_id, usuario_id, evento, motivo, fecha) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), t, n, r, a, (/* @__PURE__ */ new Date()).toISOString()), s = Number(o.lastInsertRowid), c = e.prepare("INSERT INTO historial_campos (historial_id, parte, campo, valor_anterior, valor_nuevo) VALUES (?, ?, ?, ?, ?)");
+	for (let t of i) c.run(s, t.parte, t.campo, Ee(e, t.campo, t.valor_anterior), Ee(e, t.campo, t.valor_nuevo));
 }
-function read_fields(db, history_id) {
-	return db.prepare("SELECT parte, campo, valor_anterior, valor_nuevo FROM historial_campos WHERE historial_id = ? ORDER BY id").all(history_id);
+function Le(e, t) {
+	return e.prepare("SELECT parte, campo, valor_anterior, valor_nuevo FROM historial_campos WHERE historial_id = ? ORDER BY id").all(t);
 }
-function read_history(db, sacrament_id) {
-	return db.prepare(`SELECT h.id, h.evento, h.motivo, h.fecha, u.nombre, u.apellido_paterno, u.apellido_materno, u.username
-			 FROM historial_partidas h
-			 LEFT JOIN usuarios u ON u.id = h.usuario_id
-			 WHERE h.sacramento_id = ?
-			 ORDER BY h.fecha DESC, h.id DESC`).all(sacrament_id).map((row) => ({
-		id: row.id,
-		evento: row.evento,
-		motivo: row.motivo,
-		fecha: row.fecha,
-		usuario: full_name$1(row.nombre, row.apellido_paterno, row.apellido_materno) || row.username || "Usuario desconocido",
-		campos: read_fields(db, row.id).map((field) => ({
-			parte: field.parte,
-			campo: field.campo,
-			texto_anterior: display_text(db, field.campo, field.valor_anterior),
-			texto_nuevo: display_text(db, field.campo, field.valor_nuevo)
+function Re(e, t) {
+	return e.prepare("SELECT h.id, h.evento, h.motivo, h.fecha, u.nombre, u.apellido_paterno, u.apellido_materno, u.username\n			 FROM historial_partidas h\n			 LEFT JOIN usuarios u ON u.id = h.usuario_id\n			 WHERE h.sacramento_id = ?\n			 ORDER BY h.fecha DESC, h.id DESC").all(t).map((t) => ({
+		id: t.id,
+		evento: t.evento,
+		motivo: t.motivo,
+		fecha: t.fecha,
+		usuario: we(t.nombre, t.apellido_paterno, t.apellido_materno) || t.username || "Usuario desconocido",
+		campos: Le(e, t.id).map((t) => ({
+			parte: t.parte,
+			campo: t.campo,
+			texto_anterior: Oe(e, t.campo, t.valor_anterior),
+			texto_nuevo: Oe(e, t.campo, t.valor_nuevo)
 		}))
 	}));
 }
-function read_history_data(db, sacrament_id) {
-	return db.prepare("SELECT id, client_id, usuario_id, evento, motivo, fecha FROM historial_partidas WHERE sacramento_id = ? ORDER BY id").all(sacrament_id).map(({ id, ...row }) => ({
-		...row,
-		campos: read_fields(db, id)
+function ze(e, t) {
+	return e.prepare("SELECT id, client_id, usuario_id, evento, motivo, fecha FROM historial_partidas WHERE sacramento_id = ? ORDER BY id").all(t).map(({ id: t, ...n }) => ({
+		...n,
+		campos: Le(e, t)
 	}));
 }
-function save_downloaded_history(db, sacrament_id, entries) {
-	const insert = db.prepare(`INSERT INTO historial_partidas (client_id, sacramento_id, usuario_id, evento, motivo, fecha)
-		 VALUES (?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (client_id) DO NOTHING`);
-	const insert_field = db.prepare("INSERT INTO historial_campos (historial_id, parte, campo, valor_anterior, valor_nuevo) VALUES (?, ?, ?, ?, ?)");
-	for (const entry of entries) {
-		const result = insert.run(entry.client_id, sacrament_id, entry.usuario_id, entry.evento, entry.motivo, entry.fecha);
-		if (result.changes === 0) continue;
-		for (const field of entry.campos) insert_field.run(Number(result.lastInsertRowid), field.parte, field.campo, field.valor_anterior, field.valor_nuevo);
+function Be(e, t, n) {
+	let r = e.prepare("INSERT INTO historial_partidas (client_id, sacramento_id, usuario_id, evento, motivo, fecha)\n		 VALUES (?, ?, ?, ?, ?, ?)\n		 ON CONFLICT (client_id) DO NOTHING"), i = e.prepare("INSERT INTO historial_campos (historial_id, parte, campo, valor_anterior, valor_nuevo) VALUES (?, ?, ?, ?, ?)");
+	for (let e of n) {
+		let n = r.run(e.client_id, t, e.usuario_id, e.evento, e.motivo, e.fecha);
+		if (n.changes !== 0) for (let t of e.campos) i.run(Number(n.lastInsertRowid), t.parte, t.campo, t.valor_anterior, t.valor_nuevo);
 	}
 }
-function discard_unsent_history(db, sacrament_id, kept) {
-	const kept_ids = JSON.stringify(kept.map((entry) => entry.client_id));
-	db.prepare(`DELETE FROM historial_campos WHERE historial_id IN (SELECT id FROM historial_partidas WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?)))`).run(sacrament_id, kept_ids);
-	db.prepare("DELETE FROM historial_partidas WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(sacrament_id, kept_ids);
+function Ve(e, t, n) {
+	let r = JSON.stringify(n.map((e) => e.client_id));
+	e.prepare("DELETE FROM historial_campos WHERE historial_id IN (SELECT id FROM historial_partidas WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?)))").run(t, r), e.prepare("DELETE FROM historial_partidas WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(t, r);
 }
 //#endregion
 //#region electron/main/models/parish.ts
-var GENERAL_ADMIN_READS_ONLY = "El administrador general solo consulta: no puede registrar ni modificar datos de las parroquias.";
-function read_parish(db, parish_id) {
-	return db.prepare("SELECT * FROM parroquias WHERE id = ?").get(parish_id);
+var He = "El administrador general solo consulta: no puede registrar ni modificar datos de las parroquias.";
+function Ue(e, t) {
+	return e.prepare("SELECT * FROM parroquias WHERE id = ?").get(t);
 }
-function parish_for_new(session) {
-	if (session.role === "admin_general") throw new ServiceError(GENERAL_ADMIN_READS_ONLY, 403);
-	if (!session.parish_id) throw new ServiceError("El usuario no tiene una parroquia asignada.", 400);
-	return session.parish_id;
+function We(e) {
+	if (e.role === "admin_general") throw new B(He, 403);
+	if (!e.parish_id) throw new B("El usuario no tiene una parroquia asignada.", 400);
+	return e.parish_id;
 }
-function check_parish_access(session, parish_id, message) {
-	if (session.role === "admin_general") throw new ServiceError(GENERAL_ADMIN_READS_ONLY, 403);
-	if (session.parish_id !== parish_id) throw new ServiceError(message, 403);
+function Ge(e, t, n) {
+	if (e.role === "admin_general") throw new B(He, 403);
+	if (e.parish_id !== t) throw new B(n, 403);
 }
-function check_parish_read(session, parish_id, message) {
-	if (session.role !== "admin_general" && session.parish_id !== parish_id) throw new ServiceError(message, 403);
+function Ke(e, t, n) {
+	if (e.role !== "admin_general" && e.parish_id !== t) throw new B(n, 403);
 }
-function check_parish_admin(session, parish_id, other_parish, only_admin) {
-	check_parish_access(session, parish_id, other_parish);
-	if (session.role !== "admin_parroquia") throw new ServiceError(only_admin, 403);
+function qe(e, t, n, r) {
+	if (Ge(e, t, n), e.role !== "admin_parroquia") throw new B(r, 403);
 }
 //#endregion
 //#region electron/main/models/person.ts
-var CORRECTABLE_FIELDS = [
+var Je = [
 	{
 		column: "nombres",
 		label: "Nombres"
@@ -442,238 +377,199 @@ var CORRECTABLE_FIELDS = [
 		label: "Apellido materno"
 	}
 ];
-function clean_person(person) {
+function Ye(e) {
 	return {
-		dni: clean_text(person.dni),
-		nombres: clean_text(person.nombres) ?? "",
-		apellido_paterno: clean_text(person.apellido_paterno) ?? "",
-		apellido_materno: clean_text(person.apellido_materno) ?? "",
-		fecha_nacimiento: clean_text(person.fecha_nacimiento),
-		fecha_aproximada: clean_text(person.fecha_aproximada),
-		lugar_nacimiento: clean_text(person.lugar_nacimiento),
-		padre: clean_text(person.padre),
-		madre: clean_text(person.madre)
+		dni: V(e.dni),
+		nombres: V(e.nombres) ?? "",
+		apellido_paterno: V(e.apellido_paterno) ?? "",
+		apellido_materno: V(e.apellido_materno) ?? "",
+		fecha_nacimiento: V(e.fecha_nacimiento),
+		fecha_aproximada: V(e.fecha_aproximada),
+		lugar_nacimiento: V(e.lugar_nacimiento),
+		padre: V(e.padre),
+		madre: V(e.madre)
 	};
 }
-function read_person$1(db, person_id) {
-	const person = db.prepare("SELECT * FROM personas WHERE id = ?").get(person_id);
-	const changes = db.prepare("SELECT * FROM cambios_persona WHERE persona_id = ? ORDER BY id").all(person_id);
+function Xe(e, t) {
+	let n = e.prepare("SELECT * FROM personas WHERE id = ?").get(t), r = e.prepare("SELECT * FROM cambios_persona WHERE persona_id = ? ORDER BY id").all(t);
 	return {
-		...person,
-		cambios: changes
+		...n,
+		cambios: r
 	};
 }
-function insert_person(db, parish_id, person) {
-	const row = clean_person(person);
-	const result = db.prepare(`INSERT INTO personas
-				(client_id, parroquia_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, fecha_aproximada, lugar_nacimiento, padre, madre)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(crypto.randomUUID(), parish_id, row.dni, row.nombres, row.apellido_paterno, row.apellido_materno, row.fecha_nacimiento, row.fecha_aproximada, row.lugar_nacimiento, row.padre, row.madre);
-	return Number(result.lastInsertRowid);
+function Ze(e, t, n) {
+	let r = Ye(n), i = e.prepare("INSERT INTO personas\n				(client_id, parroquia_id, dni, nombres, apellido_paterno, apellido_materno, fecha_nacimiento, fecha_aproximada, lugar_nacimiento, padre, madre)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), t, r.dni, r.nombres, r.apellido_paterno, r.apellido_materno, r.fecha_nacimiento, r.fecha_aproximada, r.lugar_nacimiento, r.padre, r.madre);
+	return Number(i.lastInsertRowid);
 }
-function update_person(db, person_id, person) {
-	const new_row = clean_person(person);
-	const old_row = db.prepare(`SELECT ${PERSON_COLUMNS.join(", ")} FROM personas WHERE id = ?`).get(person_id);
-	const changed_columns = PERSON_COLUMNS.filter((column) => old_row[column] !== new_row[column]);
-	if (changed_columns.length === 0) return;
-	const assignments = changed_columns.map((column) => `${column} = ?`).join(", ");
-	const values = changed_columns.map((column) => new_row[column]);
-	db.prepare(`UPDATE personas SET ${assignments} WHERE id = ?`).run(...values, person_id);
+function Qe(e, t, n) {
+	let r = Ye(n), i = e.prepare(`SELECT ${L.join(", ")} FROM personas WHERE id = ?`).get(t), a = L.filter((e) => i[e] !== r[e]);
+	if (a.length === 0) return;
+	let o = a.map((e) => `${e} = ?`).join(", "), s = a.map((e) => r[e]);
+	e.prepare(`UPDATE personas SET ${o} WHERE id = ?`).run(...s, t);
 }
-function apply_corrections(person) {
-	const changes = Array.isArray(person.cambios) ? person.cambios.filter((change) => change.id === void 0) : [];
-	const corrected = { ...person };
-	const result = [];
-	for (const change of changes) {
-		const field = CORRECTABLE_FIELDS.find((item) => item.column === change.campo_cambio);
-		if (!field) throw new ServiceError("La nota marginal indica un campo que no se puede corregir.", 400);
-		if (result.some((item) => item.campo_cambio === field.column)) throw new ServiceError(`La nota marginal repite el campo ${field.label}.`, 400);
-		const old_value = clean_text(person[field.column]);
-		const new_value = clean_text(change.valor_nuevo);
-		if (!old_value) throw new ServiceError(`Complete ${field.label} antes de corregirlo en la nota marginal.`, 400);
-		if (!new_value) throw new ServiceError(`Indique el valor nuevo de ${field.label} en la nota marginal.`, 400);
-		if (new_value === old_value) throw new ServiceError(`El valor nuevo de ${field.label} es igual al anterior.`, 400);
-		corrected[field.column] = new_value;
-		result.push({
-			campo_cambio: field.column,
-			valor_anterior: old_value,
-			valor_nuevo: new_value
+function $e(e) {
+	let t = Array.isArray(e.cambios) ? e.cambios.filter((e) => e.id === void 0) : [], n = { ...e }, r = [];
+	for (let i of t) {
+		let t = Je.find((e) => e.column === i.campo_cambio);
+		if (!t) throw new B("La nota marginal indica un campo que no se puede corregir.", 400);
+		if (r.some((e) => e.campo_cambio === t.column)) throw new B(`La nota marginal repite el campo ${t.label}.`, 400);
+		let a = V(e[t.column]), o = V(i.valor_nuevo);
+		if (!a) throw new B(`Complete ${t.label} antes de corregirlo en la nota marginal.`, 400);
+		if (!o) throw new B(`Indique el valor nuevo de ${t.label} en la nota marginal.`, 400);
+		if (o === a) throw new B(`El valor nuevo de ${t.label} es igual al anterior.`, 400);
+		n[t.column] = o, r.push({
+			campo_cambio: t.column,
+			valor_anterior: a,
+			valor_nuevo: o
 		});
 	}
 	return {
-		person: corrected,
-		corrections: result
+		person: n,
+		corrections: r
 	};
 }
-function save_corrections(db, session, person_id, sacrament_id, corrections) {
-	const insert = db.prepare(`INSERT INTO cambios_persona
-			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, estado, revisado_por_usuario_id, revisado_en)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?)`);
-	const now = (/* @__PURE__ */ new Date()).toISOString();
-	for (const correction of corrections) insert.run(crypto.randomUUID(), person_id, sacrament_id, session.user_id, correction.campo_cambio, correction.valor_anterior, correction.valor_nuevo, session.user_id, now);
+function et(e, t, n, r, i) {
+	let a = e.prepare("INSERT INTO cambios_persona\n			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, estado, revisado_por_usuario_id, revisado_en)\n		 VALUES (?, ?, ?, ?, ?, ?, ?, 'aprobado', ?, ?)"), o = (/* @__PURE__ */ new Date()).toISOString();
+	for (let e of i) a.run(crypto.randomUUID(), n, r, t.user_id, e.campo_cambio, e.valor_anterior, e.valor_nuevo, t.user_id, o);
 }
-function name_condition(table_alias, column) {
-	return `(${table_alias}.${column} LIKE ? OR EXISTS (
+function tt(e, t) {
+	return `(${e}.${t} LIKE ? OR EXISTS (
 		SELECT 1 FROM cambios_persona cp
-		WHERE cp.persona_id = ${table_alias}.id AND cp.campo_cambio = '${column}' AND cp.estado = 'aprobado' AND cp.valor_anterior LIKE ?
+		WHERE cp.persona_id = ${e}.id AND cp.campo_cambio = '${t}' AND cp.estado = 'aprobado' AND cp.valor_anterior LIKE ?
 	))`;
 }
 //#endregion
 //#region electron/main/sync/queue.ts
-function add_to_queue(db, entity, client_id, version_base) {
-	db.prepare(`INSERT INTO sync_cola (entidad, client_id, version_base, cola_id) VALUES (?, ?, ?, ?)
-		 ON CONFLICT (entidad, client_id) DO UPDATE SET revision = revision + 1`).run(entity, client_id, version_base, crypto.randomUUID());
+function W(e, t, n, r) {
+	e.prepare("INSERT INTO sync_cola (entidad, client_id, version_base, cola_id) VALUES (?, ?, ?, ?)\n		 ON CONFLICT (entidad, client_id) DO UPDATE SET revision = revision + 1").run(t, n, r, crypto.randomUUID());
 }
-function is_in_queue(db, entity, client_id) {
-	return db.prepare("SELECT 1 FROM sync_cola WHERE entidad = ? AND client_id = ?").get(entity, client_id) !== void 0;
+function nt(e, t, n) {
+	return e.prepare("SELECT 1 FROM sync_cola WHERE entidad = ? AND client_id = ?").get(t, n) !== void 0;
 }
-function remove_from_queue(db, entity, client_id) {
-	db.prepare("DELETE FROM sync_cola WHERE entidad = ? AND client_id = ?").run(entity, client_id);
+function rt(e, t, n) {
+	e.prepare("DELETE FROM sync_cola WHERE entidad = ? AND client_id = ?").run(t, n);
 }
-function get_sync_value(db, key) {
-	const row = db.prepare("SELECT valor FROM sync_estado WHERE clave = ?").get(key);
-	if (!row) return null;
-	return row.valor;
+function it(e, t) {
+	let n = e.prepare("SELECT valor FROM sync_estado WHERE clave = ?").get(t);
+	return n ? n.valor : null;
 }
-function set_sync_value(db, key, value) {
-	db.prepare(`INSERT INTO sync_estado (clave, valor) VALUES (?, ?)
-		 ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor`).run(key, value);
+function at(e, t, n) {
+	e.prepare("INSERT INTO sync_estado (clave, valor) VALUES (?, ?)\n		 ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor").run(t, n);
 }
 //#endregion
 //#region electron/main/models/minister.ts
-function read_minister(db, minister_id) {
-	const minister = db.prepare("SELECT * FROM ministros WHERE id = ?").get(minister_id);
-	if (!minister) return null;
-	return {
-		...minister,
-		parroquia: read_parish(db, minister.parroquia_id)
-	};
+function ot(e, t) {
+	let n = e.prepare("SELECT * FROM ministros WHERE id = ?").get(t);
+	return n ? {
+		...n,
+		parroquia: Ue(e, n.parroquia_id)
+	} : null;
 }
 //#endregion
 //#region electron/main/models/sacrament.ts
-function is_sacrament_type(value) {
-	return value === "bautismo" || value === "confirmacion" || value === "matrimonio";
+function st(e) {
+	return e === "bautismo" || e === "confirmacion" || e === "matrimonio";
 }
-function detail_table(type) {
-	if (type === "bautismo") return "bautismos";
-	if (type === "confirmacion") return "confirmaciones";
-	return "matrimonios";
+function ct(e) {
+	return e === "bautismo" ? "bautismos" : e === "confirmacion" ? "confirmaciones" : "matrimonios";
 }
-function person_columns(type) {
-	if (type === "matrimonio") return ["conyuge_1_id", "conyuge_2_id"];
-	return ["persona_id"];
+function lt(e) {
+	return e === "matrimonio" ? ["conyuge_1_id", "conyuge_2_id"] : ["persona_id"];
 }
-function people_of(type) {
-	if (type === "bautismo") return "SELECT sacramento_id, persona_id FROM bautismos";
-	if (type === "confirmacion") return "SELECT sacramento_id, persona_id FROM confirmaciones";
-	return `SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios
-		UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios`;
+function ut(e) {
+	return e === "bautismo" ? "SELECT sacramento_id, persona_id FROM bautismos" : e === "confirmacion" ? "SELECT sacramento_id, persona_id FROM confirmaciones" : "SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios\n		UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios";
 }
-var PEOPLE_OF_ALL_SACRAMENTS = `SELECT sacramento_id, persona_id FROM bautismos
-	UNION ALL SELECT sacramento_id, persona_id FROM confirmaciones
-	UNION ALL SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios
-	UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios`;
-function read_sacrament(db, sacrament_id) {
-	const sacrament = db.prepare("SELECT * FROM sacramentos WHERE id = ?").get(sacrament_id);
-	if (!sacrament) return null;
-	let minister = null;
-	if (sacrament.ministro_id !== null) minister = read_minister(db, sacrament.ministro_id);
-	return {
-		...sacrament,
-		parroquia: read_parish(db, sacrament.parroquia_id),
-		ministro: minister
+var dt = "SELECT sacramento_id, persona_id FROM bautismos\n	UNION ALL SELECT sacramento_id, persona_id FROM confirmaciones\n	UNION ALL SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios\n	UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios";
+function ft(e, t) {
+	let n = e.prepare("SELECT * FROM sacramentos WHERE id = ?").get(t);
+	if (!n) return null;
+	let r = null;
+	return n.ministro_id !== null && (r = ot(e, n.ministro_id)), {
+		...n,
+		parroquia: Ue(e, n.parroquia_id),
+		ministro: r
 	};
 }
-function clean_sacrament(sacrament) {
-	const issue_date = clean_text(sacrament.fecha_emision);
-	const book = clean_text(sacrament.libro);
-	const page = clean_text(sacrament.folio);
-	const number = clean_text(sacrament.numero);
-	if (!issue_date || !book || !page || !number) throw new ServiceError("La fecha, el libro, el folio y el número de registro son requeridos.", 400);
+function pt(e) {
+	let t = V(e.fecha_emision), n = V(e.libro), r = V(e.folio), i = V(e.numero);
+	if (!t || !n || !r || !i) throw new B("La fecha, el libro, el folio y el número de registro son requeridos.", 400);
 	return {
-		fecha_emision: issue_date,
-		libro: book,
-		folio: page,
-		numero: number,
-		ministro_id: sacrament.ministro_id ?? null,
-		fecha_evento: clean_text(sacrament.fecha_evento),
-		anotaciones: clean_text(sacrament.anotaciones)
+		fecha_emision: t,
+		libro: n,
+		folio: r,
+		numero: i,
+		ministro_id: e.ministro_id ?? null,
+		fecha_evento: V(e.fecha_evento),
+		anotaciones: V(e.anotaciones)
 	};
 }
-function sacrament_parish(db, sacrament_id, type) {
-	const sacrament = db.prepare("SELECT parroquia_id FROM sacramentos WHERE id = ? AND tipo = ?").get(sacrament_id, type);
-	if (!sacrament) throw new ServiceError("Partida no encontrada.", 404);
-	return sacrament.parroquia_id;
+function mt(e, t, n) {
+	let r = e.prepare("SELECT parroquia_id FROM sacramentos WHERE id = ? AND tipo = ?").get(t, n);
+	if (!r) throw new B("Partida no encontrada.", 404);
+	return r.parroquia_id;
 }
-var OTHER_PARISH_RECORD = "No tiene permiso para modificar partidas de otra parroquia.";
-function check_can_manage$1(db, session, sacrament_id, type) {
-	check_parish_admin(session, sacrament_parish(db, sacrament_id, type), OTHER_PARISH_RECORD, "Solo el administrador de la parroquia puede modificar o anular una partida. Pida la corrección con una nota marginal.");
+var ht = "No tiene permiso para modificar partidas de otra parroquia.";
+function gt(e, t, n, r) {
+	qe(t, mt(e, n, r), ht, "Solo el administrador de la parroquia puede modificar o anular una partida. Pida la corrección con una nota marginal.");
 }
-function check_minister_parish(db, minister_id, parish_id) {
-	if (minister_id === null) return;
-	const minister = db.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(minister_id);
-	if (minister && minister.parroquia_id !== parish_id) throw new ServiceError("El celebrante debe ser de la parroquia de la partida.", 400);
+function _t(e, t, n) {
+	if (t === null) return;
+	let r = e.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(t);
+	if (r && r.parroquia_id !== n) throw new B("El celebrante debe ser de la parroquia de la partida.", 400);
 }
-function insert_sacrament(db, client_id, type, parish_id, sacrament) {
-	const values = clean_sacrament(sacrament);
-	check_minister_parish(db, values.ministro_id, parish_id);
-	const result = db.prepare(`INSERT INTO sacramentos (client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(client_id, type, parish_id, values.ministro_id, values.libro, values.folio, values.numero, values.fecha_emision, values.fecha_evento, values.anotaciones);
-	return Number(result.lastInsertRowid);
+function vt(e, t, n, r, i) {
+	let a = pt(i);
+	_t(e, a.ministro_id, r);
+	let o = e.prepare("INSERT INTO sacramentos (client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t, n, r, a.ministro_id, a.libro, a.folio, a.numero, a.fecha_emision, a.fecha_evento, a.anotaciones);
+	return Number(o.lastInsertRowid);
 }
-function update_sacrament(db, sacrament_id, sacrament) {
-	const values = clean_sacrament(sacrament);
-	const current = db.prepare("SELECT ministro_id, parroquia_id FROM sacramentos WHERE id = ?").get(sacrament_id);
-	if (values.ministro_id !== current.ministro_id) check_minister_parish(db, values.ministro_id, current.parroquia_id);
-	db.prepare(`UPDATE sacramentos
-		 SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?
-		 WHERE id = ?`).run(values.ministro_id, values.libro, values.folio, values.numero, values.fecha_emision, values.fecha_evento, values.anotaciones, sacrament_id);
+function yt(e, t, n) {
+	let r = pt(n), i = e.prepare("SELECT ministro_id, parroquia_id FROM sacramentos WHERE id = ?").get(t);
+	r.ministro_id !== i.ministro_id && _t(e, r.ministro_id, i.parroquia_id), e.prepare("UPDATE sacramentos\n		 SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?\n		 WHERE id = ?").run(r.ministro_id, r.libro, r.folio, r.numero, r.fecha_emision, r.fecha_evento, r.anotaciones, t);
 }
 //#endregion
 //#region electron/main/models/record.ts
-var NOT_FOUND$2 = "Partida no encontrada.";
-function read_full_sacrament(db, sacrament_id, type) {
-	const sacrament = read_sacrament(db, sacrament_id);
-	if (!sacrament || sacrament.tipo !== type) throw new ServiceError(NOT_FOUND$2, 404);
+var bt = "Partida no encontrada.";
+function xt(e, t, n) {
+	let r = ft(e, t);
+	if (!r || r.tipo !== n) throw new B(bt, 404);
 	return {
-		...sacrament,
-		solicitudes: read_requests(db, sacrament_id)
+		...r,
+		solicitudes: Ne(e, t)
 	};
 }
-function read_person_sacrament(db, type, sacrament_id) {
-	const sacrament = read_full_sacrament(db, sacrament_id, type);
-	const detail = db.prepare(`SELECT * FROM ${detail_table(type)} WHERE sacramento_id = ?`).get(sacrament_id);
+function St(e, t, n) {
+	let r = xt(e, n, t), i = e.prepare(`SELECT * FROM ${ct(t)} WHERE sacramento_id = ?`).get(n);
 	return {
-		sacramento: sacrament,
-		persona: read_person$1(db, detail.persona_id),
-		padrino_1: detail.padrino_1,
-		padrino_2: detail.padrino_2
+		sacramento: r,
+		persona: Xe(e, i.persona_id),
+		padrino_1: i.padrino_1,
+		padrino_2: i.padrino_2
 	};
 }
-function read_marriage(db, sacrament_id) {
-	const sacrament = read_full_sacrament(db, sacrament_id, "matrimonio");
-	const detail = db.prepare("SELECT * FROM matrimonios WHERE sacramento_id = ?").get(sacrament_id);
+function Ct(e, t) {
+	let n = xt(e, t, "matrimonio"), r = e.prepare("SELECT * FROM matrimonios WHERE sacramento_id = ?").get(t);
 	return {
-		sacramento: sacrament,
-		conyuge_1: read_person$1(db, detail.conyuge_1_id),
-		conyuge_2: read_person$1(db, detail.conyuge_2_id),
-		lugar: detail.lugar,
-		testigo_1: detail.testigo_1,
-		testigo_2: detail.testigo_2,
-		testigo_3: detail.testigo_3,
-		testigo_4: detail.testigo_4,
-		conyuge_1_bautismo_parroquia: detail.conyuge_1_bautismo_parroquia,
-		conyuge_1_bautismo_fecha: detail.conyuge_1_bautismo_fecha,
-		conyuge_2_bautismo_parroquia: detail.conyuge_2_bautismo_parroquia,
-		conyuge_2_bautismo_fecha: detail.conyuge_2_bautismo_fecha
+		sacramento: n,
+		conyuge_1: Xe(e, r.conyuge_1_id),
+		conyuge_2: Xe(e, r.conyuge_2_id),
+		lugar: r.lugar,
+		testigo_1: r.testigo_1,
+		testigo_2: r.testigo_2,
+		testigo_3: r.testigo_3,
+		testigo_4: r.testigo_4,
+		conyuge_1_bautismo_parroquia: r.conyuge_1_bautismo_parroquia,
+		conyuge_1_bautismo_fecha: r.conyuge_1_bautismo_fecha,
+		conyuge_2_bautismo_parroquia: r.conyuge_2_bautismo_parroquia,
+		conyuge_2_bautismo_fecha: r.conyuge_2_bautismo_fecha
 	};
 }
-function read_record(db, sacrament_id) {
-	const row = db.prepare("SELECT tipo FROM sacramentos WHERE id = ?").get(sacrament_id);
-	if (!row) throw new ServiceError(NOT_FOUND$2, 404);
-	if (row.tipo === "matrimonio") return read_marriage(db, sacrament_id);
-	return read_person_sacrament(db, row.tipo, sacrament_id);
+function wt(e, t) {
+	let n = e.prepare("SELECT tipo FROM sacramentos WHERE id = ?").get(t);
+	if (!n) throw new B(bt, 404);
+	return n.tipo === "matrimonio" ? Ct(e, t) : St(e, n.tipo, t);
 }
-var REQUIRED_NAMES = [
+var Tt = [
 	{
 		field: "nombres",
 		label: "nombres"
@@ -686,8 +582,7 @@ var REQUIRED_NAMES = [
 		field: "apellido_materno",
 		label: "apellido materno"
 	}
-];
-var REQUIRED_DETAILS = [
+], Et = [
 	{
 		field: "lugar_nacimiento",
 		label: "lugar de nacimiento"
@@ -700,2131 +595,1317 @@ var REQUIRED_DETAILS = [
 		field: "madre",
 		label: "madre"
 	}
-];
-var WHO = {
+], Dt = {
 	persona: "",
 	conyuge_1: " del esposo",
 	conyuge_2: " de la esposa",
 	sacramento: "",
 	detalle: ""
 };
-function has_birth(person) {
-	return Boolean(clean_text(person?.fecha_nacimiento) || clean_text(person?.fecha_aproximada));
+function Ot(e) {
+	return !!(V(e?.fecha_nacimiento) || V(e?.fecha_aproximada));
 }
-function check_person(person, previous, who) {
-	const missing = [];
-	for (const { field, label } of REQUIRED_NAMES) if (!clean_text(person?.[field])) missing.push(label);
-	if ((previous === null || has_birth(previous)) && !has_birth(person)) missing.push("fecha de nacimiento (o fecha aproximada)");
-	for (const { field, label } of REQUIRED_DETAILS) if ((previous === null || clean_text(previous[field]) !== null) && !clean_text(person?.[field])) missing.push(label);
-	if (missing.length > 0) throw new ServiceError(`Faltan datos${who}: ${missing.join(", ")}.`, 400);
+function kt(e, t, n) {
+	let r = [];
+	for (let { field: t, label: n } of Tt) V(e?.[t]) || r.push(n);
+	(t === null || Ot(t)) && !Ot(e) && r.push("fecha de nacimiento (o fecha aproximada)");
+	for (let { field: n, label: i } of Et) (t === null || V(t[n]) !== null) && !V(e?.[n]) && r.push(i);
+	if (r.length > 0) throw new B(`Faltan datos${n}: ${r.join(", ")}.`, 400);
 }
-function check_required(record, saved) {
-	for (const part of person_parts(record.sacramento.tipo)) check_person(person_at(record, part), saved ? person_at(saved, part) : null, WHO[part]);
-	if ((saved === null || saved.sacramento.ministro_id !== null) && !record.sacramento?.ministro_id) throw new ServiceError("Seleccione el celebrante.", 400);
+function At(e, t) {
+	for (let n of ue(e.sacramento.tipo)) kt(R(e, n), t ? R(t, n) : null, Dt[n]);
+	if ((t === null || t.sacramento.ministro_id !== null) && !e.sacramento?.ministro_id) throw new B("Seleccione el celebrante.", 400);
 }
-function queue_sacrament(db, sacrament_id) {
-	const current = db.prepare("SELECT tipo, client_id, version FROM sacramentos WHERE id = ?").get(sacrament_id);
-	add_to_queue(db, current.tipo, current.client_id, current.version);
+function jt(e, t) {
+	let n = e.prepare("SELECT tipo, client_id, version FROM sacramentos WHERE id = ?").get(t);
+	W(e, n.tipo, n.client_id, n.version);
 }
-function marriage_values(record) {
+function Mt(e) {
 	return [
-		clean_text(record.lugar),
-		clean_text(record.testigo_1),
-		clean_text(record.testigo_2),
-		clean_text(record.testigo_3),
-		clean_text(record.testigo_4),
-		clean_text(record.conyuge_1_bautismo_parroquia),
-		clean_text(record.conyuge_1_bautismo_fecha),
-		clean_text(record.conyuge_2_bautismo_parroquia),
-		clean_text(record.conyuge_2_bautismo_fecha)
+		V(e.lugar),
+		V(e.testigo_1),
+		V(e.testigo_2),
+		V(e.testigo_3),
+		V(e.testigo_4),
+		V(e.conyuge_1_bautismo_parroquia),
+		V(e.conyuge_1_bautismo_fecha),
+		V(e.conyuge_2_bautismo_parroquia),
+		V(e.conyuge_2_bautismo_fecha)
 	];
 }
-function as_corrections(part, corrections) {
-	return corrections.map((correction) => ({
-		parte: part,
-		campo: correction.campo_cambio,
-		valor_anterior: correction.valor_anterior ?? null,
-		valor_nuevo: correction.valor_nuevo
+function Nt(e, t) {
+	return t.map((t) => ({
+		parte: e,
+		campo: t.campo_cambio,
+		valor_anterior: t.valor_anterior ?? null,
+		valor_nuevo: t.valor_nuevo
 	}));
 }
-function insert_people(db, parish_id, record, apply) {
-	return person_parts(record.sacramento.tipo).map((part) => {
-		const person = person_at(record, part);
-		const corrected = apply_corrections(person);
+function Pt(e, t, n, r) {
+	return ue(n.sacramento.tipo).map((i) => {
+		let a = R(n, i), o = $e(a);
 		return {
-			id: insert_person(db, parish_id, apply ? corrected.person : person),
-			part,
-			corrections: corrected.corrections
+			id: Ze(e, t, r ? o.person : a),
+			part: i,
+			corrections: o.corrections
 		};
 	});
 }
-function corrections_of(people) {
-	return people.flatMap((person) => as_corrections(person.part, person.corrections));
+function Ft(e) {
+	return e.flatMap((e) => Nt(e.part, e.corrections));
 }
-function insert_detail(db, sacrament_id, record, people_ids) {
-	const type = record.sacramento.tipo;
-	if (type === "matrimonio") {
-		db.prepare(`INSERT INTO matrimonios
-				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,
-				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(sacrament_id, people_ids[0], people_ids[1], ...marriage_values(record));
+function It(e, t, n, r) {
+	let i = n.sacramento.tipo;
+	if (i === "matrimonio") {
+		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t, r[0], r[1], ...Mt(n));
 		return;
 	}
-	const baptism = record;
-	db.prepare(`INSERT INTO ${detail_table(type)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(sacrament_id, people_ids[0], clean_text(baptism.padrino_1), clean_text(baptism.padrino_2));
+	let a = n;
+	e.prepare(`INSERT INTO ${ct(i)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(t, r[0], V(a.padrino_1), V(a.padrino_2));
 }
-function update_detail(db, sacrament_id, record) {
-	const type = record.sacramento.tipo;
-	if (type === "matrimonio") {
-		db.prepare(`UPDATE matrimonios SET
-				lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,
-				conyuge_1_bautismo_parroquia = ?, conyuge_1_bautismo_fecha = ?,
-				conyuge_2_bautismo_parroquia = ?, conyuge_2_bautismo_fecha = ?
-			 WHERE sacramento_id = ?`).run(...marriage_values(record), sacrament_id);
+function Lt(e, t, n) {
+	let r = n.sacramento.tipo;
+	if (r === "matrimonio") {
+		e.prepare("UPDATE matrimonios SET\n				lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,\n				conyuge_1_bautismo_parroquia = ?, conyuge_1_bautismo_fecha = ?,\n				conyuge_2_bautismo_parroquia = ?, conyuge_2_bautismo_fecha = ?\n			 WHERE sacramento_id = ?").run(...Mt(n), t);
 		return;
 	}
-	const baptism = record;
-	db.prepare(`UPDATE ${detail_table(type)} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(clean_text(baptism.padrino_1), clean_text(baptism.padrino_2), sacrament_id);
+	let i = n;
+	e.prepare(`UPDATE ${ct(r)} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(V(i.padrino_1), V(i.padrino_2), t);
 }
-function save_edit(db, session, saved, record) {
-	check_required(record, saved);
-	const sacrament_id = saved.sacramento.id;
-	const corrections = [];
-	for (const part of person_parts(saved.sacramento.tipo)) {
-		const person_id = person_at(saved, part).id;
-		const corrected = apply_corrections(person_at(record, part));
-		update_person(db, person_id, corrected.person);
-		save_corrections(db, session, person_id, sacrament_id, corrected.corrections);
-		corrections.push(...as_corrections(part, corrected.corrections));
+function Rt(e, t, n, r) {
+	At(r, n);
+	let i = n.sacramento.id, a = [];
+	for (let o of ue(n.sacramento.tipo)) {
+		let s = R(n, o).id, c = $e(R(r, o));
+		Qe(e, s, c.person), et(e, t, s, i, c.corrections), a.push(...Nt(o, c.corrections));
 	}
-	update_sacrament(db, sacrament_id, record.sacramento);
-	update_detail(db, sacrament_id, record);
-	return {
-		fields: changed_fields(saved, record),
-		corrections
+	return yt(e, i, r.sacramento), Lt(e, i, r), {
+		fields: ge(n, r),
+		corrections: a
 	};
 }
-function with_correction(record, part, field, value) {
-	const person = person_at(record, part);
-	const change = {
-		campo_cambio: field,
-		valor_nuevo: value
+function zt(e, t, n, r) {
+	let i = R(e, t), a = {
+		campo_cambio: n,
+		valor_nuevo: r
 	};
 	return {
-		...record,
-		[part]: {
-			...person,
-			cambios: [...person.cambios ?? [], change]
+		...e,
+		[t]: {
+			...i,
+			cambios: [...i.cambios ?? [], a]
 		}
 	};
 }
 //#endregion
 //#region electron/main/controllers/requests.ts
-var ONLY_ADMIN$1 = "Solo un administrador de la parroquia puede aprobar o rechazar cambios.";
-var PENDING_REQUEST = "La partida tiene un cambio pendiente de aprobación. Un administrador de la parroquia debe aprobarlo o rechazarlo primero.";
-var DISCARDED_ON_EDIT = "Descartada al editar la partida";
-function as_requests(changes, type) {
-	return changes.map((change) => ({
-		...change,
-		tipo: type
+var Bt = "Solo un administrador de la parroquia puede aprobar o rechazar cambios.", Vt = "La partida tiene un cambio pendiente de aprobación. Un administrador de la parroquia debe aprobarlo o rechazarlo primero.", Ht = "Descartada al editar la partida";
+function Ut(e, t) {
+	return e.map((e) => ({
+		...e,
+		tipo: t
 	}));
 }
-function requested_corrections(saved, record) {
-	const out_changes = [];
-	for (const part of person_parts(saved.sacramento.tipo)) {
-		const incoming = person_at(record, part);
-		const new_changes = Array.isArray(incoming?.cambios) ? incoming.cambios.filter((change) => change.id === void 0) : [];
-		const corrections = apply_corrections({
-			...person_at(saved, part),
-			cambios: new_changes
+function Wt(e, t) {
+	let n = [];
+	for (let r of ue(e.sacramento.tipo)) {
+		let i = R(t, r), a = Array.isArray(i?.cambios) ? i.cambios.filter((e) => e.id === void 0) : [], o = $e({
+			...R(e, r),
+			cambios: a
 		}).corrections;
-		for (const correction of corrections) out_changes.push({
-			parte: part,
-			campo: correction.campo_cambio,
-			valor_anterior: correction.valor_anterior ?? null,
-			valor_nuevo: correction.valor_nuevo
+		for (let e of o) n.push({
+			parte: r,
+			campo: e.campo_cambio,
+			valor_anterior: e.valor_anterior ?? null,
+			valor_nuevo: e.valor_nuevo
 		});
 	}
-	return out_changes;
+	return n;
 }
-function request_changes(db, session, record) {
-	const sacrament_id = positive_id(record.sacramento?.id);
-	const saved = read_record(db, sacrament_id);
-	check_parish_access(session, saved.sacramento.parroquia_id, OTHER_PARISH_RECORD);
-	if (saved.sacramento.estado === "anulado") throw new ServiceError("Una partida anulada no admite cambios.", 409);
-	if (has_pending_request(db, sacrament_id)) throw new ServiceError(PENDING_REQUEST, 409);
-	const new_note = clean_text(record.sacramento?.anotaciones);
-	const writes_blank_note = clean_text(saved.sacramento.anotaciones) === null && new_note !== null;
-	const typed = changed_fields(saved, record).filter((change) => !(writes_blank_note && change.campo === "anotaciones"));
-	const corrections = requested_corrections(saved, record);
-	if (corrections.some((correction) => typed.some((change) => change.parte === correction.parte && change.campo === correction.campo))) throw new ServiceError("No cambie el mismo dato en el formulario y en la nota marginal a la vez.", 400);
-	if (typed.length === 0 && corrections.length === 0 && !writes_blank_note) throw new ServiceError("No hay cambios para pedir.", 400);
-	check_required(record, saved);
-	const requests = [...as_requests(typed, "digitacion"), ...as_requests(corrections, "nota_marginal")];
-	db.transaction(() => {
-		queue_sacrament(db, sacrament_id);
-		if (writes_blank_note) {
-			db.prepare("UPDATE sacramentos SET anotaciones = ? WHERE id = ?").run(new_note, sacrament_id);
-			add_history(db, sacrament_id, session.user_id, "editada", [{
-				parte: "sacramento",
-				campo: "anotaciones",
-				valor_anterior: null,
-				valor_nuevo: new_note
-			}]);
-		}
-		if (requests.length > 0) {
-			insert_requests(db, sacrament_id, session.user_id, requests);
-			add_history(db, sacrament_id, session.user_id, "cambio_pedido", requests);
-		}
+function Gt(e, t, n) {
+	let r = H(n.sacramento?.id), i = wt(e, r);
+	if (Ge(t, i.sacramento.parroquia_id, ht), i.sacramento.estado === "anulado") throw new B("Una partida anulada no admite cambios.", 409);
+	if (ke(e, r)) throw new B(Vt, 409);
+	let a = V(n.sacramento?.anotaciones), o = V(i.sacramento.anotaciones) === null && a !== null, s = ge(i, n).filter((e) => !(o && e.campo === "anotaciones")), c = Wt(i, n);
+	if (c.some((e) => s.some((t) => t.parte === e.parte && t.campo === e.campo))) throw new B("No cambie el mismo dato en el formulario y en la nota marginal a la vez.", 400);
+	if (s.length === 0 && c.length === 0 && !o) throw new B("No hay cambios para pedir.", 400);
+	At(n, i);
+	let l = [...Ut(s, "digitacion"), ...Ut(c, "nota_marginal")];
+	e.transaction(() => {
+		jt(e, r), o && (e.prepare("UPDATE sacramentos SET anotaciones = ? WHERE id = ?").run(a, r), U(e, r, t.user_id, "editada", [{
+			parte: "sacramento",
+			campo: "anotaciones",
+			valor_anterior: null,
+			valor_nuevo: a
+		}])), l.length > 0 && (je(e, r, t.user_id, l), U(e, r, t.user_id, "cambio_pedido", l));
 	})();
 }
-function with_requests(saved, requests) {
-	let record = saved;
-	for (const request of requests) if (request.tipo === "nota_marginal") record = with_correction(record, request.parte, request.campo, request.valor_nuevo);
-	else record = set_field(record, request.parte, request.campo, request.valor_nuevo);
-	return record;
+function Kt(e, t) {
+	let n = e;
+	for (let e of t) n = e.tipo === "nota_marginal" ? zt(n, e.parte, e.campo, e.valor_nuevo) : he(n, e.parte, e.campo, e.valor_nuevo);
+	return n;
 }
-function uses_requests(record, requests) {
-	return requests.every((request) => {
-		if (request.tipo === "digitacion") return get_field(record, request.parte, request.campo) === request.valor_nuevo;
-		return (person_at(record, request.parte).cambios ?? []).some((change) => change.id === void 0 && change.campo_cambio === request.campo && clean_text(change.valor_nuevo) === request.valor_nuevo);
-	});
+function qt(e, t) {
+	return t.every((t) => t.tipo === "digitacion" ? me(e, t.parte, t.campo) === t.valor_nuevo : (R(e, t.parte).cambios ?? []).some((e) => e.id === void 0 && e.campo_cambio === t.campo && V(e.valor_nuevo) === t.valor_nuevo));
 }
-function check_reviewer(session, saved) {
-	check_parish_admin(session, saved.sacramento.parroquia_id, OTHER_PARISH_RECORD, ONLY_ADMIN$1);
+function Jt(e, t) {
+	qe(e, t.sacramento.parroquia_id, ht, Bt);
 }
-function review_requests(db, session, sacrament_id, decision) {
-	if (decision !== "aprobado" && decision !== "rechazado") throw new ServiceError("Indique si aprueba o rechaza el cambio.", 400);
-	const saved = read_record(db, sacrament_id);
-	check_reviewer(session, saved);
-	const requests = pending_requests(db, sacrament_id);
-	if (requests.length === 0) throw new ServiceError("La partida no tiene cambios pendientes.", 409);
-	db.transaction(() => {
-		queue_sacrament(db, sacrament_id);
-		if (decision === "aprobado") {
-			save_edit(db, session, saved, with_requests(saved, requests));
-			add_history(db, sacrament_id, session.user_id, "cambio_aprobado", requests);
-		} else add_history(db, sacrament_id, session.user_id, "cambio_rechazado", requests);
-		close_requests(db, sacrament_id, decision, session.user_id);
-		db.prepare("UPDATE sacramentos SET updated_at = ? WHERE id = ?").run((/* @__PURE__ */ new Date()).toISOString(), sacrament_id);
+function Yt(e, t, n, r) {
+	if (r !== "aprobado" && r !== "rechazado") throw new B("Indique si aprueba o rechaza el cambio.", 400);
+	let i = wt(e, n);
+	Jt(t, i);
+	let a = Ae(e, n);
+	if (a.length === 0) throw new B("La partida no tiene cambios pendientes.", 409);
+	e.transaction(() => {
+		jt(e, n), r === "aprobado" ? (Rt(e, t, i, Kt(i, a)), U(e, n, t.user_id, "cambio_aprobado", a)) : U(e, n, t.user_id, "cambio_rechazado", a), Me(e, n, r, t.user_id), e.prepare("UPDATE sacramentos SET updated_at = ? WHERE id = ?").run((/* @__PURE__ */ new Date()).toISOString(), n);
 	})();
 }
-function resolve_on_edit(db, session, sacrament_id, record) {
-	const requests = pending_requests(db, sacrament_id);
-	if (requests.length === 0) return;
-	if (uses_requests(record, requests)) {
-		close_requests(db, sacrament_id, "aprobado", session.user_id);
-		add_history(db, sacrament_id, session.user_id, "cambio_aprobado", requests);
-		return;
+function Xt(e, t, n, r) {
+	let i = Ae(e, n);
+	if (i.length !== 0) {
+		if (qt(r, i)) {
+			Me(e, n, "aprobado", t.user_id), U(e, n, t.user_id, "cambio_aprobado", i);
+			return;
+		}
+		Me(e, n, "descartado", t.user_id, Ht), U(e, n, t.user_id, "cambio_descartado", i, Ht);
 	}
-	close_requests(db, sacrament_id, "descartado", session.user_id, DISCARDED_ON_EDIT);
-	add_history(db, sacrament_id, session.user_id, "cambio_descartado", requests, DISCARDED_ON_EDIT);
 }
-function list_pending(db, session) {
-	if (session.role !== "admin_parroquia" || !session.parish_id) throw new ServiceError(ONLY_ADMIN$1, 403);
-	return db.prepare(`SELECT r.sacramento_id, MIN(r.id) AS primera, u.nombre, u.apellido_paterno, u.apellido_materno
-			 FROM solicitudes_cambio r
-			 JOIN sacramentos s ON s.id = r.sacramento_id
-			 LEFT JOIN usuarios u ON u.id = r.usuario_id
-			 WHERE r.estado = 'pendiente' AND s.parroquia_id = ?
-			 GROUP BY r.sacramento_id
-			 ORDER BY primera`).all(session.parish_id).map((row) => ({
-		partida: read_record(db, row.sacramento_id),
-		solicitado_por: full_name$1(row.nombre, row.apellido_paterno, row.apellido_materno)
+function Zt(e, t) {
+	if (t.role !== "admin_parroquia" || !t.parish_id) throw new B(Bt, 403);
+	return e.prepare("SELECT r.sacramento_id, MIN(r.id) AS primera, u.nombre, u.apellido_paterno, u.apellido_materno\n			 FROM solicitudes_cambio r\n			 JOIN sacramentos s ON s.id = r.sacramento_id\n			 LEFT JOIN usuarios u ON u.id = r.usuario_id\n			 WHERE r.estado = 'pendiente' AND s.parroquia_id = ?\n			 GROUP BY r.sacramento_id\n			 ORDER BY primera").all(t.parish_id).map((t) => ({
+		partida: wt(e, t.sacramento_id),
+		solicitado_por: we(t.nombre, t.apellido_paterno, t.apellido_materno)
 	}));
 }
-var request_routes = {
-	"requests.pending": (_payload, { db, session }) => {
-		return { pendientes: list_pending(db, session) };
-	},
-	"requests.review": (payload, { db, session }) => {
-		review_requests(db, session, positive_id(payload.sacramento_id), payload.decision);
-		return { success: true };
-	}
-};
-//#endregion
-//#region shared/sync.ts
-var ROLES = [
+var Qt = {
+	"requests.pending": (e, { db: t, session: n }) => ({ pendientes: Zt(t, n) }),
+	"requests.review": (e, { db: t, session: n }) => (Yt(t, n, H(e.sacramento_id), e.decision), { success: !0 })
+}, $t = [
 	"admin_general",
 	"admin_parroquia",
 	"usuario"
-];
-//#endregion
-//#region shared/users.ts
-var USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
-function is_role(value) {
-	return ROLES.includes(value);
+], en = /^[A-Za-z0-9._-]{3,50}$/;
+function tn(e) {
+	return $t.includes(e);
 }
-function role_parish_error(target) {
-	if (target.rol === "admin_general" && target.parroquia_id !== null) return "Un administrador general no pertenece a ninguna parroquia.";
-	if (target.rol !== "admin_general" && target.parroquia_id === null) return "Debe seleccionar una parroquia.";
-	return null;
+function nn(e) {
+	return e.rol === "admin_general" && e.parroquia_id !== null ? "Un administrador general no pertenece a ninguna parroquia." : e.rol !== "admin_general" && e.parroquia_id === null ? "Debe seleccionar una parroquia." : null;
 }
-function parish_admin_reason(actor, target, action) {
-	if (target.parroquia_id !== actor.parroquia_id) return `Solo puede ${action} cuentas de su propia parroquia.`;
-	if (target.rol === "usuario") return null;
-	if (target.rol === "admin_parroquia" && actor.principal) return null;
-	if (target.rol === "admin_parroquia") return `Solo el administrador principal de la parroquia puede ${action} a otros administradores.`;
-	return "El administrador de una parroquia no gestiona administradores generales.";
+function rn(e, t, n) {
+	return t.parroquia_id === e.parroquia_id ? t.rol === "usuario" || t.rol === "admin_parroquia" && e.principal ? null : t.rol === "admin_parroquia" ? `Solo el administrador principal de la parroquia puede ${n} a otros administradores.` : "El administrador de una parroquia no gestiona administradores generales." : `Solo puede ${n} cuentas de su propia parroquia.`;
 }
-function cannot_create(actor, target) {
-	if (actor.rol === "admin_general") {
-		if (target.rol === "admin_general" && !actor.principal) return "Solo el administrador principal puede crear administradores generales.";
-		return null;
-	}
-	if (actor.rol === "admin_parroquia") return parish_admin_reason(actor, target, "crear");
-	return "No tiene permiso para gestionar usuarios.";
+function an(e, t) {
+	return e.rol === "admin_general" ? t.rol === "admin_general" && !e.principal ? "Solo el administrador principal puede crear administradores generales." : null : e.rol === "admin_parroquia" ? rn(e, t, "crear") : "No tiene permiso para gestionar usuarios.";
 }
-function cannot_modify(actor, target) {
-	if (target.id === actor.id) return null;
-	if (actor.rol === "admin_general") {
-		if (target.rol === "admin_general" && !actor.principal) return "Solo el administrador principal puede modificar a otros administradores generales.";
-		return null;
-	}
-	if (actor.rol === "admin_parroquia") return parish_admin_reason(actor, target, "modificar");
-	return "No tiene permiso para gestionar usuarios.";
+function on(e, t) {
+	return t.id === e.id ? null : e.rol === "admin_general" ? t.rol === "admin_general" && !e.principal ? "Solo el administrador principal puede modificar a otros administradores generales." : null : e.rol === "admin_parroquia" ? rn(e, t, "modificar") : "No tiene permiso para gestionar usuarios.";
 }
-function cannot_disable(target) {
-	if (target.principal) return "No se puede deshabilitar al administrador principal: primero pase la marca de principal a otro administrador.";
-	return null;
+function sn(e) {
+	return e.principal ? "No se puede deshabilitar al administrador principal: primero pase la marca de principal a otro administrador." : null;
 }
-function can_manage_users(role) {
-	return role === "admin_general" || role === "admin_parroquia";
+function cn(e) {
+	return e === "admin_general" || e === "admin_parroquia";
 }
 //#endregion
 //#region electron/main/utils/crypto.ts
-var KEY_LENGTH = 32;
-var HASH_LENGTH = 32;
-var SALT_LENGTH = 16;
-var COST = {
+var ln = 32, un = 32, dn = 16, fn = {
 	N: 2 ** 15,
 	r: 8,
 	p: 1,
 	maxmem: 67108864
 };
-function new_key() {
-	return randomBytes(KEY_LENGTH).toString("hex");
+function pn() {
+	return w(ln).toString("hex");
 }
-function compute_hash(password, salt, options, length) {
-	return new Promise((resolve, reject) => {
-		scrypt(password.normalize("NFKC"), salt, length, options, (error, hash) => {
-			if (error) reject(error);
-			else resolve(hash);
+function mn(e, t, n, r) {
+	return new Promise((i, a) => {
+		T(e.normalize("NFKC"), t, r, n, (e, t) => {
+			e ? a(e) : i(t);
 		});
 	});
 }
-async function create_verifier(password) {
-	const salt = randomBytes(SALT_LENGTH);
-	const hash = await compute_hash(password, salt, COST, HASH_LENGTH);
-	return `scrypt:${COST.N}:${COST.r}:${COST.p}:${salt.toString("base64")}:${hash.toString("base64")}`;
+async function hn(e) {
+	let t = w(dn), n = await mn(e, t, fn, un);
+	return `scrypt:${fn.N}:${fn.r}:${fn.p}:${t.toString("base64")}:${n.toString("base64")}`;
 }
-var SERVER_ITERATIONS = 1e5;
-var SERVER_HASH_BITS = 256;
-function compute_server_hash(password, salt, iterations) {
-	return new Promise((resolve, reject) => {
-		pbkdf2(password, salt, iterations, SERVER_HASH_BITS / 8, "sha256", (error, hash) => {
-			if (error) reject(error);
-			else resolve(hash);
+var gn = 1e5, _n = 256;
+function vn(e, t, n) {
+	return new Promise((r, i) => {
+		C(e, t, n, _n / 8, "sha256", (e, t) => {
+			e ? i(e) : r(t);
 		});
 	});
 }
-async function create_server_hash(password) {
-	const salt = randomBytes(SALT_LENGTH);
-	const hash = await compute_server_hash(password, salt, SERVER_ITERATIONS);
-	return `${SERVER_ITERATIONS}:${salt.toString("base64")}:${hash.toString("base64")}`;
+async function yn(e) {
+	let t = w(dn), n = await vn(e, t, gn);
+	return `${gn}:${t.toString("base64")}:${n.toString("base64")}`;
 }
-async function matches_server_hash(password, stored) {
-	const [iterations, salt, hash] = stored.split(":");
-	if (!/^\d+$/.test(iterations ?? "") || !salt || !hash) return false;
-	const expected = Buffer.from(hash, "base64");
-	const actual = await compute_server_hash(password, Buffer.from(salt, "base64"), Number(iterations));
-	return actual.length === expected.length && timingSafeEqual(actual, expected);
+async function bn(e, t) {
+	let [n, r, i] = t.split(":");
+	if (!/^\d+$/.test(n ?? "") || !r || !i) return !1;
+	let a = Buffer.from(i, "base64"), o = await vn(e, Buffer.from(r, "base64"), Number(n));
+	return o.length === a.length && E(o, a);
 }
-async function matches_verifier(password, verifier) {
-	if (!verifier.startsWith("scrypt:")) return matches_server_hash(password, verifier);
-	const [, n, r, p, salt, hash] = verifier.split(":");
-	if (!salt || !hash) return false;
-	const expected = Buffer.from(hash, "base64");
-	const options = {
+async function xn(e, t) {
+	if (!t.startsWith("scrypt:")) return bn(e, t);
+	let [, n, r, i, a, o] = t.split(":");
+	if (!a || !o) return !1;
+	let s = Buffer.from(o, "base64"), c = {
 		N: Number(n),
 		r: Number(r),
-		p: Number(p),
-		maxmem: COST.maxmem
-	};
-	const actual = await compute_hash(password, Buffer.from(salt, "base64"), options, expected.length);
-	return timingSafeEqual(actual, expected);
+		p: Number(i),
+		maxmem: fn.maxmem
+	}, l = await mn(e, Buffer.from(a, "base64"), c, s.length);
+	return E(l, s);
 }
-var IV_LENGTH = 12;
-async function encrypt_with_password(password, data) {
-	const salt = randomBytes(SALT_LENGTH);
-	const iv = randomBytes(IV_LENGTH);
-	const key = await compute_hash(password, salt, COST, KEY_LENGTH);
-	const cipher = createCipheriv("aes-256-gcm", key, iv);
-	const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+var Sn = 12;
+async function Cn(e, t) {
+	let n = w(dn), r = w(Sn), i = await mn(e, n, fn, ln), a = x("aes-256-gcm", i, r), o = Buffer.concat([a.update(t), a.final()]);
 	return {
-		sal: salt.toString("base64"),
-		iv: iv.toString("base64"),
-		etiqueta: cipher.getAuthTag().toString("base64"),
-		datos: encrypted.toString("base64")
+		sal: n.toString("base64"),
+		iv: r.toString("base64"),
+		etiqueta: a.getAuthTag().toString("base64"),
+		datos: o.toString("base64")
 	};
 }
-async function decrypt_with_password(password, encrypted) {
-	const key = await compute_hash(password, Buffer.from(encrypted.sal, "base64"), COST, KEY_LENGTH);
+async function wn(e, t) {
+	let n = await mn(e, Buffer.from(t.sal, "base64"), fn, ln);
 	try {
-		const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(encrypted.iv, "base64"));
-		decipher.setAuthTag(Buffer.from(encrypted.etiqueta, "base64"));
-		return Buffer.concat([decipher.update(Buffer.from(encrypted.datos, "base64")), decipher.final()]);
+		let e = S("aes-256-gcm", n, Buffer.from(t.iv, "base64"));
+		return e.setAuthTag(Buffer.from(t.etiqueta, "base64")), Buffer.concat([e.update(Buffer.from(t.datos, "base64")), e.final()]);
 	} catch {
 		return null;
 	}
 }
 //#endregion
 //#region electron/main/db/migrations.ts
-var LOCAL_MIGRATIONS = [
-	`
-  CREATE TABLE parroquias (
-    id        INTEGER PRIMARY KEY,
-    nombre    TEXT    NOT NULL,
-    ubicacion TEXT,
-    activa    INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE usuarios (
-    id               INTEGER PRIMARY KEY,
-    parroquia_id     INTEGER REFERENCES parroquias(id),
-    username         TEXT    NOT NULL UNIQUE,
-    rol              TEXT    NOT NULL CHECK (rol IN ('admin', 'usuario_parroquia')),
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE ministros (
-    id               INTEGER PRIMARY KEY,
-    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
-    titulo           TEXT,
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE personas (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id        TEXT    NOT NULL UNIQUE,
-    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
-    dni              TEXT    CHECK (dni IS NULL OR dni <> ''),
-    nombres          TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL DEFAULT '',
-    fecha_nacimiento TEXT,
-    edad             INTEGER CHECK (edad IS NULL OR edad >= 0),
-    lugar_nacimiento TEXT,
-    padre            TEXT,
-    madre            TEXT,
-    version          INTEGER NOT NULL DEFAULT 1,
-    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-  CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;
-  CREATE INDEX idx_personas_busqueda ON personas (nombres, apellido_paterno, apellido_materno);
-
-  CREATE TABLE sacramentos (
-    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id              TEXT    NOT NULL UNIQUE,
-    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),
-    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),
-    ministro_id            INTEGER REFERENCES ministros(id),
-    libro                  TEXT    NOT NULL,
-    folio                  TEXT    NOT NULL,
-    numero                 TEXT    NOT NULL,
-    fecha_emision          TEXT    NOT NULL,
-    fecha_evento           TEXT,
-    anotaciones            TEXT,
-    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
-    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
-    anulado_en             TEXT,
-    motivo_anulacion       TEXT,
-    version                INTEGER NOT NULL DEFAULT 1,
-    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    -- Permite que cada subtipo enlace (id, tipo): un bautismo no puede colgar de un matrimonio.
-    UNIQUE (id, tipo),
-    CHECK (
-      estado = 'vigente'
-      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL
-          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')
-    )
-  );
-  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);
-
-  CREATE TABLE matrimonios (
-    sacramento_id                INTEGER PRIMARY KEY,
-    tipo                         TEXT    NOT NULL DEFAULT 'matrimonio' CHECK (tipo = 'matrimonio'),
-    conyuge_1_id                 INTEGER NOT NULL REFERENCES personas(id),
-    conyuge_2_id                 INTEGER NOT NULL REFERENCES personas(id),
-    lugar                        TEXT,
-    testigo_1                    TEXT,
-    testigo_2                    TEXT,
-    testigo_3                    TEXT,
-    testigo_4                    TEXT,
-    conyuge_1_bautismo_parroquia TEXT,
-    conyuge_1_bautismo_fecha     TEXT,
-    conyuge_2_bautismo_parroquia TEXT,
-    conyuge_2_bautismo_fecha     TEXT,
-    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo),
-    CHECK (conyuge_1_id <> conyuge_2_id)
-  );
-  CREATE INDEX idx_matrimonios_conyuge_1 ON matrimonios (conyuge_1_id);
-  CREATE INDEX idx_matrimonios_conyuge_2 ON matrimonios (conyuge_2_id);
-
-  CREATE TABLE bautismos (
-    sacramento_id INTEGER PRIMARY KEY,
-    tipo          TEXT    NOT NULL DEFAULT 'bautismo' CHECK (tipo = 'bautismo'),
-    persona_id    INTEGER NOT NULL REFERENCES personas(id),
-    padrino_1     TEXT,
-    padrino_2     TEXT,
-    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)
-  );
-  CREATE INDEX idx_bautismos_persona ON bautismos (persona_id);
-
-  CREATE TABLE confirmaciones (
-    sacramento_id INTEGER PRIMARY KEY,
-    tipo          TEXT    NOT NULL DEFAULT 'confirmacion' CHECK (tipo = 'confirmacion'),
-    persona_id    INTEGER NOT NULL REFERENCES personas(id),
-    padrino_1     TEXT,
-    padrino_2     TEXT,
-    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)
-  );
-  CREATE INDEX idx_confirmaciones_persona ON confirmaciones (persona_id);
-
-  CREATE TABLE cambios_persona (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    -- Evita duplicar la corrección si se reenvía tras un corte de internet.
-    client_id      TEXT    NOT NULL UNIQUE,
-    persona_id     INTEGER NOT NULL REFERENCES personas(id),
-    sacramento_id  INTEGER REFERENCES sacramentos(id),
-    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id),
-    campo_cambio   TEXT    NOT NULL,
-    valor_anterior TEXT,
-    valor_nuevo    TEXT,
-    fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-  CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);
-
-  -- Cada UPDATE sube version, salvo que la sincronización ya la haya fijado.
-  CREATE TRIGGER trg_personas_touch
-  AFTER UPDATE ON personas
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE personas
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-
-  CREATE TRIGGER trg_sacramentos_touch
-  AFTER UPDATE ON sacramentos
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE sacramentos
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-  `,
-	`
-  CREATE TABLE ministros_nueva (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id        TEXT    NOT NULL UNIQUE,
-    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
-    titulo           TEXT,
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1,
-    version          INTEGER NOT NULL DEFAULT 1,
-    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  INSERT INTO ministros_nueva (id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo)
-  SELECT id, 'servidor-' || id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo
-  FROM ministros;
-
-  DROP TABLE ministros;
-  ALTER TABLE ministros_nueva RENAME TO ministros;
-
-  CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
-
-  CREATE TRIGGER trg_ministros_touch
-  AFTER UPDATE ON ministros
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE ministros
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-  `,
-	`
-  -- Registros con cambios sin subir. Se envía su estado final, así que basta una fila por registro.
-  -- version_base: última versión que conoce el servidor; NULL si el registro aún no existe allí.
-  CREATE TABLE sync_cola (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro')),
-    client_id    TEXT    NOT NULL,
-    version_base INTEGER,
-    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    UNIQUE (entidad, client_id)
-  );
-
-  INSERT INTO sync_cola (entidad, client_id)
-  SELECT tipo, client_id FROM sacramentos ORDER BY id;
-
-  INSERT INTO sync_cola (entidad, client_id)
-  SELECT 'ministro', client_id FROM ministros ORDER BY id;
-  `,
-	`
-  -- cola_id: identifica la fila mientras siga pendiente, para reconocer un reenvío tras un corte.
-  -- revision: sube con cada edición; si cambió durante el envío, la fila no se quita al confirmarse.
-  ALTER TABLE sync_cola ADD COLUMN cola_id TEXT NOT NULL DEFAULT '';
-  ALTER TABLE sync_cola ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
-  ALTER TABLE sync_cola ADD COLUMN estado TEXT NOT NULL DEFAULT 'pendiente'
-    CHECK (estado IN ('pendiente', 'conflicto', 'rechazado'));
-  ALTER TABLE sync_cola ADD COLUMN motivo TEXT;
-  UPDATE sync_cola SET cola_id = lower(hex(randomblob(16)));
-
-  CREATE TABLE sync_estado (
-    clave TEXT PRIMARY KEY,
-    valor TEXT
-  );
-
-  -- Verificación para entrar sin internet. Solo existe para quien ya entró con conexión en esta PC.
-  CREATE TABLE credenciales_locales (
-    usuario_id     INTEGER PRIMARY KEY REFERENCES usuarios(id),
-    verificador    TEXT NOT NULL,
-    actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-  `,
-	`
-  -- La edad pasa a ser una fecha aproximada en texto libre: los libros traen cosas como
-  -- "22 AG 1978" o "(27 AÑOS AL DIA DE BODA)". Las edades que ya había se conservan como "N años".
-  ALTER TABLE personas ADD COLUMN fecha_aproximada TEXT;
-  UPDATE personas SET fecha_aproximada = edad || ' años' WHERE edad IS NOT NULL;
-  ALTER TABLE personas DROP COLUMN edad;
-  `,
-	`
-  -- Tres roles (ver worker/src/db/migrations/0015_roles_y_correcciones.sql):
-  --   admin_general, admin_parroquia (el párroco) y usuario (un ayudante).
-  -- Un admin sin parroquia pasa a admin_general; las demás cuentas, a admin_parroquia.
-  --
-  -- Los usuarios ahora se pueden crear y editar en esta PC sin internet y subirse después:
-  --   client_id      los identifica ante el servidor (el mismo 'servidor-<id>' que puso su migración).
-  --   id negativo    una cuenta creada aquí que el servidor todavía no conoce; al subirla se cambia por el suyo.
-  --   password_hash_pendiente   la contraseña cambiada aquí que falta subir (PBKDF2, el formato del
-  --                             servidor). Se borra en cuanto el servidor la recibe.
-  CREATE TABLE usuarios_nueva (
-    id               INTEGER PRIMARY KEY,
-    client_id        TEXT    NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
-    parroquia_id     INTEGER REFERENCES parroquias(id),
-    username         TEXT    NOT NULL UNIQUE,
-    rol              TEXT    NOT NULL CHECK (rol IN ('admin_general', 'admin_parroquia', 'usuario')),
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1,
-    principal        INTEGER NOT NULL DEFAULT 0,
-    password_hash_pendiente TEXT,
-    version          INTEGER NOT NULL DEFAULT 1,
-    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  INSERT INTO usuarios_nueva (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)
-  SELECT id, 'servidor-' || id, parroquia_id, username,
-         CASE WHEN rol = 'admin' AND parroquia_id IS NULL THEN 'admin_general' ELSE 'admin_parroquia' END,
-         nombre, apellido_paterno, apellido_materno, activo
-  FROM usuarios;
-
-  DROP TABLE usuarios;
-  ALTER TABLE usuarios_nueva RENAME TO usuarios;
-
-  CREATE TRIGGER trg_usuarios_touch
-  AFTER UPDATE ON usuarios
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE usuarios
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-
-  -- Una corrección pedida por un usuario queda 'pendiente' hasta que el admin_parroquia la revise.
-  ALTER TABLE cambios_persona ADD COLUMN estado TEXT NOT NULL DEFAULT 'aprobado'
-    CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'));
-  ALTER TABLE cambios_persona ADD COLUMN revisado_por_usuario_id INTEGER REFERENCES usuarios(id);
-  ALTER TABLE cambios_persona ADD COLUMN revisado_en TEXT;
-
-  -- La cola también lleva usuarios.
-  CREATE TABLE sync_cola_nueva (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro', 'usuario')),
-    client_id    TEXT    NOT NULL,
-    version_base INTEGER,
-    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    cola_id      TEXT    NOT NULL DEFAULT '',
-    revision     INTEGER NOT NULL DEFAULT 1,
-    estado       TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'conflicto', 'rechazado')),
-    motivo       TEXT,
-    UNIQUE (entidad, client_id)
-  );
-
-  INSERT INTO sync_cola_nueva (id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo)
-  SELECT id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo FROM sync_cola;
-
-  DROP TABLE sync_cola;
-  ALTER TABLE sync_cola_nueva RENAME TO sync_cola;
-  `,
-	`
-  ALTER TABLE sacramentos ADD COLUMN anotaciones_propuestas TEXT;
-  `,
-	`
-  CREATE TABLE solicitudes_cambio (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id               TEXT    NOT NULL UNIQUE,
-    sacramento_id           INTEGER NOT NULL REFERENCES sacramentos(id),
-    usuario_id              INTEGER NOT NULL REFERENCES usuarios(id),
-    parte                   TEXT    NOT NULL CHECK (parte IN ('sacramento', 'persona', 'conyuge_1', 'conyuge_2', 'detalle')),
-    campo                   TEXT    NOT NULL,
-    tipo                    TEXT    NOT NULL CHECK (tipo IN ('digitacion', 'nota_marginal')),
-    valor_anterior          TEXT,
-    valor_nuevo             TEXT,
-    estado                  TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'descartado')),
-    motivo                  TEXT,
-    revisado_por_usuario_id INTEGER REFERENCES usuarios(id),
-    revisado_en             TEXT,
-    creado_en               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  CREATE INDEX idx_solicitudes_sacramento ON solicitudes_cambio (sacramento_id);
-
-  CREATE TABLE historial_partidas (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id     TEXT    NOT NULL UNIQUE,
-    sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
-    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
-    evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
-                                                     'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),
-    motivo        TEXT,
-    fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);
-
-  CREATE TABLE historial_campos (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    historial_id   INTEGER NOT NULL REFERENCES historial_partidas(id),
-    parte          TEXT    NOT NULL,
-    campo          TEXT    NOT NULL,
-    valor_anterior TEXT,
-    valor_nuevo    TEXT
-  );
-
-  CREATE INDEX idx_historial_campos ON historial_campos (historial_id);
-
-  -- Las correcciones de nombres pendientes: la misma client_id que tenían.
-  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
-  SELECT
-    c.client_id,
-    c.sacramento_id,
-    c.usuario_id,
-    CASE
-      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_1_id = c.persona_id) THEN 'conyuge_1'
-      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_2_id = c.persona_id) THEN 'conyuge_2'
-      ELSE 'persona'
-    END,
-    c.campo_cambio,
-    'nota_marginal',
-    c.valor_anterior,
-    c.valor_nuevo,
-    c.fecha_cambio
-  FROM cambios_persona c
-  WHERE c.estado = 'pendiente' AND c.sacramento_id IS NOT NULL;
-
-  -- La nota propuesta: la pidió quien pidió la corrección que iba con ella.
-  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
-  SELECT
-    s.client_id || '-nota',
-    s.id,
-    c.usuario_id,
-    'sacramento',
-    'anotaciones',
-    'digitacion',
-    s.anotaciones,
-    s.anotaciones_propuestas,
-    c.fecha_cambio
-  FROM sacramentos s
-  JOIN cambios_persona c ON c.id = (SELECT MIN(id) FROM cambios_persona WHERE sacramento_id = s.id AND estado = 'pendiente')
-  WHERE s.anotaciones_propuestas IS NOT NULL;
-
-  DELETE FROM cambios_persona WHERE estado = 'pendiente';
-
-  ALTER TABLE sacramentos DROP COLUMN anotaciones_propuestas;
-  `,
-	`
-  UPDATE usuarios SET principal = 1
-  WHERE id IN (
-    SELECT MIN(a.id) FROM usuarios a
-    WHERE a.rol = 'admin_parroquia' AND a.activo = 1 AND a.id > 0
-      AND NOT EXISTS (SELECT 1 FROM usuarios p WHERE p.principal = 1 AND p.parroquia_id = a.parroquia_id)
-    GROUP BY a.parroquia_id
-  );
-  `
-];
-//#endregion
-//#region electron/main/db/database.ts
-var HEX_KEY_PATTERN = /^[0-9a-f]{64}$/i;
-var NewerDatabaseError = class extends Error {};
-function migrate(db, migrations) {
-	const current_version = db.pragma("user_version", { simple: true });
-	if (current_version > migrations.length) throw new NewerDatabaseError(`La base local está en la versión ${current_version} y esta app solo conoce hasta la ${migrations.length}.`);
-	db.pragma("foreign_keys = OFF");
-	for (let i = current_version; i < migrations.length; i++) db.transaction(() => {
-		db.exec(migrations[i]);
-		if (db.pragma("foreign_key_check").length > 0) throw new Error("La migración dejó claves foráneas rotas.");
-		db.pragma(`user_version = ${i + 1}`);
+var Tn = [
+	"\n  CREATE TABLE parroquias (\n    id        INTEGER PRIMARY KEY,\n    nombre    TEXT    NOT NULL,\n    ubicacion TEXT,\n    activa    INTEGER NOT NULL DEFAULT 1\n  );\n\n  CREATE TABLE usuarios (\n    id               INTEGER PRIMARY KEY,\n    parroquia_id     INTEGER REFERENCES parroquias(id),\n    username         TEXT    NOT NULL UNIQUE,\n    rol              TEXT    NOT NULL CHECK (rol IN ('admin', 'usuario_parroquia')),\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1\n  );\n\n  CREATE TABLE ministros (\n    id               INTEGER PRIMARY KEY,\n    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),\n    titulo           TEXT,\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1\n  );\n\n  CREATE TABLE personas (\n    id               INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id        TEXT    NOT NULL UNIQUE,\n    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),\n    dni              TEXT    CHECK (dni IS NULL OR dni <> ''),\n    nombres          TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL DEFAULT '',\n    fecha_nacimiento TEXT,\n    edad             INTEGER CHECK (edad IS NULL OR edad >= 0),\n    lugar_nacimiento TEXT,\n    padre            TEXT,\n    madre            TEXT,\n    version          INTEGER NOT NULL DEFAULT 1,\n    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n  CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;\n  CREATE INDEX idx_personas_busqueda ON personas (nombres, apellido_paterno, apellido_materno);\n\n  CREATE TABLE sacramentos (\n    id                     INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id              TEXT    NOT NULL UNIQUE,\n    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),\n    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),\n    ministro_id            INTEGER REFERENCES ministros(id),\n    libro                  TEXT    NOT NULL,\n    folio                  TEXT    NOT NULL,\n    numero                 TEXT    NOT NULL,\n    fecha_emision          TEXT    NOT NULL,\n    fecha_evento           TEXT,\n    anotaciones            TEXT,\n    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),\n    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),\n    anulado_en             TEXT,\n    motivo_anulacion       TEXT,\n    version                INTEGER NOT NULL DEFAULT 1,\n    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    -- Permite que cada subtipo enlace (id, tipo): un bautismo no puede colgar de un matrimonio.\n    UNIQUE (id, tipo),\n    CHECK (\n      estado = 'vigente'\n      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL\n          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')\n    )\n  );\n  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);\n\n  CREATE TABLE matrimonios (\n    sacramento_id                INTEGER PRIMARY KEY,\n    tipo                         TEXT    NOT NULL DEFAULT 'matrimonio' CHECK (tipo = 'matrimonio'),\n    conyuge_1_id                 INTEGER NOT NULL REFERENCES personas(id),\n    conyuge_2_id                 INTEGER NOT NULL REFERENCES personas(id),\n    lugar                        TEXT,\n    testigo_1                    TEXT,\n    testigo_2                    TEXT,\n    testigo_3                    TEXT,\n    testigo_4                    TEXT,\n    conyuge_1_bautismo_parroquia TEXT,\n    conyuge_1_bautismo_fecha     TEXT,\n    conyuge_2_bautismo_parroquia TEXT,\n    conyuge_2_bautismo_fecha     TEXT,\n    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo),\n    CHECK (conyuge_1_id <> conyuge_2_id)\n  );\n  CREATE INDEX idx_matrimonios_conyuge_1 ON matrimonios (conyuge_1_id);\n  CREATE INDEX idx_matrimonios_conyuge_2 ON matrimonios (conyuge_2_id);\n\n  CREATE TABLE bautismos (\n    sacramento_id INTEGER PRIMARY KEY,\n    tipo          TEXT    NOT NULL DEFAULT 'bautismo' CHECK (tipo = 'bautismo'),\n    persona_id    INTEGER NOT NULL REFERENCES personas(id),\n    padrino_1     TEXT,\n    padrino_2     TEXT,\n    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)\n  );\n  CREATE INDEX idx_bautismos_persona ON bautismos (persona_id);\n\n  CREATE TABLE confirmaciones (\n    sacramento_id INTEGER PRIMARY KEY,\n    tipo          TEXT    NOT NULL DEFAULT 'confirmacion' CHECK (tipo = 'confirmacion'),\n    persona_id    INTEGER NOT NULL REFERENCES personas(id),\n    padrino_1     TEXT,\n    padrino_2     TEXT,\n    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)\n  );\n  CREATE INDEX idx_confirmaciones_persona ON confirmaciones (persona_id);\n\n  CREATE TABLE cambios_persona (\n    id             INTEGER PRIMARY KEY AUTOINCREMENT,\n    -- Evita duplicar la corrección si se reenvía tras un corte de internet.\n    client_id      TEXT    NOT NULL UNIQUE,\n    persona_id     INTEGER NOT NULL REFERENCES personas(id),\n    sacramento_id  INTEGER REFERENCES sacramentos(id),\n    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id),\n    campo_cambio   TEXT    NOT NULL,\n    valor_anterior TEXT,\n    valor_nuevo    TEXT,\n    fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n  CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);\n\n  -- Cada UPDATE sube version, salvo que la sincronización ya la haya fijado.\n  CREATE TRIGGER trg_personas_touch\n  AFTER UPDATE ON personas\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE personas\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n\n  CREATE TRIGGER trg_sacramentos_touch\n  AFTER UPDATE ON sacramentos\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE sacramentos\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n  ",
+	"\n  CREATE TABLE ministros_nueva (\n    id               INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id        TEXT    NOT NULL UNIQUE,\n    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),\n    titulo           TEXT,\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1,\n    version          INTEGER NOT NULL DEFAULT 1,\n    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n\n  INSERT INTO ministros_nueva (id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo)\n  SELECT id, 'servidor-' || id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo\n  FROM ministros;\n\n  DROP TABLE ministros;\n  ALTER TABLE ministros_nueva RENAME TO ministros;\n\n  CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);\n\n  CREATE TRIGGER trg_ministros_touch\n  AFTER UPDATE ON ministros\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE ministros\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n  ",
+	"\n  -- Registros con cambios sin subir. Se envía su estado final, así que basta una fila por registro.\n  -- version_base: última versión que conoce el servidor; NULL si el registro aún no existe allí.\n  CREATE TABLE sync_cola (\n    id           INTEGER PRIMARY KEY AUTOINCREMENT,\n    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro')),\n    client_id    TEXT    NOT NULL,\n    version_base INTEGER,\n    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    UNIQUE (entidad, client_id)\n  );\n\n  INSERT INTO sync_cola (entidad, client_id)\n  SELECT tipo, client_id FROM sacramentos ORDER BY id;\n\n  INSERT INTO sync_cola (entidad, client_id)\n  SELECT 'ministro', client_id FROM ministros ORDER BY id;\n  ",
+	"\n  -- cola_id: identifica la fila mientras siga pendiente, para reconocer un reenvío tras un corte.\n  -- revision: sube con cada edición; si cambió durante el envío, la fila no se quita al confirmarse.\n  ALTER TABLE sync_cola ADD COLUMN cola_id TEXT NOT NULL DEFAULT '';\n  ALTER TABLE sync_cola ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;\n  ALTER TABLE sync_cola ADD COLUMN estado TEXT NOT NULL DEFAULT 'pendiente'\n    CHECK (estado IN ('pendiente', 'conflicto', 'rechazado'));\n  ALTER TABLE sync_cola ADD COLUMN motivo TEXT;\n  UPDATE sync_cola SET cola_id = lower(hex(randomblob(16)));\n\n  CREATE TABLE sync_estado (\n    clave TEXT PRIMARY KEY,\n    valor TEXT\n  );\n\n  -- Verificación para entrar sin internet. Solo existe para quien ya entró con conexión en esta PC.\n  CREATE TABLE credenciales_locales (\n    usuario_id     INTEGER PRIMARY KEY REFERENCES usuarios(id),\n    verificador    TEXT NOT NULL,\n    actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n  ",
+	"\n  -- La edad pasa a ser una fecha aproximada en texto libre: los libros traen cosas como\n  -- \"22 AG 1978\" o \"(27 AÑOS AL DIA DE BODA)\". Las edades que ya había se conservan como \"N años\".\n  ALTER TABLE personas ADD COLUMN fecha_aproximada TEXT;\n  UPDATE personas SET fecha_aproximada = edad || ' años' WHERE edad IS NOT NULL;\n  ALTER TABLE personas DROP COLUMN edad;\n  ",
+	"\n  -- Tres roles (ver worker/src/db/migrations/0015_roles_y_correcciones.sql):\n  --   admin_general, admin_parroquia (el párroco) y usuario (un ayudante).\n  -- Un admin sin parroquia pasa a admin_general; las demás cuentas, a admin_parroquia.\n  --\n  -- Los usuarios ahora se pueden crear y editar en esta PC sin internet y subirse después:\n  --   client_id      los identifica ante el servidor (el mismo 'servidor-<id>' que puso su migración).\n  --   id negativo    una cuenta creada aquí que el servidor todavía no conoce; al subirla se cambia por el suyo.\n  --   password_hash_pendiente   la contraseña cambiada aquí que falta subir (PBKDF2, el formato del\n  --                             servidor). Se borra en cuanto el servidor la recibe.\n  CREATE TABLE usuarios_nueva (\n    id               INTEGER PRIMARY KEY,\n    client_id        TEXT    NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),\n    parroquia_id     INTEGER REFERENCES parroquias(id),\n    username         TEXT    NOT NULL UNIQUE,\n    rol              TEXT    NOT NULL CHECK (rol IN ('admin_general', 'admin_parroquia', 'usuario')),\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1,\n    principal        INTEGER NOT NULL DEFAULT 0,\n    password_hash_pendiente TEXT,\n    version          INTEGER NOT NULL DEFAULT 1,\n    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n\n  INSERT INTO usuarios_nueva (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)\n  SELECT id, 'servidor-' || id, parroquia_id, username,\n         CASE WHEN rol = 'admin' AND parroquia_id IS NULL THEN 'admin_general' ELSE 'admin_parroquia' END,\n         nombre, apellido_paterno, apellido_materno, activo\n  FROM usuarios;\n\n  DROP TABLE usuarios;\n  ALTER TABLE usuarios_nueva RENAME TO usuarios;\n\n  CREATE TRIGGER trg_usuarios_touch\n  AFTER UPDATE ON usuarios\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE usuarios\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n\n  -- Una corrección pedida por un usuario queda 'pendiente' hasta que el admin_parroquia la revise.\n  ALTER TABLE cambios_persona ADD COLUMN estado TEXT NOT NULL DEFAULT 'aprobado'\n    CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'));\n  ALTER TABLE cambios_persona ADD COLUMN revisado_por_usuario_id INTEGER REFERENCES usuarios(id);\n  ALTER TABLE cambios_persona ADD COLUMN revisado_en TEXT;\n\n  -- La cola también lleva usuarios.\n  CREATE TABLE sync_cola_nueva (\n    id           INTEGER PRIMARY KEY AUTOINCREMENT,\n    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro', 'usuario')),\n    client_id    TEXT    NOT NULL,\n    version_base INTEGER,\n    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    cola_id      TEXT    NOT NULL DEFAULT '',\n    revision     INTEGER NOT NULL DEFAULT 1,\n    estado       TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'conflicto', 'rechazado')),\n    motivo       TEXT,\n    UNIQUE (entidad, client_id)\n  );\n\n  INSERT INTO sync_cola_nueva (id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo)\n  SELECT id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo FROM sync_cola;\n\n  DROP TABLE sync_cola;\n  ALTER TABLE sync_cola_nueva RENAME TO sync_cola;\n  ",
+	"\n  ALTER TABLE sacramentos ADD COLUMN anotaciones_propuestas TEXT;\n  ",
+	"\n  CREATE TABLE solicitudes_cambio (\n    id                      INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id               TEXT    NOT NULL UNIQUE,\n    sacramento_id           INTEGER NOT NULL REFERENCES sacramentos(id),\n    usuario_id              INTEGER NOT NULL REFERENCES usuarios(id),\n    parte                   TEXT    NOT NULL CHECK (parte IN ('sacramento', 'persona', 'conyuge_1', 'conyuge_2', 'detalle')),\n    campo                   TEXT    NOT NULL,\n    tipo                    TEXT    NOT NULL CHECK (tipo IN ('digitacion', 'nota_marginal')),\n    valor_anterior          TEXT,\n    valor_nuevo             TEXT,\n    estado                  TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'descartado')),\n    motivo                  TEXT,\n    revisado_por_usuario_id INTEGER REFERENCES usuarios(id),\n    revisado_en             TEXT,\n    creado_en               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n\n  CREATE INDEX idx_solicitudes_sacramento ON solicitudes_cambio (sacramento_id);\n\n  CREATE TABLE historial_partidas (\n    id            INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id     TEXT    NOT NULL UNIQUE,\n    sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),\n    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),\n    evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',\n                                                     'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),\n    motivo        TEXT,\n    fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n\n  CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);\n\n  CREATE TABLE historial_campos (\n    id             INTEGER PRIMARY KEY AUTOINCREMENT,\n    historial_id   INTEGER NOT NULL REFERENCES historial_partidas(id),\n    parte          TEXT    NOT NULL,\n    campo          TEXT    NOT NULL,\n    valor_anterior TEXT,\n    valor_nuevo    TEXT\n  );\n\n  CREATE INDEX idx_historial_campos ON historial_campos (historial_id);\n\n  -- Las correcciones de nombres pendientes: la misma client_id que tenían.\n  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)\n  SELECT\n    c.client_id,\n    c.sacramento_id,\n    c.usuario_id,\n    CASE\n      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_1_id = c.persona_id) THEN 'conyuge_1'\n      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_2_id = c.persona_id) THEN 'conyuge_2'\n      ELSE 'persona'\n    END,\n    c.campo_cambio,\n    'nota_marginal',\n    c.valor_anterior,\n    c.valor_nuevo,\n    c.fecha_cambio\n  FROM cambios_persona c\n  WHERE c.estado = 'pendiente' AND c.sacramento_id IS NOT NULL;\n\n  -- La nota propuesta: la pidió quien pidió la corrección que iba con ella.\n  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)\n  SELECT\n    s.client_id || '-nota',\n    s.id,\n    c.usuario_id,\n    'sacramento',\n    'anotaciones',\n    'digitacion',\n    s.anotaciones,\n    s.anotaciones_propuestas,\n    c.fecha_cambio\n  FROM sacramentos s\n  JOIN cambios_persona c ON c.id = (SELECT MIN(id) FROM cambios_persona WHERE sacramento_id = s.id AND estado = 'pendiente')\n  WHERE s.anotaciones_propuestas IS NOT NULL;\n\n  DELETE FROM cambios_persona WHERE estado = 'pendiente';\n\n  ALTER TABLE sacramentos DROP COLUMN anotaciones_propuestas;\n  ",
+	"\n  UPDATE usuarios SET principal = 1\n  WHERE id IN (\n    SELECT MIN(a.id) FROM usuarios a\n    WHERE a.rol = 'admin_parroquia' AND a.activo = 1 AND a.id > 0\n      AND NOT EXISTS (SELECT 1 FROM usuarios p WHERE p.principal = 1 AND p.parroquia_id = a.parroquia_id)\n    GROUP BY a.parroquia_id\n  );\n  "
+], En = /^[0-9a-f]{64}$/i, Dn = class extends Error {};
+function On(e, t) {
+	let n = e.pragma("user_version", { simple: !0 });
+	if (n > t.length) throw new Dn(`La base local está en la versión ${n} y esta app solo conoce hasta la ${t.length}.`);
+	e.pragma("foreign_keys = OFF");
+	for (let r = n; r < t.length; r++) e.transaction(() => {
+		if (e.exec(t[r]), e.pragma("foreign_key_check").length > 0) throw Error("La migración dejó claves foráneas rotas.");
+		e.pragma(`user_version = ${r + 1}`);
 	})();
-	db.pragma("foreign_keys = ON");
+	e.pragma("foreign_keys = ON");
 }
-function open_local_database(file_path, hex_key, migrations = LOCAL_MIGRATIONS) {
-	if (!HEX_KEY_PATTERN.test(hex_key)) throw new Error("La clave de la base local debe tener 32 bytes en hexadecimal.");
-	const db = new Database(file_path);
+function kn(e, t, n = Tn) {
+	if (!En.test(t)) throw Error("La clave de la base local debe tener 32 bytes en hexadecimal.");
+	let r = new b(e);
 	try {
-		db.pragma(`cipher='chacha20'`);
-		db.pragma(`hexkey='${hex_key}'`);
-		db.prepare("SELECT count(*) FROM sqlite_master").get();
-		db.pragma("foreign_keys = ON");
-		db.pragma("journal_mode = WAL");
-		db.pragma("synchronous = FULL");
-		migrate(db, migrations);
-		return db;
-	} catch (error) {
-		db.close();
-		throw error;
+		return r.pragma("cipher='chacha20'"), r.pragma(`hexkey='${t}'`), r.prepare("SELECT count(*) FROM sqlite_master").get(), r.pragma("foreign_keys = ON"), r.pragma("journal_mode = WAL"), r.pragma("synchronous = FULL"), On(r, n), r;
+	} catch (e) {
+		throw r.close(), e;
 	}
 }
-function is_unreadable(error) {
-	const code = error?.code ?? "";
-	return code.startsWith("SQLITE_NOTADB") || code.startsWith("SQLITE_CORRUPT");
+function An(e) {
+	let t = e?.code ?? "";
+	return t.startsWith("SQLITE_NOTADB") || t.startsWith("SQLITE_CORRUPT");
 }
-function local_paths(directory) {
+function jn(e) {
 	return {
-		directory,
-		database: path.join(directory, FILE_NAMES.database),
-		key: path.join(directory, FILE_NAMES.key),
-		device: path.join(directory, FILE_NAMES.device),
-		temp_database: path.join(directory, FILE_NAMES.temp_database),
-		temp_key: path.join(directory, FILE_NAMES.temp_key),
-		set_aside_folder: path.join(directory, FILE_NAMES.set_aside_folder)
+		directory: e,
+		database: s.join(e, be.database),
+		key: s.join(e, be.key),
+		device: s.join(e, be.device),
+		temp_database: s.join(e, be.temp_database),
+		temp_key: s.join(e, be.temp_key),
+		set_aside_folder: s.join(e, be.set_aside_folder)
 	};
 }
-function device_id(paths) {
-	if (existsSync(paths.device)) return readFileSync(paths.device, "utf8").trim();
-	const id = randomUUID();
-	writeFileSync(paths.device, id);
-	return id;
+function Mn(e) {
+	if (u(e.device)) return f(e.device, "utf8").trim();
+	let t = ee();
+	return _(e.device, t), t;
 }
-function move_with_extra_files(from, to) {
-	for (const suffix of [
+function Nn(e, t) {
+	for (let n of [
 		"",
 		"-wal",
 		"-shm"
-	]) if (existsSync(from + suffix)) renameSync(from + suffix, to + suffix);
+	]) u(e + n) && m(e + n, t + n);
 }
-function remove_with_extra_files(file) {
-	for (const suffix of [
+function Pn(e) {
+	for (let t of [
 		"",
 		"-wal",
 		"-shm"
-	]) rmSync(file + suffix, { force: true });
+	]) h(e + t, { force: !0 });
 }
-function clean_set_aside(paths) {
-	if (!existsSync(paths.set_aside_folder)) return;
-	readdirSync(paths.set_aside_folder).filter((name) => name.endsWith(".db")).sort().reverse().forEach((name, index) => {
-		const file = path.join(paths.set_aside_folder, name);
-		const too_old = Date.now() - statSync(file).mtimeMs > SET_ASIDE_DAYS_MS;
-		if (index > 0 || too_old) remove_with_extra_files(file);
+function Fn(e) {
+	u(e.set_aside_folder) && p(e.set_aside_folder).filter((e) => e.endsWith(".db")).sort().reverse().forEach((t, n) => {
+		let r = s.join(e.set_aside_folder, t), i = Date.now() - g(r).mtimeMs > xe;
+		(n > 0 || i) && Pn(r);
 	});
 }
-function set_aside(paths) {
-	if (!existsSync(paths.database)) return;
-	mkdirSync(paths.set_aside_folder, { recursive: true });
-	const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-	move_with_extra_files(paths.database, path.join(paths.set_aside_folder, `prelatura-local-${stamp}.db`));
-	clean_set_aside(paths);
+function In(e) {
+	if (!u(e.database)) return;
+	d(e.set_aside_folder, { recursive: !0 });
+	let t = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+	Nn(e.database, s.join(e.set_aside_folder, `prelatura-local-${t}.db`)), Fn(e);
 }
-function open_or_detect(paths, keys) {
-	clean_set_aside(paths);
-	const key = keys.read(paths.key);
-	if (!existsSync(paths.database)) {
-		const created_key = key ?? new_key();
-		const db = open_local_database(paths.database, created_key);
-		if (!key) keys.write(paths.key, created_key);
-		return {
+function Ln(e, t) {
+	Fn(e);
+	let n = t.read(e.key);
+	if (!u(e.database)) {
+		let r = n ?? pn(), i = kn(e.database, r);
+		return n || t.write(e.key, r), {
 			status: "open",
-			db,
-			key: created_key
+			db: i,
+			key: r
 		};
 	}
-	if (!key) return { status: "needs-recovery" };
+	if (!n) return { status: "needs-recovery" };
 	try {
-		const db = open_local_database(paths.database, key);
-		remove_with_extra_files(paths.temp_database);
-		rmSync(paths.temp_key, { force: true });
-		return {
+		let t = kn(e.database, n);
+		return Pn(e.temp_database), h(e.temp_key, { force: !0 }), {
 			status: "open",
-			db,
-			key
+			db: t,
+			key: n
 		};
-	} catch (error) {
-		if (error instanceof NewerDatabaseError) return {
+	} catch (e) {
+		if (e instanceof Dn) return {
 			status: "failed",
 			message: "La base local es de una versión más nueva. Actualice la aplicación."
 		};
-		if (is_unreadable(error)) return { status: "needs-recovery" };
-		throw error;
+		if (An(e)) return { status: "needs-recovery" };
+		throw e;
 	}
 }
-function open_with_key_copy(paths, keys, key) {
+function Rn(e, t, n) {
 	try {
-		const db = open_local_database(paths.database, key);
-		keys.write(paths.key, key);
-		return db;
-	} catch (error) {
-		if (!is_unreadable(error)) throw error;
+		let r = kn(e.database, n);
+		return t.write(e.key, n), r;
+	} catch (e) {
+		if (!An(e)) throw e;
 		return null;
 	}
 }
-function open_temp_database(paths, keys) {
-	let key = keys.read(paths.temp_key);
-	if (!key || !existsSync(paths.temp_database)) {
-		remove_with_extra_files(paths.temp_database);
-		key = new_key();
-		keys.write(paths.temp_key, key);
-	}
+function zn(e, t) {
+	let n = t.read(e.temp_key);
+	(!n || !u(e.temp_database)) && (Pn(e.temp_database), n = pn(), t.write(e.temp_key, n));
 	try {
 		return {
-			db: open_local_database(paths.temp_database, key),
-			key
+			db: kn(e.temp_database, n),
+			key: n
 		};
-	} catch (error) {
-		if (!is_unreadable(error)) throw error;
-		remove_with_extra_files(paths.temp_database);
-		return {
-			db: open_local_database(paths.temp_database, key),
-			key
+	} catch (t) {
+		if (!An(t)) throw t;
+		return Pn(e.temp_database), {
+			db: kn(e.temp_database, n),
+			key: n
 		};
 	}
 }
-function create_temp_database(paths, keys, migrations) {
-	remove_with_extra_files(paths.temp_database);
-	const key = new_key();
-	keys.write(paths.temp_key, key);
-	return {
-		db: open_local_database(paths.temp_database, key, migrations),
-		key
+function Bn(e, t, n) {
+	Pn(e.temp_database);
+	let r = pn();
+	return t.write(e.temp_key, r), {
+		db: kn(e.temp_database, r, n),
+		key: r
 	};
 }
-function install_temp_database(paths, keys, key) {
-	set_aside(paths);
-	move_with_extra_files(paths.temp_database, paths.database);
-	keys.write(paths.key, key);
-	rmSync(paths.temp_key, { force: true });
-	return open_local_database(paths.database, key);
+function Vn(e, t, n) {
+	return In(e), Nn(e.temp_database, e.database), t.write(e.key, n), h(e.temp_key, { force: !0 }), kn(e.database, n);
 }
 //#endregion
 //#region electron/main/db/app_database.ts
-var database = null;
-var database_key = null;
-var needs_recovery = false;
-var unavailable_message = "La base local no está disponible.";
-function check_secure_storage() {
-	if (!safeStorage.isEncryptionAvailable()) throw new Error("El sistema operativo no ofrece almacenamiento seguro para la clave.");
+var Hn = null, Un = null, Wn = !1, Gn = "La base local no está disponible.";
+function Kn() {
+	if (!a.isEncryptionAvailable()) throw Error("El sistema operativo no ofrece almacenamiento seguro para la clave.");
 }
-function read_key_file(key_path) {
-	check_secure_storage();
-	if (!existsSync(key_path)) return null;
+function qn(e) {
+	if (Kn(), !u(e)) return null;
 	try {
-		return safeStorage.decryptString(readFileSync(key_path));
+		return a.decryptString(f(e));
 	} catch {
 		return null;
 	}
 }
-function write_key_file(key_path, key) {
-	check_secure_storage();
-	writeFileSync(key_path, safeStorage.encryptString(key), { mode: 384 });
+function Jn(e, t) {
+	Kn(), _(e, a.encryptString(t), { mode: 384 });
 }
-var KEY_STORE = {
-	read: read_key_file,
-	write: write_key_file
+var Yn = {
+	read: qn,
+	write: Jn
 };
-function database_paths() {
-	return local_paths(app.getPath("userData"));
+function Xn() {
+	return jn(n.getPath("userData"));
 }
-function open_at_startup() {
-	const result = open_or_detect(database_paths(), KEY_STORE);
-	if (result.status === "open") {
-		database = result.db;
-		database_key = result.key;
-	} else if (result.status === "needs-recovery") {
-		needs_recovery = true;
-		unavailable_message = "La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.";
-	} else unavailable_message = result.message;
+function Zn() {
+	let e = Ln(Xn(), Yn);
+	e.status === "open" ? (Hn = e.db, Un = e.key) : e.status === "needs-recovery" ? (Wn = !0, Gn = "La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.") : Gn = e.message;
 }
-function get_database() {
-	if (!database) throw new ServiceError(unavailable_message, 503);
-	return database;
+function G() {
+	if (!Hn) throw new B(Gn, 503);
+	return Hn;
 }
-function current_key() {
-	return database_key;
+function Qn() {
+	return Un;
 }
-function database_needs_recovery() {
-	return needs_recovery;
+function $n() {
+	return Wn;
 }
-function use_database(db, key) {
-	database = db;
-	database_key = key;
-	needs_recovery = false;
+function er(e, t) {
+	Hn = e, Un = t, Wn = !1;
 }
-function close_database() {
-	database?.close();
-	database = null;
-	database_key = null;
+function tr() {
+	Hn?.close(), Hn = null, Un = null;
 }
 //#endregion
 //#region electron/shared/index.ts
-var LOCAL_REQUEST_CHANNEL = "local:request";
-var OFFLINE_TOKEN = "sin-conexion";
-//#endregion
-//#region electron/main/models/session.ts
-var session = null;
-var saved_login = null;
-function require_session() {
-	if (!session) throw new ServiceError("Sesión no válida.", 401);
-	return session;
+var nr = "local:request", rr = "sin-conexion", ir = null, ar = null;
+function or() {
+	if (!ir) throw new B("Sesión no válida.", 401);
+	return ir;
 }
-function current_session() {
-	return session;
+function sr() {
+	return ir;
 }
-function saved_credentials() {
-	return saved_login;
+function cr() {
+	return ar;
 }
-function start_session(new_session, username, password) {
-	session = new_session;
-	saved_login = {
-		username,
-		password
+function lr(e, t, n) {
+	ir = e, ar = {
+		username: t,
+		password: n
 	};
 }
-function end_session() {
-	session = null;
-	saved_login = null;
+function ur() {
+	ir = null, ar = null;
 }
 //#endregion
 //#region electron/main/utils/logger.ts
-function info(...values) {
-	console.log(...values);
+function dr(...e) {
+	console.log(...e);
 }
-function error(...values) {
-	console.error(...values);
+function fr(...e) {
+	console.error(...e);
 }
-var DEVELOPMENT_SERVER = "http://localhost:8787";
-var cached = null;
-function read_config_file(file) {
-	if (!existsSync(file)) return null;
+var pr = "http://localhost:8787", mr = null;
+function hr(e) {
+	if (!u(e)) return null;
 	try {
-		const content = JSON.parse(readFileSync(file, "utf8"));
-		if (typeof content.servidor === "string" && /^https?:\/\/\S+$/.test(content.servidor.trim())) return content.servidor.trim().replace(/\/+$/, "");
-		error(`${file}: "servidor" debe ser una dirección que empiece con http:// o https://.`);
-	} catch (error$7) {
-		error(`No se pudo leer ${file}:`, error$7);
+		let t = JSON.parse(f(e, "utf8"));
+		if (typeof t.servidor == "string" && /^https?:\/\/\S+$/.test(t.servidor.trim())) return t.servidor.trim().replace(/\/+$/, "");
+		fr(`${e}: "servidor" debe ser una dirección que empiece con http:// o https://.`);
+	} catch (t) {
+		fr(`No se pudo leer ${e}:`, t);
 	}
 	return null;
 }
-function installer_folder() {
-	if (app.isPackaged) return path.join(process.resourcesPath, "instalador");
-	return path.join(app.getAppPath(), "resources", "instalador");
+function gr() {
+	return n.isPackaged ? s.join(process.resourcesPath, "instalador") : s.join(n.getAppPath(), "resources", "instalador");
 }
-function server_url() {
-	if (cached) return cached;
-	const url = process.env.PRELATURA_API_URL ?? read_config_file(path.join(app.getPath("userData"), "configuracion.json")) ?? read_config_file(path.join(installer_folder(), "configuracion.json")) ?? void 0 ?? DEVELOPMENT_SERVER;
-	info(`Servidor: ${url}`);
-	cached = url;
-	return url;
+function _r() {
+	if (mr) return mr;
+	let e = process.env.PRELATURA_API_URL ?? hr(s.join(n.getPath("userData"), "configuracion.json")) ?? hr(s.join(gr(), "configuracion.json")) ?? "https://registro-sacramental.registro-sacramental-prelatura.workers.dev" ?? pr;
+	return dr(`Servidor: ${e}`), mr = e, e;
 }
 //#endregion
 //#region electron/main/sync/online.ts
-var CONNECTION_ERROR = "No se pudo conectar con el servidor. Verifique su conexión.";
-var remote_request = async (path, options = {}) => {
-	const method = options.method ?? "GET";
-	const timeout_ms = options.timeoutMs ?? 3e4;
-	const headers = {};
-	if (options.body !== void 0) headers["Content-Type"] = "application/json";
-	if (options.token) headers["Authorization"] = `Bearer ${options.token}`;
-	let response;
-	let data;
+var vr = "No se pudo conectar con el servidor. Verifique su conexión.", yr = async (e, t = {}) => {
+	let n = t.method ?? "GET", r = t.timeoutMs ?? 3e4, i = {};
+	t.body !== void 0 && (i["Content-Type"] = "application/json"), t.token && (i.Authorization = `Bearer ${t.token}`);
+	let a, o;
 	try {
-		response = await fetch(`${server_url()}${path}`, {
-			method,
-			headers,
-			body: options.body === void 0 ? void 0 : JSON.stringify(options.body),
-			signal: AbortSignal.timeout(timeout_ms)
-		});
-		data = await response.json().catch(() => null);
+		a = await fetch(`${_r()}${e}`, {
+			method: n,
+			headers: i,
+			body: t.body === void 0 ? void 0 : JSON.stringify(t.body),
+			signal: AbortSignal.timeout(r)
+		}), o = await a.json().catch(() => null);
 	} catch {
-		throw new ServiceError(CONNECTION_ERROR, 0);
+		throw new B(vr, 0);
 	}
-	if (!response.ok) throw new ServiceError(data?.message ? String(data.message) : "Ocurrió un error inesperado.", response.status);
-	if (data === null) throw new ServiceError(CONNECTION_ERROR, 0);
-	return data;
+	if (!a.ok) throw new B(o?.message ? String(o.message) : "Ocurrió un error inesperado.", a.status);
+	if (o === null) throw new B(vr, 0);
+	return o;
 };
-function is_connection_error(error) {
-	return error instanceof ServiceError && (error.status === 0 || error.status >= 500);
+function br(e) {
+	return e instanceof B && (e.status === 0 || e.status >= 500);
 }
-function request_login(request, username, password) {
-	return request("/api/auth/login", {
+function xr(e, t, n) {
+	return e("/api/auth/login", {
 		method: "POST",
 		body: {
-			username,
-			password
+			username: t,
+			password: n
 		},
-		timeoutMs: LOGIN_TIMEOUT_MS
+		timeoutMs: _e
 	});
 }
-function get_reference(request, token) {
-	return request("/api/reference", { token });
+function Sr(e, t) {
+	return e("/api/reference", { token: t });
 }
-function push_changes(request, token, changes) {
-	return request("/api/sync/push", {
+function Cr(e, t, n) {
+	return e("/api/sync/push", {
 		method: "POST",
-		body: { cambios: changes },
-		token
+		body: { cambios: n },
+		token: t
 	});
 }
-function pull_page(request, token, cursor) {
-	return request(`/api/sync/pull?cursor=${encodeURIComponent(cursor)}`, { token });
+function wr(e, t, n) {
+	return e(`/api/sync/pull?cursor=${encodeURIComponent(n)}`, { token: t });
 }
-function get_record(request, token, entity, client_id) {
-	return request(`/api/sync/record?${`entidad=${encodeURIComponent(entity)}&client_id=${encodeURIComponent(client_id)}`}`, { token });
+function Tr(e, t, n, r) {
+	return e(`/api/sync/record?${`entidad=${encodeURIComponent(n)}&client_id=${encodeURIComponent(r)}`}`, { token: t });
 }
-function get_key_copy(request, token, device) {
-	return request(`/api/devices/${device}/key`, { token });
+function Er(e, t, n) {
+	return e(`/api/devices/${n}/key`, { token: t });
 }
-function put_key_copy(request, token, device, key) {
-	return request(`/api/devices/${device}/key`, {
+function Dr(e, t, n, r) {
+	return e(`/api/devices/${n}/key`, {
 		method: "PUT",
-		body: { clave: key },
-		token
+		body: { clave: r },
+		token: t
 	});
 }
 //#endregion
 //#region electron/main/sync/records.ts
-var MissingReferenceError = class extends Error {};
-function allow_version_write(db, table, id) {
-	db.prepare(`UPDATE ${table} SET version = -1 WHERE id = ?`).run(id);
+var Or = class extends Error {};
+function kr(e, t, n) {
+	e.prepare(`UPDATE ${t} SET version = -1 WHERE id = ?`).run(n);
 }
-function table_of(entity) {
-	if (entity === "ministro") return "ministros";
-	if (entity === "usuario") return "usuarios";
-	return "sacramentos";
+function Ar(e) {
+	return e === "ministro" ? "ministros" : e === "usuario" ? "usuarios" : "sacramentos";
 }
-function set_server_version(db, entity, client_id, version) {
-	db.prepare(`UPDATE ${table_of(entity)} SET version = ? WHERE client_id = ? AND version <> ?`).run(version, client_id, version);
+function jr(e, t, n, r) {
+	e.prepare(`UPDATE ${Ar(t)} SET version = ? WHERE client_id = ? AND version <> ?`).run(r, n, r);
 }
-function read_local_minister(db, client_id) {
-	return db.prepare("SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(client_id);
+function Mr(e, t) {
+	return e.prepare("SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(t);
 }
-function read_local_user(db, client_id) {
-	return db.prepare(`SELECT client_id, id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo,
-				password_hash_pendiente AS password_hash
-			 FROM usuarios WHERE client_id = ?`).get(client_id);
+function Nr(e, t) {
+	return e.prepare("SELECT client_id, id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo,\n				password_hash_pendiente AS password_hash\n			 FROM usuarios WHERE client_id = ?").get(t);
 }
-function read_local_record(db, client_id) {
-	const sacrament = db.prepare(`SELECT s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,
-				s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion
-			 FROM sacramentos s
-			 LEFT JOIN ministros m ON m.id = s.ministro_id
-			 WHERE s.client_id = ?`).get(client_id);
-	const type = sacrament.tipo;
-	const detail_row = db.prepare(`SELECT * FROM ${detail_table(type)} WHERE sacramento_id = ?`).get(sacrament.id);
-	const read_person = db.prepare(`SELECT client_id, ${PERSON_COLUMNS.join(", ")} FROM personas WHERE id = ?`);
-	const people = [];
-	for (const column of person_columns(type)) people.push(read_person.get(detail_row[column]));
-	const detail = {};
-	for (const column of detail_columns(type)) detail[column] = detail_row[column];
-	const corrections = db.prepare(`SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio,
-				c.estado, c.revisado_por_usuario_id, c.revisado_en
-			 FROM cambios_persona c
-			 JOIN personas p ON p.id = c.persona_id
-			 WHERE c.sacramento_id = ?
-			 ORDER BY c.id`).all(sacrament.id);
+function Pr(e, t) {
+	let n = e.prepare("SELECT s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,\n				s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion\n			 FROM sacramentos s\n			 LEFT JOIN ministros m ON m.id = s.ministro_id\n			 WHERE s.client_id = ?").get(t), r = n.tipo, i = e.prepare(`SELECT * FROM ${ct(r)} WHERE sacramento_id = ?`).get(n.id), a = e.prepare(`SELECT client_id, ${L.join(", ")} FROM personas WHERE id = ?`), o = [];
+	for (let e of lt(r)) o.push(a.get(i[e]));
+	let s = {};
+	for (let e of le(r)) s[e] = i[e];
+	let c = e.prepare("SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio,\n				c.estado, c.revisado_por_usuario_id, c.revisado_en\n			 FROM cambios_persona c\n			 JOIN personas p ON p.id = c.persona_id\n			 WHERE c.sacramento_id = ?\n			 ORDER BY c.id").all(n.id);
 	return {
-		tipo: type,
-		client_id: sacrament.client_id,
-		parroquia_id: sacrament.parroquia_id,
-		ministro_client_id: sacrament.ministro_client_id,
-		libro: sacrament.libro,
-		folio: sacrament.folio,
-		numero: sacrament.numero,
-		fecha_emision: sacrament.fecha_emision,
-		fecha_evento: sacrament.fecha_evento,
-		anotaciones: sacrament.anotaciones,
-		estado: sacrament.estado,
-		anulado_por_usuario_id: sacrament.anulado_por_usuario_id,
-		anulado_en: sacrament.anulado_en,
-		motivo_anulacion: sacrament.motivo_anulacion,
-		personas: people,
-		detalle: detail,
-		cambios: corrections,
-		solicitudes: read_request_data(db, sacrament.id),
-		historial: read_history_data(db, sacrament.id)
+		tipo: r,
+		client_id: n.client_id,
+		parroquia_id: n.parroquia_id,
+		ministro_client_id: n.ministro_client_id,
+		libro: n.libro,
+		folio: n.folio,
+		numero: n.numero,
+		fecha_emision: n.fecha_emision,
+		fecha_evento: n.fecha_evento,
+		anotaciones: n.anotaciones,
+		estado: n.estado,
+		anulado_por_usuario_id: n.anulado_por_usuario_id,
+		anulado_en: n.anulado_en,
+		motivo_anulacion: n.motivo_anulacion,
+		personas: o,
+		detalle: s,
+		cambios: c,
+		solicitudes: Pe(e, n.id),
+		historial: ze(e, n.id)
 	};
 }
-function save_downloaded_person(db, parish_id, person) {
-	const values = PERSON_COLUMNS.map((column) => person[column]);
-	const existing = db.prepare("SELECT id FROM personas WHERE client_id = ?").get(person.client_id);
-	if (existing) {
-		const assignments = PERSON_COLUMNS.map((column) => `${column} = ?`).join(", ");
-		db.prepare(`UPDATE personas SET ${assignments} WHERE id = ?`).run(...values, existing.id);
-		return existing.id;
+function Fr(e, t, n) {
+	let r = L.map((e) => n[e]), i = e.prepare("SELECT id FROM personas WHERE client_id = ?").get(n.client_id);
+	if (i) {
+		let t = L.map((e) => `${e} = ?`).join(", ");
+		return e.prepare(`UPDATE personas SET ${t} WHERE id = ?`).run(...r, i.id), i.id;
 	}
-	const marks = PERSON_COLUMNS.map(() => "?").join(", ");
-	const result = db.prepare(`INSERT INTO personas (client_id, parroquia_id, ${PERSON_COLUMNS.join(", ")}) VALUES (?, ?, ${marks})`).run(person.client_id, parish_id, ...values);
-	return Number(result.lastInsertRowid);
+	let a = L.map(() => "?").join(", "), o = e.prepare(`INSERT INTO personas (client_id, parroquia_id, ${L.join(", ")}) VALUES (?, ?, ${a})`).run(n.client_id, t, ...r);
+	return Number(o.lastInsertRowid);
 }
-function local_minister_id(db, client_id) {
-	if (!client_id) return null;
-	const row = db.prepare("SELECT id FROM ministros WHERE client_id = ?").get(client_id);
-	if (!row) throw new MissingReferenceError(`Ministro desconocido: ${client_id}`);
-	return row.id;
+function Ir(e, t) {
+	if (!t) return null;
+	let n = e.prepare("SELECT id FROM ministros WHERE client_id = ?").get(t);
+	if (!n) throw new Or(`Ministro desconocido: ${t}`);
+	return n.id;
 }
-function save_downloaded_record(db, record, force = false) {
-	const version = record.version ?? 1;
-	const local = db.prepare("SELECT id, version FROM sacramentos WHERE client_id = ?").get(record.client_id);
-	if (!force) {
-		if (is_in_queue(db, record.tipo, record.client_id)) return;
-		if (local && local.version === version) return;
+function Lr(e, t, n = !1) {
+	let r = t.version ?? 1, i = e.prepare("SELECT id, version FROM sacramentos WHERE client_id = ?").get(t.client_id);
+	if (!n && (nt(e, t.tipo, t.client_id) || i && i.version === r)) return;
+	let a = Ir(e, t.ministro_client_id), o = t.personas.map((n) => Fr(e, t.parroquia_id, n)), s = t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString(), c = [
+		a,
+		t.libro,
+		t.folio,
+		t.numero,
+		t.fecha_emision,
+		t.fecha_evento,
+		t.anotaciones,
+		t.estado,
+		t.anulado_por_usuario_id,
+		t.anulado_en,
+		t.motivo_anulacion,
+		r,
+		s
+	], l;
+	if (i) l = i.id, kr(e, "sacramentos", i.id), e.prepare("UPDATE sacramentos SET\n				ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?,\n				estado = ?, anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?, version = ?, updated_at = ?\n			 WHERE id = ?").run(...c, i.id);
+	else {
+		let n = e.prepare("INSERT INTO sacramentos\n					(ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,\n					 estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, updated_at,\n					 client_id, tipo, parroquia_id)\n				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(...c, t.client_id, t.tipo, t.parroquia_id);
+		l = Number(n.lastInsertRowid);
 	}
-	const minister_id = local_minister_id(db, record.ministro_client_id);
-	const people_ids = record.personas.map((person) => save_downloaded_person(db, record.parroquia_id, person));
-	const updated_at = record.updated_at ?? (/* @__PURE__ */ new Date()).toISOString();
-	const values = [
-		minister_id,
-		record.libro,
-		record.folio,
-		record.numero,
-		record.fecha_emision,
-		record.fecha_evento,
-		record.anotaciones,
-		record.estado,
-		record.anulado_por_usuario_id,
-		record.anulado_en,
-		record.motivo_anulacion,
-		version,
-		updated_at
-	];
-	let sacrament_id;
-	if (local) {
-		sacrament_id = local.id;
-		allow_version_write(db, "sacramentos", local.id);
-		db.prepare(`UPDATE sacramentos SET
-				ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?,
-				estado = ?, anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?, version = ?, updated_at = ?
-			 WHERE id = ?`).run(...values, local.id);
-	} else {
-		const result = db.prepare(`INSERT INTO sacramentos
-					(ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,
-					 estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, updated_at,
-					 client_id, tipo, parroquia_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...values, record.client_id, record.tipo, record.parroquia_id);
-		sacrament_id = Number(result.lastInsertRowid);
-	}
-	save_downloaded_detail(db, record, sacrament_id, people_ids);
-	save_downloaded_corrections(db, record, sacrament_id, people_ids);
-	save_downloaded_requests(db, sacrament_id, record.solicitudes ?? []);
-	save_downloaded_history(db, sacrament_id, record.historial ?? []);
-	if (force) {
-		const kept_ids = JSON.stringify(record.cambios.map((correction) => correction.client_id));
-		db.prepare("DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(sacrament_id, kept_ids);
-		discard_unsent_requests(db, sacrament_id, record.solicitudes ?? []);
-		discard_unsent_history(db, sacrament_id, record.historial ?? []);
-		remove_from_queue(db, record.tipo, record.client_id);
+	if (Rr(e, t, l, o), zr(e, t, l, o), Fe(e, l, t.solicitudes ?? []), Be(e, l, t.historial ?? []), n) {
+		let n = JSON.stringify(t.cambios.map((e) => e.client_id));
+		e.prepare("DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(l, n), Ie(e, l, t.solicitudes ?? []), Ve(e, l, t.historial ?? []), rt(e, t.tipo, t.client_id);
 	}
 }
-function save_downloaded_detail(db, record, sacrament_id, people_ids) {
-	const detail = record.detalle;
-	if (record.tipo === "matrimonio") {
-		db.prepare(`INSERT INTO matrimonios
-				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,
-				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			 ON CONFLICT (sacramento_id) DO UPDATE SET
-				conyuge_1_id = excluded.conyuge_1_id,
-				conyuge_2_id = excluded.conyuge_2_id,
-				lugar = excluded.lugar,
-				testigo_1 = excluded.testigo_1,
-				testigo_2 = excluded.testigo_2,
-				testigo_3 = excluded.testigo_3,
-				testigo_4 = excluded.testigo_4,
-				conyuge_1_bautismo_parroquia = excluded.conyuge_1_bautismo_parroquia,
-				conyuge_1_bautismo_fecha = excluded.conyuge_1_bautismo_fecha,
-				conyuge_2_bautismo_parroquia = excluded.conyuge_2_bautismo_parroquia,
-				conyuge_2_bautismo_fecha = excluded.conyuge_2_bautismo_fecha`).run(sacrament_id, people_ids[0], people_ids[1], detail.lugar ?? null, detail.testigo_1 ?? null, detail.testigo_2 ?? null, detail.testigo_3 ?? null, detail.testigo_4 ?? null, detail.conyuge_1_bautismo_parroquia ?? null, detail.conyuge_1_bautismo_fecha ?? null, detail.conyuge_2_bautismo_parroquia ?? null, detail.conyuge_2_bautismo_fecha ?? null);
+function Rr(e, t, n, r) {
+	let i = t.detalle;
+	if (t.tipo === "matrimonio") {
+		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n			 ON CONFLICT (sacramento_id) DO UPDATE SET\n				conyuge_1_id = excluded.conyuge_1_id,\n				conyuge_2_id = excluded.conyuge_2_id,\n				lugar = excluded.lugar,\n				testigo_1 = excluded.testigo_1,\n				testigo_2 = excluded.testigo_2,\n				testigo_3 = excluded.testigo_3,\n				testigo_4 = excluded.testigo_4,\n				conyuge_1_bautismo_parroquia = excluded.conyuge_1_bautismo_parroquia,\n				conyuge_1_bautismo_fecha = excluded.conyuge_1_bautismo_fecha,\n				conyuge_2_bautismo_parroquia = excluded.conyuge_2_bautismo_parroquia,\n				conyuge_2_bautismo_fecha = excluded.conyuge_2_bautismo_fecha").run(n, r[0], r[1], i.lugar ?? null, i.testigo_1 ?? null, i.testigo_2 ?? null, i.testigo_3 ?? null, i.testigo_4 ?? null, i.conyuge_1_bautismo_parroquia ?? null, i.conyuge_1_bautismo_fecha ?? null, i.conyuge_2_bautismo_parroquia ?? null, i.conyuge_2_bautismo_fecha ?? null);
 		return;
 	}
-	db.prepare(`INSERT INTO ${detail_table(record.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2)
+	e.prepare(`INSERT INTO ${ct(t.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT (sacramento_id) DO UPDATE SET
 			persona_id = excluded.persona_id,
 			padrino_1 = excluded.padrino_1,
-			padrino_2 = excluded.padrino_2`).run(sacrament_id, people_ids[0], detail.padrino_1 ?? null, detail.padrino_2 ?? null);
+			padrino_2 = excluded.padrino_2`).run(n, r[0], i.padrino_1 ?? null, i.padrino_2 ?? null);
 }
-function save_downloaded_corrections(db, record, sacrament_id, people_ids) {
-	const local_person_ids = /* @__PURE__ */ new Map();
-	record.personas.forEach((person, i) => local_person_ids.set(person.client_id, people_ids[i]));
-	const insert = db.prepare(`INSERT INTO cambios_persona
-			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,
-			 estado, revisado_por_usuario_id, revisado_en)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (client_id) DO UPDATE SET
-			estado = excluded.estado,
-			revisado_por_usuario_id = excluded.revisado_por_usuario_id,
-			revisado_en = excluded.revisado_en`);
-	for (const correction of record.cambios) insert.run(correction.client_id, local_person_ids.get(correction.persona_client_id), sacrament_id, correction.usuario_id, correction.campo_cambio, correction.valor_anterior, correction.valor_nuevo, correction.fecha_cambio, correction.estado ?? "aprobado", correction.revisado_por_usuario_id ?? null, correction.revisado_en ?? null);
+function zr(e, t, n, r) {
+	let i = /* @__PURE__ */ new Map();
+	t.personas.forEach((e, t) => i.set(e.client_id, r[t]));
+	let a = e.prepare("INSERT INTO cambios_persona\n			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,\n			 estado, revisado_por_usuario_id, revisado_en)\n		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n		 ON CONFLICT (client_id) DO UPDATE SET\n			estado = excluded.estado,\n			revisado_por_usuario_id = excluded.revisado_por_usuario_id,\n			revisado_en = excluded.revisado_en");
+	for (let e of t.cambios) a.run(e.client_id, i.get(e.persona_client_id), n, e.usuario_id, e.campo_cambio, e.valor_anterior, e.valor_nuevo, e.fecha_cambio, e.estado ?? "aprobado", e.revisado_por_usuario_id ?? null, e.revisado_en ?? null);
 }
-function save_downloaded_user(db, user, force = false) {
-	user = {
-		...user,
-		client_id: user.client_id ?? `servidor-${user.id}`
-	};
-	if (!force && is_in_queue(db, "usuario", user.client_id)) return;
-	db.prepare(`UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?`).run(user.username, user.id);
-	db.prepare(`UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?`).run(user.client_id, user.id);
-	db.prepare(`INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)
-		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)
-		 ON CONFLICT (id) DO UPDATE SET
-			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,
-			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,
-			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL`).run({
-		id: user.id,
-		client_id: user.client_id,
-		parroquia_id: user.parroquia_id,
-		username: user.username,
-		rol: user.rol,
-		nombre: user.nombre,
-		apellido_paterno: user.apellido_paterno,
-		apellido_materno: user.apellido_materno ?? "",
-		activo: user.activo,
-		principal: user.principal ?? 0,
-		updated_at: user.updated_at ?? (/* @__PURE__ */ new Date()).toISOString()
-	});
-	allow_version_write(db, "usuarios", user.id);
-	db.prepare("UPDATE usuarios SET version = ? WHERE id = ?").run(user.version ?? 1, user.id);
-	if (user.password_hash) db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
-			 ON CONFLICT (usuario_id) DO UPDATE SET
-				verificador = excluded.verificador,
-				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user.id, user.password_hash);
-	if (force) remove_from_queue(db, "usuario", user.client_id);
+function Br(e, t, n = !1) {
+	t = {
+		...t,
+		client_id: t.client_id ?? `servidor-${t.id}`
+	}, (n || !nt(e, "usuario", t.client_id)) && (e.prepare("UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?").run(t.username, t.id), e.prepare("UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?").run(t.client_id, t.id), e.prepare("INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)\n		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)\n		 ON CONFLICT (id) DO UPDATE SET\n			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,\n			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,\n			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL").run({
+		id: t.id,
+		client_id: t.client_id,
+		parroquia_id: t.parroquia_id,
+		username: t.username,
+		rol: t.rol,
+		nombre: t.nombre,
+		apellido_paterno: t.apellido_paterno,
+		apellido_materno: t.apellido_materno ?? "",
+		activo: t.activo,
+		principal: t.principal ?? 0,
+		updated_at: t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString()
+	}), kr(e, "usuarios", t.id), e.prepare("UPDATE usuarios SET version = ? WHERE id = ?").run(t.version ?? 1, t.id), t.password_hash && e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n			 ON CONFLICT (usuario_id) DO UPDATE SET\n				verificador = excluded.verificador,\n				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t.id, t.password_hash), n && rt(e, "usuario", t.client_id));
 }
-function adopt_server_user_id(db, client_id, server_id) {
-	const row = db.prepare("SELECT id FROM usuarios WHERE client_id = ?").get(client_id);
-	if (!row || row.id === server_id) return null;
-	const old_id = row.id;
-	db.pragma("defer_foreign_keys = ON");
-	db.prepare("UPDATE usuarios SET id = ? WHERE id = ?").run(server_id, old_id);
-	db.prepare("UPDATE cambios_persona SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE cambios_persona SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE sacramentos SET anulado_por_usuario_id = ? WHERE anulado_por_usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE solicitudes_cambio SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE solicitudes_cambio SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE historial_partidas SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE credenciales_locales SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	return old_id;
+function Vr(e, t, n) {
+	let r = e.prepare("SELECT id FROM usuarios WHERE client_id = ?").get(t);
+	if (!r || r.id === n) return null;
+	let i = r.id;
+	return e.pragma("defer_foreign_keys = ON"), e.prepare("UPDATE usuarios SET id = ? WHERE id = ?").run(n, i), e.prepare("UPDATE cambios_persona SET usuario_id = ? WHERE usuario_id = ?").run(n, i), e.prepare("UPDATE cambios_persona SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(n, i), e.prepare("UPDATE sacramentos SET anulado_por_usuario_id = ? WHERE anulado_por_usuario_id = ?").run(n, i), e.prepare("UPDATE solicitudes_cambio SET usuario_id = ? WHERE usuario_id = ?").run(n, i), e.prepare("UPDATE solicitudes_cambio SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(n, i), e.prepare("UPDATE historial_partidas SET usuario_id = ? WHERE usuario_id = ?").run(n, i), e.prepare("UPDATE credenciales_locales SET usuario_id = ? WHERE usuario_id = ?").run(n, i), i;
 }
-var MINISTER_FIELDS = [
+var Hr = [
 	"titulo",
 	"nombre",
 	"apellido_paterno",
 	"apellido_materno",
 	"activo"
 ];
-function save_downloaded_minister(db, minister, force = false) {
-	const version = minister.version ?? 1;
-	const updated_at = minister.updated_at ?? (/* @__PURE__ */ new Date()).toISOString();
-	const local = db.prepare("SELECT id, version, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(minister.client_id);
-	if (!force && is_in_queue(db, "ministro", minister.client_id)) {
-		const same_data = local !== void 0 && MINISTER_FIELDS.every((field) => (local[field] ?? null) === (minister[field] ?? null));
-		const queued = db.prepare("SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?").get("ministro", minister.client_id);
-		if (!same_data || queued.version_base !== null) return;
-		remove_from_queue(db, "ministro", minister.client_id);
-		set_server_version(db, "ministro", minister.client_id, version);
+function Ur(e, t, n = !1) {
+	let r = t.version ?? 1, i = t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString(), a = e.prepare("SELECT id, version, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(t.client_id);
+	if (!n && nt(e, "ministro", t.client_id)) {
+		let n = a !== void 0 && Hr.every((e) => (a[e] ?? null) === (t[e] ?? null)), i = e.prepare("SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?").get("ministro", t.client_id);
+		if (!n || i.version_base !== null) return;
+		rt(e, "ministro", t.client_id), jr(e, "ministro", t.client_id, r);
 		return;
 	}
-	if (!local) {
-		db.prepare(`INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(minister.client_id, minister.parroquia_id, minister.titulo ?? null, minister.nombre, minister.apellido_paterno, minister.apellido_materno, minister.activo, version, updated_at);
+	if (!a) {
+		e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t.client_id, t.parroquia_id, t.titulo ?? null, t.nombre, t.apellido_paterno, t.apellido_materno, t.activo, r, i);
 		return;
 	}
-	if (force || local.version !== version) {
-		allow_version_write(db, "ministros", local.id);
-		db.prepare(`UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?, version = ?, updated_at = ?
-			 WHERE id = ?`).run(minister.titulo ?? null, minister.nombre, minister.apellido_paterno, minister.apellido_materno, minister.activo, version, updated_at, local.id);
-	}
-	if (force) remove_from_queue(db, "ministro", minister.client_id);
+	(n || a.version !== r) && (kr(e, "ministros", a.id), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?, version = ?, updated_at = ?\n			 WHERE id = ?").run(t.titulo ?? null, t.nombre, t.apellido_paterno, t.apellido_materno, t.activo, r, i, a.id)), n && rt(e, "ministro", t.client_id);
 }
 //#endregion
 //#region electron/main/sync/sync.ts
-function save_reference_data(db, data) {
-	const save_parish = db.prepare(`INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)
-		 ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa`);
-	const adopt_minister = db.prepare("UPDATE ministros SET client_id = ? WHERE client_id = ?");
-	db.transaction(() => {
-		for (const parish of data.parroquias) save_parish.run(parish);
-		for (const minister of data.ministros) {
-			adopt_minister.run(minister.client_id, `servidor-${minister.id}`);
-			save_downloaded_minister(db, minister);
-		}
-		for (const user of data.usuarios) save_downloaded_user(db, user);
-		db.exec("DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)");
+function Wr(e, t) {
+	let n = e.prepare("INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)\n		 ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa"), r = e.prepare("UPDATE ministros SET client_id = ? WHERE client_id = ?");
+	e.transaction(() => {
+		for (let e of t.parroquias) n.run(e);
+		for (let n of t.ministros) r.run(n.client_id, `servidor-${n.id}`), Ur(e, n);
+		for (let n of t.usuarios) Br(e, n);
+		e.exec("DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)");
 	})();
 }
-async function refresh_reference(db, request, token) {
-	save_reference_data(db, await get_reference(request, token));
+async function Gr(e, t, n) {
+	Wr(e, await Sr(t, n));
 }
-function read_local_data(db, row) {
-	if (row.entidad === "ministro") return read_local_minister(db, row.client_id);
-	if (row.entidad === "usuario") return read_local_user(db, row.client_id);
-	return read_local_record(db, row.client_id);
+function Kr(e, t) {
+	return t.entidad === "ministro" ? Mr(e, t.client_id) : t.entidad === "usuario" ? Nr(e, t.client_id) : Pr(e, t.client_id);
 }
-function adopt_user_id(db, client_id, server_id) {
-	if (!server_id) return;
-	const old_id = adopt_server_user_id(db, client_id, server_id);
-	const session = current_session();
-	if (old_id !== null && session && session.user_id === old_id) session.user_id = server_id;
+function qr(e, t, n) {
+	if (!n) return;
+	let r = Vr(e, t, n), i = sr();
+	r !== null && i && i.user_id === r && (i.user_id = n);
 }
-function save_push_result(db, row, result) {
-	db.transaction(() => {
-		if (result.estado === "conflicto" || result.estado === "rechazado") {
-			db.prepare("UPDATE sync_cola SET estado = ?, motivo = ? WHERE id = ?").run(result.estado, result.motivo, row.id);
+function Jr(e, t, n) {
+	e.transaction(() => {
+		if (n.estado === "conflicto" || n.estado === "rechazado") {
+			e.prepare("UPDATE sync_cola SET estado = ?, motivo = ? WHERE id = ?").run(n.estado, n.motivo, t.id);
 			return;
 		}
-		if (row.entidad === "usuario") adopt_user_id(db, row.client_id, result.id);
-		if (db.prepare("SELECT revision FROM sync_cola WHERE id = ?").get(row.id).revision === row.revision) {
-			remove_from_queue(db, row.entidad, row.client_id);
-			set_server_version(db, row.entidad, row.client_id, result.version);
-			if (row.entidad === "usuario") db.prepare("UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?").run(row.client_id);
-		} else db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?`).run(result.version, row.id);
+		t.entidad === "usuario" && qr(e, t.client_id, n.id), e.prepare("SELECT revision FROM sync_cola WHERE id = ?").get(t.id).revision === t.revision ? (rt(e, t.entidad, t.client_id), jr(e, t.entidad, t.client_id, n.version), t.entidad === "usuario" && e.prepare("UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?").run(t.client_id)) : e.prepare("UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?").run(n.version, t.id);
 	})();
 }
-async function push_pending(db, request, token) {
-	const pending = db.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' AND (entidad = 'usuario') = ? ORDER BY entidad = 'ministro' DESC, id`).pluck();
-	await push_rows(db, request, token, pending.all(1));
-	await push_rows(db, request, token, pending.all(0));
+async function Yr(e, t, n) {
+	let r = e.prepare("SELECT id FROM sync_cola WHERE estado <> 'conflicto' AND (entidad = 'usuario') = ? ORDER BY entidad = 'ministro' DESC, id").pluck();
+	await Xr(e, t, n, r.all(1)), await Xr(e, t, n, r.all(0));
 }
-async function push_rows(db, request, token, pending_ids) {
-	const read_row = db.prepare("SELECT * FROM sync_cola WHERE id = ?");
-	for (let start = 0; start < pending_ids.length; start += 15) {
-		const rows = [];
-		for (const id of pending_ids.slice(start, start + 15)) {
-			const row = read_row.get(id);
-			if (row && row.estado !== "conflicto") rows.push(row);
+async function Xr(e, t, n, r) {
+	let i = e.prepare("SELECT * FROM sync_cola WHERE id = ?");
+	for (let a = 0; a < r.length; a += 15) {
+		let o = [];
+		for (let e of r.slice(a, a + 15)) {
+			let t = i.get(e);
+			t && t.estado !== "conflicto" && o.push(t);
 		}
-		if (rows.length === 0) continue;
-		const response = await push_changes(request, token, rows.map((row) => {
-			return {
-				entidad: row.entidad,
-				client_id: row.client_id,
-				version_base: row.version_base,
-				cola_id: row.cola_id,
-				datos: read_local_data(db, row)
-			};
-		}));
-		for (let i = 0; i < rows.length; i++) if (response.resultados[i]) save_push_result(db, rows[i], response.resultados[i]);
+		if (o.length === 0) continue;
+		let s = await Cr(t, n, o.map((t) => ({
+			entidad: t.entidad,
+			client_id: t.client_id,
+			version_base: t.version_base,
+			cola_id: t.cola_id,
+			datos: Kr(e, t)
+		})));
+		for (let t = 0; t < o.length; t++) s.resultados[t] && Jr(e, o[t], s.resultados[t]);
 	}
 }
-function save_page(db, page) {
-	db.transaction(() => {
-		for (const record of page.partidas) save_downloaded_record(db, record);
-		set_sync_value(db, SYNC_KEYS.cursor, String(page.cursor));
+function Zr(e, t) {
+	e.transaction(() => {
+		for (let n of t.partidas) Lr(e, n);
+		at(e, z.cursor, String(t.cursor));
 	})();
 }
-function is_missing_reference(error) {
-	if (error instanceof MissingReferenceError) return true;
-	return error?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
+function Qr(e) {
+	return e instanceof Or || e?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
 }
-async function pull_changes(db, request, token) {
-	while (true) {
-		const page = await pull_page(request, token, get_sync_value(db, SYNC_KEYS.cursor) ?? "0");
+async function $r(e, t, n) {
+	for (;;) {
+		let r = await wr(t, n, it(e, z.cursor) ?? "0");
 		try {
-			save_page(db, page);
-		} catch (error) {
-			if (!is_missing_reference(error)) throw error;
-			await refresh_reference(db, request, token);
-			save_page(db, page);
+			Zr(e, r);
+		} catch (i) {
+			if (!Qr(i)) throw i;
+			await Gr(e, t, n), Zr(e, r);
 		}
-		if (!page.hayMas) return;
+		if (!r.hayMas) return;
 	}
 }
-async function run_sync(db, request, token) {
-	await refresh_reference(db, request, token);
-	await push_pending(db, request, token);
-	await pull_changes(db, request, token);
-	set_sync_value(db, SYNC_KEYS.last_sync, (/* @__PURE__ */ new Date()).toISOString());
+async function ei(e, t, n) {
+	await Gr(e, t, n), await Yr(e, t, n), await $r(e, t, n), at(e, z.last_sync, (/* @__PURE__ */ new Date()).toISOString());
 }
-async function resolve_conflict(db, request, token, entity, client_id, choice) {
-	const server_record = (await get_record(request, token, entity, client_id)).registro;
-	db.transaction(() => {
-		if (choice === "local") db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE entidad = ? AND client_id = ?`).run(server_record.version, entity, client_id);
-		else if (entity === "ministro") save_downloaded_minister(db, server_record, true);
-		else if (entity === "usuario") save_downloaded_user(db, server_record, true);
-		else save_downloaded_record(db, server_record, true);
+async function ti(e, t, n, r, i, a) {
+	let o = (await Tr(t, n, r, i)).registro;
+	e.transaction(() => {
+		a === "local" ? e.prepare("UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE entidad = ? AND client_id = ?").run(o.version, r, i) : r === "ministro" ? Ur(e, o, !0) : r === "usuario" ? Br(e, o, !0) : Lr(e, o, !0);
 	})();
 }
-var TYPE_NAMES = {
+var ni = {
 	bautismo: "Bautismo",
 	confirmacion: "Confirmación",
 	matrimonio: "Matrimonio"
 };
-function describe(db, row) {
-	if (row.entidad === "ministro") {
-		const minister = db.prepare("SELECT nombre, apellido_paterno FROM ministros WHERE client_id = ?").get(row.client_id);
-		return `Ministro ${minister?.nombre ?? ""} ${minister?.apellido_paterno ?? ""}`.trim();
+function ri(e, t) {
+	if (t.entidad === "ministro") {
+		let n = e.prepare("SELECT nombre, apellido_paterno FROM ministros WHERE client_id = ?").get(t.client_id);
+		return `Ministro ${n?.nombre ?? ""} ${n?.apellido_paterno ?? ""}`.trim();
 	}
-	if (row.entidad === "usuario") return `Usuario ${db.prepare("SELECT username FROM usuarios WHERE client_id = ?").get(row.client_id)?.username ?? ""}`.trim();
-	const type_name = TYPE_NAMES[row.entidad];
-	const record = db.prepare("SELECT libro, folio, numero FROM sacramentos WHERE client_id = ?").get(row.client_id);
-	if (!record) return type_name;
-	return `${type_name}: libro ${record.libro}, folio ${record.folio}, registro ${record.numero}`;
+	if (t.entidad === "usuario") return `Usuario ${e.prepare("SELECT username FROM usuarios WHERE client_id = ?").get(t.client_id)?.username ?? ""}`.trim();
+	let n = ni[t.entidad], r = e.prepare("SELECT libro, folio, numero FROM sacramentos WHERE client_id = ?").get(t.client_id);
+	return r ? `${n}: libro ${r.libro}, folio ${r.folio}, registro ${r.numero}` : n;
 }
-function read_queue_summary(db) {
-	const counts = db.prepare("SELECT estado, COUNT(*) AS total FROM sync_cola GROUP BY estado").all();
-	const count_of = (state) => {
-		const row = counts.find((item) => item.estado === state);
-		return row ? row.total : 0;
-	};
-	const items = db.prepare(`SELECT * FROM sync_cola WHERE estado <> 'pendiente' ORDER BY id`).all().map((row) => ({
-		entidad: row.entidad,
-		client_id: row.client_id,
-		estado: row.estado,
-		motivo: row.motivo,
-		descripcion: describe(db, row)
+function ii(e) {
+	let t = e.prepare("SELECT estado, COUNT(*) AS total FROM sync_cola GROUP BY estado").all(), n = (e) => {
+		let n = t.find((t) => t.estado === e);
+		return n ? n.total : 0;
+	}, r = e.prepare("SELECT * FROM sync_cola WHERE estado <> 'pendiente' ORDER BY id").all().map((t) => ({
+		entidad: t.entidad,
+		client_id: t.client_id,
+		estado: t.estado,
+		motivo: t.motivo,
+		descripcion: ri(e, t)
 	}));
 	return {
-		pendientes: count_of("pendiente"),
-		conflictos: count_of("conflicto"),
-		rechazados: count_of("rechazado"),
-		ultima_sync: get_sync_value(db, SYNC_KEYS.last_sync),
-		aviso: get_sync_value(db, SYNC_KEYS.notice),
-		items
+		pendientes: n("pendiente"),
+		conflictos: n("conflicto"),
+		rechazados: n("rechazado"),
+		ultima_sync: it(e, z.last_sync),
+		aviso: it(e, z.notice),
+		items: r
 	};
 }
 //#endregion
 //#region electron/main/sync/recovery.ts
-var REBUILT_NOTICE = "La base local se reconstruyó desde el servidor. Revise lo registrado recientemente: lo que no se había subido debe volver a digitarse desde el libro.";
-async function download_key_copy(paths, request, token) {
+var ai = "La base local se reconstruyó desde el servidor. Revise lo registrado recientemente: lo que no se había subido debe volver a digitarse desde el libro.";
+async function oi(e, t, n) {
 	try {
-		return (await get_key_copy(request, token, device_id(paths))).clave;
-	} catch (error) {
-		if (error instanceof ServiceError && error.status === 404) return null;
-		throw error;
+		return (await Er(t, n, Mn(e))).clave;
+	} catch (e) {
+		if (e instanceof B && e.status === 404) return null;
+		throw e;
 	}
 }
-async function rebuild(paths, keys, request, token) {
-	const temp = open_temp_database(paths, keys);
+async function si(e, t, n, r) {
+	let i = zn(e, t);
 	try {
-		await refresh_reference(temp.db, request, token);
-		await pull_changes(temp.db, request, token);
-		set_sync_value(temp.db, SYNC_KEYS.last_sync, (/* @__PURE__ */ new Date()).toISOString());
-		set_sync_value(temp.db, SYNC_KEYS.notice, REBUILT_NOTICE);
-		set_sync_value(temp.db, SYNC_KEYS.key_registered, null);
+		await Gr(i.db, n, r), await $r(i.db, n, r), at(i.db, z.last_sync, (/* @__PURE__ */ new Date()).toISOString()), at(i.db, z.notice, ai), at(i.db, z.key_registered, null);
 	} finally {
-		temp.db.close();
+		i.db.close();
 	}
 	return {
-		db: install_temp_database(paths, keys, temp.key),
-		key: temp.key
+		db: Vn(e, t, i.key),
+		key: i.key
 	};
 }
-async function recover_local_database(paths, keys, request, token) {
-	if (existsSync(paths.database)) {
-		const key_copy = await download_key_copy(paths, request, token);
-		if (key_copy) {
-			const db = open_with_key_copy(paths, keys, key_copy);
-			if (db) return {
-				db,
-				key: key_copy
+async function ci(e, t, n, r) {
+	if (u(e.database)) {
+		let i = await oi(e, n, r);
+		if (i) {
+			let n = Rn(e, t, i);
+			if (n) return {
+				db: n,
+				key: i
 			};
 		}
 	}
-	return rebuild(paths, keys, request, token);
+	return si(e, t, n, r);
 }
-async function upload_key_copy(db, paths, key, request, token, parish_id) {
-	const registered = get_sync_value(db, SYNC_KEYS.key_registered);
-	if (registered && !(registered === "admin" && parish_id !== null)) return;
-	const response = await put_key_copy(request, token, device_id(paths), key);
-	set_sync_value(db, SYNC_KEYS.key_registered, response.parroquiaId === null ? "admin" : "parroquia");
+async function li(e, t, n, r, i, a) {
+	let o = it(e, z.key_registered);
+	if (o && (o !== "admin" || a === null)) return;
+	let s = await Dr(r, i, Mn(t), n);
+	at(e, z.key_registered, s.parroquiaId === null ? "admin" : "parroquia");
 }
 //#endregion
 //#region electron/main/sync/auto_sync.ts
-var mode = "sin-conexion";
-var last_error = null;
-var running_sync = null;
-var sync_timer = null;
-function start_auto_sync(initial_mode) {
-	if (!sync_timer) sync_timer = setInterval(() => void sync_now(), SYNC_INTERVAL_MS);
-	mode = initial_mode;
+var K = "sin-conexion", ui = null, di = null, fi = null;
+function pi(e) {
+	fi ||= setInterval(() => void q(), ve), K = e;
 }
-function stop_auto_sync() {
-	if (sync_timer) clearInterval(sync_timer);
-	sync_timer = null;
+function mi() {
+	fi && clearInterval(fi), fi = null;
 }
-function reset_sync_status() {
-	mode = "sin-conexion";
-	last_error = null;
+function hi() {
+	K = "sin-conexion", ui = null;
 }
-var ACCOUNT_NOT_UPLOADED = "Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.";
-function is_waiting_upload(user_id) {
-	if (user_id < 0) return true;
+var gi = "Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.";
+function _i(e) {
+	if (e < 0) return !0;
 	try {
-		const row = get_database().prepare("SELECT password_hash_pendiente FROM usuarios WHERE id = ?").get(user_id);
-		return Boolean(row?.password_hash_pendiente);
+		return !!G().prepare("SELECT password_hash_pendiente FROM usuarios WHERE id = ?").get(e)?.password_hash_pendiente;
 	} catch {
-		return false;
+		return !1;
 	}
 }
-async function renew_token() {
-	const session = current_session();
-	const login = saved_credentials();
-	if (!session || !login) return null;
+async function vi() {
+	let e = sr(), t = cr();
+	if (!e || !t) return null;
 	try {
-		const response = await request_login(remote_request, login.username, login.password);
-		session.token = response.token;
-		session.role = response.usuario.rol;
-		session.parish_id = response.usuario.parroquia_id;
-		return response.token;
-	} catch (error) {
-		session.token = "";
-		if (is_connection_error(error)) {
-			mode = "sin-conexion";
-			return null;
-		}
-		if (is_waiting_upload(session.user_id)) {
-			mode = "error";
-			last_error = ACCOUNT_NOT_UPLOADED;
-			return null;
-		}
-		mode = "requiere-login";
-		last_error = "La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.";
-		return null;
+		let n = await xr(yr, t.username, t.password);
+		return e.token = n.token, e.role = n.usuario.rol, e.parish_id = n.usuario.parroquia_id, n.token;
+	} catch (t) {
+		return e.token = "", br(t) ? (K = "sin-conexion", null) : _i(e.user_id) ? (K = "error", ui = gi, null) : (K = "requiere-login", ui = "La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.", null);
 	}
 }
-async function with_token(action) {
-	const token = current_session()?.token || await renew_token();
-	if (!token) return;
-	try {
-		await action(token);
-	} catch (error) {
-		if (!(error instanceof ServiceError && error.status === 401)) throw error;
-		const new_token = await renew_token();
-		if (new_token) await action(new_token);
+async function yi(e) {
+	let t = sr()?.token || await vi();
+	if (t) try {
+		await e(t);
+	} catch (t) {
+		if (!(t instanceof B && t.status === 401)) throw t;
+		let n = await vi();
+		n && await e(n);
 	}
 }
-async function perform_sync() {
-	last_error = null;
+async function bi() {
+	ui = null;
 	try {
-		let completed = false;
-		await with_token(async (token) => {
-			const db = get_database();
-			await run_sync(db, remote_request, token);
-			completed = true;
-			const key = current_key();
-			if (key) await upload_key_copy(db, database_paths(), key, remote_request, token, current_session()?.parish_id ?? null).catch((error$5) => {
-				error("No se pudo subir la copia de la clave:", error$5);
+		let e = !1;
+		await yi(async (t) => {
+			let n = G();
+			await ei(n, yr, t), e = !0;
+			let r = Qn();
+			r && await li(n, Xn(), r, yr, t, sr()?.parish_id ?? null).catch((e) => {
+				fr("No se pudo subir la copia de la clave:", e);
 			});
-		});
-		if (completed) mode = "en-linea";
-	} catch (error$6) {
-		if (is_connection_error(error$6)) {
-			mode = "sin-conexion";
+		}), e && (K = "en-linea");
+	} catch (e) {
+		if (br(e)) {
+			K = "sin-conexion";
 			return;
 		}
-		error("Falló la sincronización:", error$6);
-		mode = "error";
-		last_error = error$6 instanceof ServiceError ? error$6.message : "Ocurrió un error al sincronizar.";
+		fr("Falló la sincronización:", e), K = "error", ui = e instanceof B ? e.message : "Ocurrió un error al sincronizar.";
 	}
 }
-function sync_now() {
-	if (!current_session()) return Promise.resolve();
-	if (!running_sync) running_sync = perform_sync().finally(() => {
-		running_sync = null;
-	});
-	return running_sync;
+function q() {
+	return sr() ? (di ||= bi().finally(() => {
+		di = null;
+	}), di) : Promise.resolve();
 }
-function wait_for_sync() {
-	return running_sync ?? Promise.resolve();
+function xi() {
+	return di ?? Promise.resolve();
 }
-function get_sync_status() {
-	require_session();
-	return {
-		...read_queue_summary(get_database()),
-		modo: mode,
-		en_curso: running_sync !== null,
-		mensaje: last_error,
-		token: current_session()?.token || "sin-conexion"
+function Si() {
+	return or(), {
+		...ii(G()),
+		modo: K,
+		en_curso: di !== null,
+		mensaje: ui,
+		token: sr()?.token || "sin-conexion"
 	};
 }
-async function resolve_sync_conflict(entity, client_id, choice) {
-	require_session();
-	let done = false;
-	await with_token(async (token) => {
-		await resolve_conflict(get_database(), remote_request, token, entity, client_id, choice);
-		done = true;
-	});
-	if (!done) throw new ServiceError("Se necesita conexión para resolver el conflicto.", 0);
-	await sync_now();
+async function Ci(e, t, n) {
+	or();
+	let r = !1;
+	if (await yi(async (i) => {
+		await ti(G(), yr, i, e, t, n), r = !0;
+	}), !r) throw new B("Se necesita conexión para resolver el conflicto.", 0);
+	await q();
 }
-function dismiss_sync_notice() {
-	require_session();
-	set_sync_value(get_database(), SYNC_KEYS.notice, null);
+function wi() {
+	or(), at(G(), z.notice, null);
 }
-async function sync_before_quit(limit_ms) {
-	if (!current_session()) return;
-	if (read_queue_summary(get_database()).pendientes === 0) return;
-	const time_limit = new Promise((resolve) => setTimeout(resolve, limit_ms));
-	await Promise.race([sync_now(), time_limit]);
+async function Ti(e) {
+	if (!sr() || ii(G()).pendientes === 0) return;
+	let t = new Promise((t) => setTimeout(t, e));
+	await Promise.race([q(), t]);
 }
 //#endregion
 //#region electron/main/controllers/login.ts
-async function save_credential(db, user_id, password) {
-	const verifier = await create_verifier(password);
-	db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
-		 ON CONFLICT (usuario_id) DO UPDATE SET
-			verificador = excluded.verificador,
-			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user_id, verifier);
+async function Ei(e, t, n) {
+	let r = await hn(n);
+	e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n		 ON CONFLICT (usuario_id) DO UPDATE SET\n			verificador = excluded.verificador,\n			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t, r);
 }
-async function verify_offline(db, username, password) {
-	const row = db.prepare(`SELECT u.id, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,
-				c.verificador, p.nombre AS parroquia_nombre
-			 FROM usuarios u
-			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
-			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
-			 WHERE u.username = ?`).get(username);
-	if (!row || !row.verificador) return {
-		ok: false,
+async function Di(e, t, n) {
+	let r = e.prepare("SELECT u.id, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,\n				c.verificador, p.nombre AS parroquia_nombre\n			 FROM usuarios u\n			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id\n			 LEFT JOIN parroquias p ON p.id = u.parroquia_id\n			 WHERE u.username = ?").get(t);
+	return !r || !r.verificador ? {
+		ok: !1,
 		reason: "sin-credencial"
-	};
-	if (row.activo !== 1) return {
-		ok: false,
+	} : r.activo !== 1 || !await xn(n, r.verificador) ? {
+		ok: !1,
 		reason: "incorrecta"
-	};
-	if (!await matches_verifier(password, row.verificador)) return {
-		ok: false,
-		reason: "incorrecta"
-	};
-	return {
-		ok: true,
+	} : {
+		ok: !0,
 		usuario: {
-			id: row.id,
-			rol: row.rol,
-			parroquia_id: row.parroquia_id,
-			parroquia_nombre: row.parroquia_nombre,
-			nombre_completo: full_name$1(row.nombre, row.apellido_paterno, row.apellido_materno)
+			id: r.id,
+			rol: r.rol,
+			parroquia_id: r.parroquia_id,
+			parroquia_nombre: r.parroquia_nombre,
+			nombre_completo: we(r.nombre, r.apellido_paterno, r.apellido_materno)
 		}
 	};
 }
-async function login_online(response, username, password) {
-	const token = response.token;
-	const user = response.usuario;
-	if (database_needs_recovery()) {
-		const recovered = await recover_local_database(database_paths(), KEY_STORE, remote_request, token);
-		use_database(recovered.db, recovered.key);
+async function Oi(e, t, n) {
+	let r = e.token, i = e.usuario;
+	if ($n()) {
+		let e = await ci(Xn(), Yn, yr, r);
+		er(e.db, e.key);
 	}
-	const db = get_database();
+	let a = G();
 	try {
-		await refresh_reference(db, remote_request, token);
-	} catch (error) {
-		if (!db.prepare("SELECT 1 FROM usuarios WHERE id = ?").get(user.id)) throw error;
+		await Gr(a, yr, r);
+	} catch (e) {
+		if (!a.prepare("SELECT 1 FROM usuarios WHERE id = ?").get(i.id)) throw e;
 	}
-	await save_credential(db, user.id, password);
-	start_session({
-		user_id: user.id,
-		role: user.rol,
-		parish_id: user.parroquia_id,
-		token
-	}, username, password);
-	start_auto_sync("en-linea");
-	await sync_now();
-	return response;
+	return await Ei(a, i.id, n), lr({
+		user_id: i.id,
+		role: i.rol,
+		parish_id: i.parroquia_id,
+		token: r
+	}, t, n), pi("en-linea"), await q(), e;
 }
-function start_local_session(user, username, password) {
-	start_session({
-		user_id: user.id,
-		role: user.rol,
-		parish_id: user.parroquia_id,
+function ki(e, t, n) {
+	return lr({
+		user_id: e.id,
+		role: e.rol,
+		parish_id: e.parroquia_id,
 		token: ""
-	}, username, password);
-	start_auto_sync("sin-conexion");
-	sync_now();
-	return {
-		token: OFFLINE_TOKEN,
-		usuario: user
+	}, t, n), pi("sin-conexion"), q(), {
+		token: rr,
+		usuario: e
 	};
 }
-var NOT_IN_THIS_PC = "Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.";
-async function login(payload) {
-	const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-	const password = typeof payload?.password === "string" ? payload.password : "";
-	let local = {
-		ok: false,
+var Ai = "Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.";
+async function ji(e) {
+	let t = typeof e?.username == "string" ? e.username.trim() : "", n = typeof e?.password == "string" ? e.password : "", r = {
+		ok: !1,
 		reason: "sin-credencial"
 	};
-	if (!database_needs_recovery()) {
-		local = await verify_offline(get_database(), username, password);
-		if (local.ok) return start_local_session(local.usuario, username, password);
-	}
-	let response;
+	if (!$n() && (r = await Di(G(), t, n), r.ok)) return ki(r.usuario, t, n);
+	let i;
 	try {
-		response = await request_login(remote_request, username, password);
-	} catch (error) {
-		if (!is_connection_error(error)) throw error;
-		if (database_needs_recovery()) throw new ServiceError("La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.", 503);
-		if (local.reason === "sin-credencial") throw new ServiceError(NOT_IN_THIS_PC, 401);
-		throw new ServiceError("Usuario o contraseña incorrectos.", 401);
+		i = await xr(yr, t, n);
+	} catch (e) {
+		throw br(e) ? $n() ? new B("La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.", 503) : r.reason === "sin-credencial" ? new B(Ai, 401) : new B("Usuario o contraseña incorrectos.", 401) : e;
 	}
-	return login_online(response, username, password);
+	return Oi(i, t, n);
 }
-function logout() {
-	stop_auto_sync();
-	end_session();
-	reset_sync_status();
+function Mi() {
+	mi(), ur(), hi();
 }
-var login_routes = {
-	"auth.login": login,
-	"auth.logout": () => {
-		logout();
-		return { success: true };
-	}
-};
-//#endregion
-//#region electron/main/controllers/package.ts
-var PACKAGE_FORMAT = "prelatura-paquete-inicial";
-var PACKAGE_FILE = "paquete-inicial.json";
-function needs_package(db) {
-	return db.prepare("SELECT COUNT(*) FROM usuarios").pluck().get() === 0;
+var Ni = {
+	"auth.login": ji,
+	"auth.logout": () => (Mi(), { success: !0 })
+}, Pi = "prelatura-paquete-inicial", Fi = "paquete-inicial.json";
+function Ii(e) {
+	return e.prepare("SELECT COUNT(*) FROM usuarios").pluck().get() === 0;
 }
-function build_package(db, session) {
-	if (session.role !== "admin_general") throw new ServiceError("Solo el administrador general puede generar el paquete inicial.", 403);
-	if (db.prepare("SELECT COUNT(*) FROM sync_cola").pluck().get() > 0) throw new ServiceError("Hay cambios sin subir. Sincronice con internet antes de generar el paquete inicial.", 409);
-	const users = db.prepare(`SELECT u.id, u.client_id, u.parroquia_id, u.username, u.rol, u.nombre, u.apellido_paterno, u.apellido_materno,
-				u.activo, u.principal, u.version, u.updated_at, c.verificador AS password_hash
-			 FROM usuarios u
-			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
-			 WHERE u.id > 0
-			 ORDER BY u.id`).all();
-	const ministers = db.prepare("SELECT id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at FROM ministros ORDER BY id").all();
-	const records = db.prepare("SELECT client_id, version, created_at, updated_at FROM sacramentos ORDER BY id").all();
+function Li(e, t) {
+	if (t.role !== "admin_general") throw new B("Solo el administrador general puede generar el paquete inicial.", 403);
+	if (e.prepare("SELECT COUNT(*) FROM sync_cola").pluck().get() > 0) throw new B("Hay cambios sin subir. Sincronice con internet antes de generar el paquete inicial.", 409);
+	let n = e.prepare("SELECT u.id, u.client_id, u.parroquia_id, u.username, u.rol, u.nombre, u.apellido_paterno, u.apellido_materno,\n				u.activo, u.principal, u.version, u.updated_at, c.verificador AS password_hash\n			 FROM usuarios u\n			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id\n			 WHERE u.id > 0\n			 ORDER BY u.id").all(), r = e.prepare("SELECT id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at FROM ministros ORDER BY id").all(), i = e.prepare("SELECT client_id, version, created_at, updated_at FROM sacramentos ORDER BY id").all();
 	return {
-		formato: PACKAGE_FORMAT,
+		formato: Pi,
 		version: 1,
 		generado_en: (/* @__PURE__ */ new Date()).toISOString(),
-		cursor: get_sync_value(db, SYNC_KEYS.cursor),
-		parroquias: db.prepare("SELECT id, nombre, ubicacion, activa FROM parroquias ORDER BY id").all(),
-		usuarios: users,
-		ministros: ministers,
-		partidas: records.map((row) => ({
-			...read_local_record(db, row.client_id),
-			version: row.version,
-			created_at: row.created_at,
-			updated_at: row.updated_at
+		cursor: it(e, z.cursor),
+		parroquias: e.prepare("SELECT id, nombre, ubicacion, activa FROM parroquias ORDER BY id").all(),
+		usuarios: n,
+		ministros: r,
+		partidas: i.map((t) => ({
+			...Pr(e, t.client_id),
+			version: t.version,
+			created_at: t.created_at,
+			updated_at: t.updated_at
 		}))
 	};
 }
-function check_package(data) {
-	const candidate = data;
-	if (!candidate || candidate.formato !== "prelatura-paquete-inicial") throw new ServiceError("El archivo no es un paquete inicial de esta aplicación.", 400);
-	if (candidate.version !== 1) throw new ServiceError("El paquete inicial es de otra versión de la aplicación.", 400);
-	if (!Array.isArray(candidate.parroquias) || !Array.isArray(candidate.usuarios) || !Array.isArray(candidate.ministros) || !Array.isArray(candidate.partidas)) throw new ServiceError("El paquete inicial está incompleto.", 400);
-	return candidate;
+function Ri(e) {
+	let t = e;
+	if (!t || t.formato !== "prelatura-paquete-inicial") throw new B("El archivo no es un paquete inicial de esta aplicación.", 400);
+	if (t.version !== 1) throw new B("El paquete inicial es de otra versión de la aplicación.", 400);
+	if (!Array.isArray(t.parroquias) || !Array.isArray(t.usuarios) || !Array.isArray(t.ministros) || !Array.isArray(t.partidas)) throw new B("El paquete inicial está incompleto.", 400);
+	return t;
 }
-function load_package(db, data) {
-	const content = check_package(data);
-	if (!needs_package(db)) throw new ServiceError("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
-	db.transaction(() => {
-		save_reference_data(db, {
-			parroquias: content.parroquias,
-			ministros: content.ministros,
-			usuarios: content.usuarios
+function zi(e, t) {
+	let n = Ri(t);
+	if (!Ii(e)) throw new B("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
+	return e.transaction(() => {
+		Wr(e, {
+			parroquias: n.parroquias,
+			ministros: n.ministros,
+			usuarios: n.usuarios
 		});
-		for (const record of content.partidas) save_downloaded_record(db, record);
-		if (content.cursor) set_sync_value(db, SYNC_KEYS.cursor, content.cursor);
-	})();
-	return {
-		parroquias: content.parroquias.length,
-		usuarios: content.usuarios.length,
-		partidas: content.partidas.length
+		for (let t of n.partidas) Lr(e, t);
+		n.cursor && at(e, z.cursor, n.cursor);
+	})(), {
+		parroquias: n.parroquias.length,
+		usuarios: n.usuarios.length,
+		partidas: n.partidas.length
 	};
 }
-function read_package_file(file_path) {
+function Bi(e) {
 	try {
-		return JSON.parse(readFileSync(file_path, "utf8"));
+		return JSON.parse(f(e, "utf8"));
 	} catch {
-		throw new ServiceError("No se pudo leer el paquete inicial.", 400);
+		throw new B("No se pudo leer el paquete inicial.", 400);
 	}
 }
-function bundled_package_path() {
-	if (app.isPackaged) return path.join(process.resourcesPath, "instalador", PACKAGE_FILE);
-	return path.join(app.getAppPath(), "resources", "instalador", PACKAGE_FILE);
+function Vi() {
+	return n.isPackaged ? s.join(process.resourcesPath, "instalador", Fi) : s.join(n.getAppPath(), "resources", "instalador", Fi);
 }
-function load_bundled_package() {
+function Hi() {
 	if (process.env.PRELATURA_SIN_PAQUETE === "1") return;
-	const file = process.env.PRELATURA_PAQUETE || bundled_package_path();
-	let db;
+	let e = process.env.PRELATURA_PAQUETE || Vi(), t;
 	try {
-		db = get_database();
+		t = G();
 	} catch {
 		return;
 	}
-	if (!existsSync(file) || !needs_package(db)) return;
-	try {
-		const summary = load_package(db, read_package_file(file));
-		info(`Paquete inicial cargado: ${summary.parroquias} parroquias, ${summary.usuarios} usuarios y ${summary.partidas} partidas.`);
-	} catch (error$4) {
-		error("No se pudo cargar el paquete inicial del instalador:", error$4);
+	if (u(e) && Ii(t)) try {
+		let n = zi(t, Bi(e));
+		dr(`Paquete inicial cargado: ${n.parroquias} parroquias, ${n.usuarios} usuarios y ${n.partidas} partidas.`);
+	} catch (e) {
+		fr("No se pudo cargar el paquete inicial del instalador:", e);
 	}
 }
-function parent_window() {
-	return BrowserWindow.getFocusedWindow() ?? void 0;
+function Ui() {
+	return t.getFocusedWindow() ?? void 0;
 }
-var package_public_routes = { "package.status": () => {
+var Wi = { "package.status": () => {
 	try {
-		return { necesita_paquete: needs_package(get_database()) };
+		return { necesita_paquete: Ii(G()) };
 	} catch {
-		return { necesita_paquete: false };
+		return { necesita_paquete: !1 };
 	}
-} };
-var package_routes = { "package.export": async (_payload, { db, session }) => {
-	const content = build_package(db, session);
-	const options = {
+} }, Gi = { "package.export": async (e, { db: t, session: n }) => {
+	let i = Li(t, n), a = {
 		title: "Guardar el paquete inicial",
-		defaultPath: PACKAGE_FILE,
+		defaultPath: Fi,
 		filters: [{
 			name: "Paquete inicial",
 			extensions: ["json"]
 		}]
-	};
-	const window = parent_window();
-	const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
-	if (choice.canceled || !choice.filePath) return { cancelado: true };
-	writeFileSync(choice.filePath, JSON.stringify(content), "utf8");
-	return {
-		cancelado: false,
-		parroquias: content.parroquias.length,
-		usuarios: content.usuarios.length,
-		partidas: content.partidas.length
-	};
-} };
-//#endregion
-//#region electron/main/controllers/backup.ts
-var BACKUP_FORMAT = "prelatura-respaldo";
-var BACKUP_EXTENSION = "respaldo";
-var LOGO_FILE = /^parroquia-\d+\.txt$/;
-var WRONG_PASSWORD = "La contraseña no es la del respaldo, o el archivo está dañado.";
-var NOT_A_BACKUP = "El archivo no es un respaldo de esta aplicación.";
-function table_names(db) {
-	return db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`).pluck().all();
+	}, o = Ui(), s = o ? await r.showSaveDialog(o, a) : await r.showSaveDialog(a);
+	return s.canceled || !s.filePath ? { cancelado: !0 } : (_(s.filePath, JSON.stringify(i), "utf8"), {
+		cancelado: !1,
+		parroquias: i.parroquias.length,
+		usuarios: i.usuarios.length,
+		partidas: i.partidas.length
+	});
+} }, Ki = "prelatura-respaldo", qi = "respaldo", Ji = /^parroquia-\d+\.txt$/, Yi = "La contraseña no es la del respaldo, o el archivo está dañado.", Xi = "El archivo no es un respaldo de esta aplicación.";
+function Zi(e) {
+	return e.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
 }
-function logos_folder(directory) {
-	return path.join(directory, FILE_NAMES.logos_folder);
+function Qi(e) {
+	return s.join(e, be.logos_folder);
 }
-function build_backup(db, directory) {
-	const tables = {};
-	for (const name of table_names(db)) {
-		const select = db.prepare(`SELECT * FROM "${name}"`).raw();
-		tables[name] = {
-			columnas: select.columns().map((column) => column.name),
-			filas: select.all()
+function $i(e, t) {
+	let n = {};
+	for (let t of Zi(e)) {
+		let r = e.prepare(`SELECT * FROM "${t}"`).raw();
+		n[t] = {
+			columnas: r.columns().map((e) => e.name),
+			filas: r.all()
 		};
 	}
-	const logos = {};
-	const folder = logos_folder(directory);
-	if (existsSync(folder)) for (const name of readdirSync(folder).filter((file) => LOGO_FILE.test(file))) logos[name] = readFileSync(path.join(folder, name), "utf8");
+	let r = {}, i = Qi(t);
+	if (u(i)) for (let e of p(i).filter((e) => Ji.test(e))) r[e] = f(s.join(i, e), "utf8");
 	return {
-		version_base: db.pragma("user_version", { simple: true }),
-		tablas: tables,
-		logos
+		version_base: e.pragma("user_version", { simple: !0 }),
+		tablas: n,
+		logos: r
 	};
 }
-async function encode_backup(content, password) {
-	const encrypted = await encrypt_with_password(password, gzipSync(JSON.stringify(content)));
+async function ea(e, t) {
+	let n = await Cn(t, y(JSON.stringify(e)));
 	return JSON.stringify({
-		formato: BACKUP_FORMAT,
+		formato: Ki,
 		version: 1,
 		creado_en: (/* @__PURE__ */ new Date()).toISOString(),
-		...encrypted
+		...n
 	});
 }
-async function decode_backup(text, password) {
-	let file;
+async function ta(e, t) {
+	let n;
 	try {
-		file = JSON.parse(text);
+		n = JSON.parse(e);
 	} catch {
-		throw new ServiceError(NOT_A_BACKUP, 400);
+		throw new B(Xi, 400);
 	}
-	if (file?.formato !== "prelatura-respaldo" || !file.sal || !file.iv || !file.etiqueta || !file.datos) throw new ServiceError(NOT_A_BACKUP, 400);
-	if (file.version !== 1) throw new ServiceError("El respaldo es de otra versión de la aplicación.", 400);
-	const data = await decrypt_with_password(password, file);
-	if (!data) throw new ServiceError(WRONG_PASSWORD, 400);
-	const content = JSON.parse(gunzipSync(data).toString("utf8"));
-	if (!Number.isInteger(content?.version_base) || content.version_base < 1 || typeof content.tablas !== "object" || typeof content.logos !== "object") throw new ServiceError(NOT_A_BACKUP, 400);
-	return content;
+	if (n?.formato !== "prelatura-respaldo" || !n.sal || !n.iv || !n.etiqueta || !n.datos) throw new B(Xi, 400);
+	if (n.version !== 1) throw new B("El respaldo es de otra versión de la aplicación.", 400);
+	let r = await wn(t, n);
+	if (!r) throw new B(Yi, 400);
+	let i = JSON.parse(v(r).toString("utf8"));
+	if (!Number.isInteger(i?.version_base) || i.version_base < 1 || typeof i.tablas != "object" || typeof i.logos != "object") throw new B(Xi, 400);
+	return i;
 }
-function load_tables(db, content) {
-	const known = table_names(db);
-	for (const name of Object.keys(content.tablas)) if (!known.includes(name)) throw new ServiceError(NOT_A_BACKUP, 400);
-	const load = db.transaction(() => {
-		for (const name of known) db.prepare(`DELETE FROM "${name}"`).run();
-		for (const [name, table] of Object.entries(content.tablas)) {
-			const columns = db.pragma(`table_info("${name}")`).map((column) => column.name);
-			if (!table.columnas.every((column) => columns.includes(column))) throw new ServiceError(NOT_A_BACKUP, 400);
-			const names = table.columnas.map((column) => `"${column}"`).join(", ");
-			const marks = table.columnas.map(() => "?").join(", ");
-			const insert = db.prepare(`INSERT INTO "${name}" (${names}) VALUES (${marks})`);
-			for (const row of table.filas) insert.run(row);
+function na(e, t) {
+	let n = Zi(e);
+	for (let e of Object.keys(t.tablas)) if (!n.includes(e)) throw new B(Xi, 400);
+	let r = e.transaction(() => {
+		for (let t of n) e.prepare(`DELETE FROM "${t}"`).run();
+		for (let [n, r] of Object.entries(t.tablas)) {
+			let t = e.pragma(`table_info("${n}")`).map((e) => e.name);
+			if (!r.columnas.every((e) => t.includes(e))) throw new B(Xi, 400);
+			let i = r.columnas.map((e) => `"${e}"`).join(", "), a = r.columnas.map(() => "?").join(", "), o = e.prepare(`INSERT INTO "${n}" (${i}) VALUES (${a})`);
+			for (let e of r.filas) o.run(e);
 		}
-		db.prepare("DELETE FROM sync_estado WHERE clave = ?").run(SYNC_KEYS.key_registered);
-		if (db.pragma("foreign_key_check").length > 0) throw new ServiceError("El respaldo está incompleto: hay datos que apuntan a registros que no están.", 400);
+		if (e.prepare("DELETE FROM sync_estado WHERE clave = ?").run(z.key_registered), e.pragma("foreign_key_check").length > 0) throw new B("El respaldo está incompleto: hay datos que apuntan a registros que no están.", 400);
 	});
-	db.pragma("foreign_keys = OFF");
+	e.pragma("foreign_keys = OFF");
 	try {
-		load();
+		r();
 	} finally {
-		db.pragma("foreign_keys = ON");
+		e.pragma("foreign_keys = ON");
 	}
 }
-function prepare_restore(paths, keys, content) {
-	if (content.version_base > LOCAL_MIGRATIONS.length) throw new ServiceError("El respaldo es de una versión más nueva de la aplicación. Actualícela antes de restaurarlo.", 400);
-	const temp = create_temp_database(paths, keys, LOCAL_MIGRATIONS.slice(0, content.version_base));
+function ra(e, t, n) {
+	if (n.version_base > Tn.length) throw new B("El respaldo es de una versión más nueva de la aplicación. Actualícela antes de restaurarlo.", 400);
+	let r = Bn(e, t, Tn.slice(0, n.version_base));
 	try {
-		load_tables(temp.db, content);
+		na(r.db, n);
 	} finally {
-		temp.db.close();
+		r.db.close();
 	}
-	open_local_database(paths.temp_database, temp.key).close();
-	return temp.key;
+	return kn(e.temp_database, r.key).close(), r.key;
 }
-function write_logos(directory, logos) {
-	const folder = logos_folder(directory);
-	mkdirSync(folder, { recursive: true });
-	for (const name of readdirSync(folder).filter((file) => LOGO_FILE.test(file))) rmSync(path.join(folder, name), { force: true });
-	for (const [name, text] of Object.entries(logos)) if (LOGO_FILE.test(name) && typeof text === "string") writeFileSync(path.join(folder, name), text, "utf8");
+function ia(e, t) {
+	let n = Qi(e);
+	d(n, { recursive: !0 });
+	for (let e of p(n).filter((e) => Ji.test(e))) h(s.join(n, e), { force: !0 });
+	for (let [e, r] of Object.entries(t)) Ji.test(e) && typeof r == "string" && _(s.join(n, e), r, "utf8");
 }
-async function replace_database(content) {
-	const paths = database_paths();
-	const key = prepare_restore(paths, KEY_STORE, content);
-	logout();
-	await wait_for_sync();
-	close_database();
-	use_database(install_temp_database(paths, KEY_STORE, key), key);
-	write_logos(paths.directory, content.logos);
+async function aa(e) {
+	let t = Xn(), n = ra(t, Yn, e);
+	Mi(), await xi(), tr(), er(Vn(t, Yn, n), n), ia(t.directory, e.logos);
 }
-function check_admin(session) {
-	if (!can_manage_users(session.role)) throw new ServiceError("Solo un administrador puede hacer o restaurar respaldos.", 403);
+function oa(e) {
+	if (!cn(e.role)) throw new B("Solo un administrador puede hacer o restaurar respaldos.", 403);
 }
-function read_password(value, is_new) {
-	const password = typeof value === "string" ? value : "";
-	if (is_new && password.length < 8) throw new ServiceError(`La contraseña del respaldo debe tener al menos 8 caracteres.`, 400);
-	if (!password) throw new ServiceError("Escriba la contraseña del respaldo.", 400);
-	return password;
+function sa(e, t) {
+	let n = typeof e == "string" ? e : "";
+	if (t && n.length < 8) throw new B("La contraseña del respaldo debe tener al menos 8 caracteres.", 400);
+	if (!n) throw new B("Escriba la contraseña del respaldo.", 400);
+	return n;
 }
-function count_rows(content, table) {
-	return content.tablas[table]?.filas.length ?? 0;
+function ca(e, t) {
+	return e.tablas[t]?.filas.length ?? 0;
 }
-function summary_of(content) {
+function la(e) {
 	return {
-		cancelado: false,
-		partidas: count_rows(content, "sacramentos"),
-		pendientes: count_rows(content, "sync_cola")
+		cancelado: !1,
+		partidas: ca(e, "sacramentos"),
+		pendientes: ca(e, "sync_cola")
 	};
 }
-async function restore_from_file(password_value) {
-	const password = read_password(password_value, false);
-	const options = {
+async function ua(e) {
+	let t = sa(e, !1), n = {
 		title: "Elegir el respaldo",
 		properties: ["openFile"],
 		filters: [{
 			name: "Respaldo",
-			extensions: [BACKUP_EXTENSION]
+			extensions: [qi]
 		}]
-	};
-	const window = parent_window();
-	const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
-	if (choice.canceled || choice.filePaths.length === 0) return { cancelado: true };
-	let text;
+	}, i = Ui(), a = i ? await r.showOpenDialog(i, n) : await r.showOpenDialog(n);
+	if (a.canceled || a.filePaths.length === 0) return { cancelado: !0 };
+	let o;
 	try {
-		text = readFileSync(choice.filePaths[0], "utf8");
+		o = f(a.filePaths[0], "utf8");
 	} catch {
-		throw new ServiceError("No se pudo leer el respaldo.", 400);
+		throw new B("No se pudo leer el respaldo.", 400);
 	}
-	const content = await decode_backup(text, password);
-	await replace_database(content);
-	return summary_of(content);
+	let s = await ta(o, t);
+	return await aa(s), la(s);
 }
-function is_empty_pc() {
+function da() {
 	try {
-		return needs_package(get_database());
+		return Ii(G());
 	} catch {
-		return false;
+		return !1;
 	}
 }
-var backup_routes = {
-	"backup.export": async (payload, { db, session }) => {
-		check_admin(session);
-		const password = read_password(payload?.password, true);
-		const options = {
+var fa = {
+	"backup.export": async (e, { db: t, session: n }) => {
+		oa(n);
+		let i = sa(e?.password, !0), a = {
 			title: "Guardar el respaldo",
-			defaultPath: `respaldo-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.${BACKUP_EXTENSION}`,
+			defaultPath: `respaldo-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.${qi}`,
 			filters: [{
 				name: "Respaldo",
-				extensions: [BACKUP_EXTENSION]
+				extensions: [qi]
 			}]
-		};
-		const window = parent_window();
-		const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
-		if (choice.canceled || !choice.filePath) return { cancelado: true };
-		const content = build_backup(db, database_paths().directory);
-		writeFileSync(choice.filePath, await encode_backup(content, password), "utf8");
-		return summary_of(content);
+		}, o = Ui(), s = o ? await r.showSaveDialog(o, a) : await r.showSaveDialog(a);
+		if (s.canceled || !s.filePath) return { cancelado: !0 };
+		let c = $i(t, Xn().directory);
+		return _(s.filePath, await ea(c, i), "utf8"), la(c);
 	},
-	"backup.restore": (payload, { session }) => {
-		check_admin(session);
-		return restore_from_file(payload?.password);
-	}
-};
-var backup_public_routes = { "backup.restoreEmpty": (payload) => {
-	if (!is_empty_pc()) throw new ServiceError("Esta PC ya tiene usuarios: entre como administrador y restaure el respaldo desde Configuración.", 409);
-	return restore_from_file(payload?.password);
-} };
-//#endregion
-//#region electron/main/controllers/duplicates.ts
-var MAX_MATCHES_PER_PERSON = 50;
-var MIN_PERCENT = 75;
-var SIMILAR = .75;
-var FIELDS = [
+	"backup.restore": (e, { session: t }) => (oa(t), ua(e?.password))
+}, pa = { "backup.restoreEmpty": (e) => {
+	if (!da()) throw new B("Esta PC ya tiene usuarios: entre como administrador y restaure el respaldo desde Configuración.", 409);
+	return ua(e?.password);
+} }, ma = 50, ha = 75, ga = .75, _a = [
 	"dni",
 	"nombres",
 	"apellido_paterno",
@@ -2832,8 +1913,7 @@ var FIELDS = [
 	"fecha_nacimiento",
 	"padre",
 	"madre"
-];
-var WEIGHTS = {
+], va = {
 	dni: 40,
 	nombres: 25,
 	apellido_paterno: 20,
@@ -2841,8 +1921,7 @@ var WEIGHTS = {
 	fecha_nacimiento: 20,
 	padre: 10,
 	madre: 10
-};
-var LABELS = {
+}, ya = {
 	dni: "DNI",
 	nombres: "Nombres",
 	apellido_paterno: "Apellido paterno",
@@ -2851,1941 +1930,1034 @@ var LABELS = {
 	padre: "Padre",
 	madre: "Madre"
 };
-function normalize$1(value) {
-	return (value ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+function J(e) {
+	return (e ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
-function edit_distance(a, b) {
-	let previous_row = [];
-	for (let j = 0; j <= b.length; j++) previous_row.push(j);
-	for (let i = 1; i <= a.length; i++) {
-		const row = [i];
-		for (let j = 1; j <= b.length; j++) {
-			const change_cost = a[i - 1] === b[j - 1] ? 0 : 1;
-			row[j] = Math.min(previous_row[j] + 1, row[j - 1] + 1, previous_row[j - 1] + change_cost);
+function ba(e, t) {
+	let n = [];
+	for (let e = 0; e <= t.length; e++) n.push(e);
+	for (let r = 1; r <= e.length; r++) {
+		let i = [r];
+		for (let a = 1; a <= t.length; a++) {
+			let o = e[r - 1] === t[a - 1] ? 0 : 1;
+			i[a] = Math.min(n[a] + 1, i[a - 1] + 1, n[a - 1] + o);
 		}
-		previous_row = row;
+		n = i;
 	}
-	return previous_row[b.length];
+	return n[t.length];
 }
-function similarity(a, b) {
-	if (!a || !b) return 0;
-	if (a === b) return 1;
-	const words_a = a.split(" ");
-	const words_b = b.split(" ");
-	const shorter = words_a.length <= words_b.length ? words_a : words_b;
-	const longer = words_a.length <= words_b.length ? words_b : words_a;
-	if (shorter.every((word) => longer.includes(word))) return .85;
-	const longest = Math.max(a.length, b.length);
-	if (Math.abs(a.length - b.length) / longest > .25) return 0;
-	const ratio = 1 - edit_distance(a, b) / longest;
-	if (ratio >= SIMILAR) return ratio;
-	return 0;
+function xa(e, t) {
+	if (!e || !t) return 0;
+	if (e === t) return 1;
+	let n = e.split(" "), r = t.split(" "), i = n.length <= r.length ? n : r, a = n.length <= r.length ? r : n;
+	if (i.every((e) => a.includes(e))) return .85;
+	let o = Math.max(e.length, t.length);
+	if (Math.abs(e.length - t.length) / o > .25) return 0;
+	let s = 1 - ba(e, t) / o;
+	return s >= ga ? s : 0;
 }
-function compare_dates(a, b) {
-	if (!a || !b) return {
-		comparable: false,
+function Sa(e, t) {
+	return !e || !t ? {
+		comparable: !1,
 		value: 0
-	};
-	if (a === b) return {
-		comparable: true,
+	} : e === t ? {
+		comparable: !0,
 		value: 1
-	};
-	return {
-		comparable: !(a.startsWith(b + "-") || b.startsWith(a + "-")),
+	} : {
+		comparable: !(e.startsWith(t + "-") || t.startsWith(e + "-")),
 		value: 0
 	};
 }
-function compare(input, candidate, old_names) {
-	const dni_comparable = Boolean(input.dni && candidate.dni);
-	const same_dni = dni_comparable && input.dni === normalize$1(candidate.dni);
-	const name_similarity = (field, current) => {
-		const options = [normalize$1(current), ...old_names.get(`${candidate.persona_id}:${field}`) ?? []];
-		return Math.max(...options.map((option) => similarity(input[field], option)));
-	};
-	const first_name_score = name_similarity("nombres", candidate.nombres);
-	const father_name_score = name_similarity("apellido_paterno", candidate.apellido_paterno);
-	if (!same_dni && (first_name_score === 0 || father_name_score === 0)) return null;
-	const results = {
+function Ca(e, t, n) {
+	let r = !!(e.dni && t.dni), i = r && e.dni === J(t.dni), a = (r, i) => {
+		let a = [J(i), ...n.get(`${t.persona_id}:${r}`) ?? []];
+		return Math.max(...a.map((t) => xa(e[r], t)));
+	}, o = a("nombres", t.nombres), s = a("apellido_paterno", t.apellido_paterno);
+	if (!i && (o === 0 || s === 0)) return null;
+	let c = {
 		dni: {
-			comparable: dni_comparable,
-			value: same_dni ? 1 : 0
+			comparable: r,
+			value: +!!i
 		},
 		nombres: {
-			comparable: Boolean(input.nombres),
-			value: first_name_score
+			comparable: !!e.nombres,
+			value: o
 		},
 		apellido_paterno: {
-			comparable: Boolean(input.apellido_paterno),
-			value: father_name_score
+			comparable: !!e.apellido_paterno,
+			value: s
 		},
 		apellido_materno: {
-			comparable: Boolean(input.apellido_materno && candidate.apellido_materno),
-			value: name_similarity("apellido_materno", candidate.apellido_materno)
+			comparable: !!(e.apellido_materno && t.apellido_materno),
+			value: a("apellido_materno", t.apellido_materno)
 		},
-		fecha_nacimiento: compare_dates(input.fecha_nacimiento, normalize$1(candidate.fecha_nacimiento)),
+		fecha_nacimiento: Sa(e.fecha_nacimiento, J(t.fecha_nacimiento)),
 		padre: {
-			comparable: Boolean(input.padre && candidate.padre),
-			value: similarity(input.padre, normalize$1(candidate.padre))
+			comparable: !!(e.padre && t.padre),
+			value: xa(e.padre, J(t.padre))
 		},
 		madre: {
-			comparable: Boolean(input.madre && candidate.madre),
-			value: similarity(input.madre, normalize$1(candidate.madre))
+			comparable: !!(e.madre && t.madre),
+			value: xa(e.madre, J(t.madre))
 		}
-	};
-	let obtained_points = 0;
-	let possible_points = 0;
-	const matching_labels = [];
-	for (const field of FIELDS) {
-		const result = results[field];
-		if (!result.comparable) continue;
-		possible_points += WEIGHTS[field];
-		obtained_points += WEIGHTS[field] * result.value;
-		if (result.value >= SIMILAR) matching_labels.push(LABELS[field]);
+	}, l = 0, u = 0, d = [];
+	for (let e of _a) {
+		let t = c[e];
+		t.comparable && (u += va[e], l += va[e] * t.value, t.value >= ga && d.push(ya[e]));
 	}
-	const percent = Math.round(obtained_points / possible_points * 100);
-	const names_match = first_name_score >= SIMILAR && father_name_score >= SIMILAR;
-	const different_dni = dni_comparable && !same_dni;
-	let has_independent_data = false;
-	for (const field of [
+	let f = Math.round(l / u * 100), p = o >= ga && s >= ga, m = r && !i, h = !1;
+	for (let e of [
 		"fecha_nacimiento",
 		"padre",
 		"madre"
-	]) if (results[field].comparable && results[field].value >= SIMILAR) has_independent_data = true;
-	if (same_dni && (first_name_score > 0 || father_name_score > 0)) return {
+	]) c[e].comparable && c[e].value >= ga && (h = !0);
+	return i && (o > 0 || s > 0) || p && h && !m ? {
 		nivel: "alta",
-		porcentaje: percent,
-		coincide: matching_labels
-	};
-	if (names_match && has_independent_data && !different_dni) return {
-		nivel: "alta",
-		porcentaje: percent,
-		coincide: matching_labels
-	};
-	if (same_dni || percent >= MIN_PERCENT) return {
+		porcentaje: f,
+		coincide: d
+	} : i || f >= ha ? {
 		nivel: "posible",
-		porcentaje: percent,
-		coincide: matching_labels
-	};
-	return null;
+		porcentaje: f,
+		coincide: d
+	} : null;
 }
-function normalized_values(person) {
+function wa(e) {
 	return {
-		dni: normalize$1(person.dni),
-		nombres: normalize$1(person.nombres),
-		apellido_paterno: normalize$1(person.apellido_paterno),
-		apellido_materno: normalize$1(person.apellido_materno),
-		fecha_nacimiento: normalize$1(person.fecha_nacimiento),
-		padre: normalize$1(person.padre),
-		madre: normalize$1(person.madre)
+		dni: J(e.dni),
+		nombres: J(e.nombres),
+		apellido_paterno: J(e.apellido_paterno),
+		apellido_materno: J(e.apellido_materno),
+		fecha_nacimiento: J(e.fecha_nacimiento),
+		padre: J(e.padre),
+		madre: J(e.madre)
 	};
 }
-function by_relevance(a, b) {
-	const level_difference = Number(b.nivel === "alta") - Number(a.nivel === "alta");
-	if (level_difference !== 0) return level_difference;
-	return b.porcentaje - a.porcentaje;
+function Ta(e, t) {
+	let n = Number(t.nivel === "alta") - Number(e.nivel === "alta");
+	return n === 0 ? t.porcentaje - e.porcentaje : n;
 }
-function find_duplicates(db, type, exclude_sacrament_id, people) {
-	if (!is_sacrament_type(type)) throw new ServiceError("Tipo de sacramento inválido.", 400);
-	const searchable = people.map((person) => ({
-		para: person.para ?? "",
-		values: normalized_values(person)
-	})).filter((person) => person.values.dni || person.values.nombres && person.values.apellido_paterno);
-	if (searchable.length === 0) return {
+function Ea(e, t, n, r) {
+	if (!st(t)) throw new B("Tipo de sacramento inválido.", 400);
+	let i = r.map((e) => ({
+		para: e.para ?? "",
+		values: wa(e)
+	})).filter((e) => e.values.dni || e.values.nombres && e.values.apellido_paterno);
+	if (i.length === 0) return {
 		matches: [],
 		total: 0
 	};
-	const excluded_id = Number.isInteger(exclude_sacrament_id) ? exclude_sacrament_id : 0;
-	const candidates = db.prepare(`SELECT s.id, sub.persona_id, s.libro, s.folio, s.numero, par.nombre AS parroquia_nombre,
+	let a = Number.isInteger(n) ? n : 0, o = e.prepare(`SELECT s.id, sub.persona_id, s.libro, s.folio, s.numero, par.nombre AS parroquia_nombre,
 				pe.dni, pe.nombres, pe.apellido_paterno, pe.apellido_materno, pe.fecha_nacimiento, pe.padre, pe.madre
-			 FROM (${people_of(type)}) sub
+			 FROM (${ut(t)}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
 			 JOIN parroquias par ON par.id = s.parroquia_id
-			 WHERE s.estado = 'vigente' AND s.id <> ?`).all(excluded_id);
-	const old_names = /* @__PURE__ */ new Map();
-	const corrections = db.prepare(`SELECT persona_id, campo_cambio, valor_anterior FROM cambios_persona
-			 WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_anterior IS NOT NULL
-			   AND estado = 'aprobado'`).all();
-	for (const correction of corrections) {
-		const key = `${correction.persona_id}:${correction.campo_cambio}`;
-		const list = old_names.get(key) ?? [];
-		list.push(normalize$1(correction.valor_anterior));
-		old_names.set(key, list);
+			 WHERE s.estado = 'vigente' AND s.id <> ?`).all(a), s = /* @__PURE__ */ new Map(), c = e.prepare("SELECT persona_id, campo_cambio, valor_anterior FROM cambios_persona\n			 WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_anterior IS NOT NULL\n			   AND estado = 'aprobado'").all();
+	for (let e of c) {
+		let t = `${e.persona_id}:${e.campo_cambio}`, n = s.get(t) ?? [];
+		n.push(J(e.valor_anterior)), s.set(t, n);
 	}
-	let total = 0;
-	const found = [];
-	for (const person of searchable) {
-		const matches = [];
-		for (const candidate of candidates) {
-			const result = compare(person.values, candidate, old_names);
-			if (!result) continue;
-			matches.push({
-				sacramento_id: candidate.id,
-				para: person.para,
-				nivel: result.nivel,
-				porcentaje: result.porcentaje,
-				coincide: result.coincide,
-				nombre_completo: full_name$1(candidate.nombres, candidate.apellido_paterno, candidate.apellido_materno),
-				parroquia_nombre: candidate.parroquia_nombre,
-				libro: candidate.libro,
-				folio: candidate.folio,
-				numero: candidate.numero
+	let l = 0, u = [];
+	for (let e of i) {
+		let t = [];
+		for (let n of o) {
+			let r = Ca(e.values, n, s);
+			r && t.push({
+				sacramento_id: n.id,
+				para: e.para,
+				nivel: r.nivel,
+				porcentaje: r.porcentaje,
+				coincide: r.coincide,
+				nombre_completo: we(n.nombres, n.apellido_paterno, n.apellido_materno),
+				parroquia_nombre: n.parroquia_nombre,
+				libro: n.libro,
+				folio: n.folio,
+				numero: n.numero
 			});
 		}
-		total += matches.length;
-		matches.sort(by_relevance);
-		found.push(...matches.slice(0, MAX_MATCHES_PER_PERSON));
+		l += t.length, t.sort(Ta), u.push(...t.slice(0, ma));
 	}
-	found.sort(by_relevance);
-	return {
-		matches: found,
-		total
+	return u.sort(Ta), {
+		matches: u,
+		total: l
 	};
 }
-var duplicate_routes = { "sacraments.findDuplicates": (payload, { db }) => {
-	return find_duplicates(db, payload.tipo, payload.excluir_sacramento_id, payload.personas);
-} };
-//#endregion
-//#region node_modules/worker-f/lib/stringifyFunctionReferences.js
-var JAVASCRIPT_VARIABLE_NAME_REG_EXP = /^[$_\u0080-\uFFFFa-zA-Z][$_\u0080-\uFFFF\w]*$/;
-/**
-* In a given list of dependencies, it stringifies any functions to their javascript source code strings.
-* It could've used simple `.toString()` if it wasn't for "minification" process which eventually renames
-* all functions to random shortened names. Why do function names matter? Because the worker will have to
-* call those functions by name rather than by reference, because a worker can't share any runtime code
-* with the parent thread, hence the stringification to javascript source code.
-*
-* Alternatively, the code that is executed inside a worker could abstain from using global function references
-* and instead reference any functions from some kind of a `context` object. In that case, minifiers
-* won't touch the property names in that `context` object. The "pros" would be not having to use this "magic" function.
-* The "cons" would be having to prepend the `context.` prefix to every function being called,
-* and if any of those functions happen to call another functions, those would have to be called
-* from the `context` too, which could quickly turn the code into a context-passing "spaghetti" mess.
-* Not to mention having to define the `Context` type in case of TypeScript.
-* But otherwise, both approaches would work and there's no other difference between them.
-*
-* @param {function} getDependencies — Returns an array of dependencies. This function must adhere to a strict form: it has to be a "closure" that returns an array of named variables. The restriction is because the exact variable names have to be known from the stringified form of this function.
-* @returns {object} — An object of shape: `{ functions, values }` where `functions` contains the source code of any functions by their actual name, and `values` contains any "regular values" — strings, numbers, objects, arrays, etc — in their original (non-stringified) form.
-*/
-function stringifyFunctionReferences(getDependencies) {
-	const functions = {};
-	const variables = {};
-	const references = getDependencies();
-	const getReferencesSourceCode = getDependencies.toString();
-	const referencedNames = getReferencesSourceCode.slice(getReferencesSourceCode.indexOf("[") + 1, getReferencesSourceCode.lastIndexOf("]")).split(",").map((_) => _.trim());
-	for (const name of referencedNames) if (!JAVASCRIPT_VARIABLE_NAME_REG_EXP.test(name)) throw new Error(`Invalid dependency name: ${name}`);
-	let i = 0;
-	while (i < references.length) {
-		let name = referencedNames[i];
-		let value = references[i];
-		if (typeof value === "function") functions[name] = getFunctionSourceCode(value, name);
-		else variables[name] = value;
-		i++;
+var Da = { "sacraments.findDuplicates": (e, { db: t }) => Ea(t, e.tipo, e.excluir_sacramento_id, e.personas) }, Oa = /^[$_\u0080-\uFFFFa-zA-Z][$_\u0080-\uFFFF\w]*$/;
+function ka(e) {
+	let t = {}, n = {}, r = e(), i = e.toString(), a = i.slice(i.indexOf("[") + 1, i.lastIndexOf("]")).split(",").map((e) => e.trim());
+	for (let e of a) if (!Oa.test(e)) throw Error(`Invalid dependency name: ${e}`);
+	let o = 0;
+	for (; o < r.length;) {
+		let e = a[o], i = r[o];
+		typeof i == "function" ? t[e] = Aa(i, e) : n[e] = i, o++;
 	}
 	return {
-		functions,
-		variables
+		functions: t,
+		variables: n
 	};
 }
-/**
-* Returns the source code for a function or a class.
-*
-* For non-"native" classes, the end result will depend on the name of the class,
-* which should be passed as a second argument for that reason. Specifically,
-* the name of the class will be used when defining its `prototype` properties.
-*
-* "Native" functions or classes will be stringified to their "native" global name.
-* For example, a reference to `ArrayBuffer` will be stringified as `"ArrayBuffer"`.
-*
-* @param {function} func
-* @param {string} name
-* @returns {string}
-*/
-function getFunctionSourceCode(func, name) {
-	const funcSourceCode = func.toString();
-	if (func.prototype) {
-		if (funcSourceCode.indexOf("[native code]") >= 0) {
-			const funcNameStartsAt = funcSourceCode.indexOf(" ", 8) + 1;
-			const funcNameEndsBefore = funcSourceCode.indexOf("(", funcNameStartsAt);
-			return funcSourceCode.slice(funcNameStartsAt, funcNameEndsBefore);
-		} else {
-			let code = funcSourceCode;
-			for (const key in func.prototype) code += ";" + name + ".prototype." + key + "=" + func.prototype[key].toString();
-			return code;
+function Aa(e, t) {
+	let n = e.toString();
+	if (e.prototype) {
+		if (n.indexOf("[native code]") >= 0) {
+			let e = n.indexOf(" ", 8) + 1, t = n.indexOf("(", e);
+			return n.slice(e, t);
 		}
-	} else return funcSourceCode;
+		{
+			let r = n;
+			for (let n in e.prototype) r += ";" + t + ".prototype." + n + "=" + e.prototype[n].toString();
+			return r;
+		}
+	}
+	return n;
 }
 //#endregion
 //#region node_modules/worker-f/lib/createWorker.js
-/**
-* Creates a worker.
-*
-* @example
-* ```js
-* // When running in a web browser.
-* import createWorkerInBrowser from './createWorkerInBrowser.ts'
-*
-* // Create a worker.
-* const workerFn = createWorkerFn(
-* 	// Creates a worker in a given environment.
-* 	createWorkerInBrowser,
-*
-* 	// (optional) Filters `transferList` argument.
-* 	undefined,
-*
-* 	// Any "outside" dependencies that're referenced in the function (below).
-* 	[() => [outsideVar1, outsideVar2, func1, func2]],
-*
-* 	// Returns a function in the worker that processes input data.
-* 	(respond) => {
-*  	return (data) => {
-* 			// Process the data (perform some kind of calculation).
-* 			const result = processData(data)
-* 			// Post the result of the calculation back to the main thread.
-* 			respond(result) // (optional) add `transferList` argument.
-* 		}
-*  },
-*
-* 	// A function in the main thread that will be called every time
-* 	// when the worker has finished processing the data
-* 	// (or threw an error while doing that).
-* 	(error, result) => {
-* 		if (error) {
-* 			workerFn.stop()
-* 			throw error
-* 		}
-* 		// If no more data will be passed to the worker, it should be terminated.
-* 		workerFn.stop()
-* 		console.log(result)
-* 	}
-* )
-*
-* workerFn.start()
-*
-* // Post a message with some data to the worker
-* // so that it starts processing the data
-* // and later posts a message back to the main thread
-* // with the result of the calculation.
-* workerFn.input(inputData) // (optional) add `transferList` argument.
-* ```
-*
-* @param {function} createWorkerInEnvironment — Creates a worker in a given environment. The worker must call globally-available `onMessage(data)` function every time it receives a message, and it must define a `var postMessage = (data) => void` function that posts a message to the parent (main) thread.
-* @param {function} createInputHandler — A "creator" that creates a function that will be called with message data every time a message is sent to this worker. The "creator" function receives a single argument — a function that posts data back to the main thread, with two arguments: `outputData` and (optional) `transferList`.
-* @param {function} onError — This function will be called every time when there was an error while processing an incoming message. It would be logical to call `worker.terminate()` inside this function.
-* @param {function} onOutput — This function will be called every time when done processing an incoming message.
-* @param {function} getFromCache — Could be used to add caching. Has no arguments. Returns the cached value.
-* @param {function} setInCache — Could be used to add caching. Receives the value to cache as an argument. Doesn't return anything.
-* @returns {Worker} — An object with methods: `start(getDependenciesFunctionOrArrayOfGetDependenciesFunctions)`, `stop()`, `input(data, [transferList])`. Calling `stop()` requests termination of the worker. Calling `stop()` multiple times is safe and will not throw any errors.
-*/
-function createWorker(createWorkerInEnvironment, createInputHandler, onError, onOutput, getFromCache, setInCache) {
-	let started = false;
-	let worker;
-	const stop = () => {
-		worker.stop();
-	};
-	const ingest = (data, transferList) => {
+function ja(e, t, n, r, i, a) {
+	let o = !1, s, c = () => {
+		s.stop();
+	}, l = (e, t) => {
 		try {
-			worker.ingest(data, transferList);
-		} catch (error) {
-			stop();
-			throw error;
+			s.ingest(e, t);
+		} catch (e) {
+			throw c(), e;
 		}
 	};
-	const start = (arrayOfGetDependenciesFunctions, dependenciesTransferList) => {
-		if (started) throw new Error("Was started");
-		started = true;
-		const cacheValue = getFromCache();
-		const cachedCodeAndVars = cacheValue && cacheValue._;
-		const codeAndVars = cachedCodeAndVars || getCodeAndVars(createInputHandler, arrayOfGetDependenciesFunctions);
-		if (!cachedCodeAndVars) setInCache({ _: codeAndVars });
-		const [code, vars] = codeAndVars;
-		const getOtherFromCache = () => {
-			const properties = getFromCache();
-			if (properties) return properties.other;
-		};
-		const setOtherInCache = (value) => {
-			setInCache(Object.assign(Object.assign({}, getFromCache()), { other: value }));
-		};
-		worker = createWorkerInEnvironment(code, getOtherFromCache, setOtherInCache, onError, onOutput);
-		if (vars) ingest(vars, dependenciesTransferList);
-	};
 	return {
-		start,
-		stop,
-		ingest
+		start: (c, u) => {
+			if (o) throw Error("Was started");
+			o = !0;
+			let d = i(), f = d && d._, p = f || Na(t, c);
+			f || a({ _: p });
+			let [m, h] = p;
+			s = e(m, () => {
+				let e = i();
+				if (e) return e.other;
+			}, (e) => {
+				a(Object.assign(Object.assign({}, i()), { other: e }));
+			}, n, r), h && l(h, u);
+		},
+		stop: c,
+		ingest: l
 	};
 }
-var JAVASCRIPT_CODE_AFTER_CREATE_INPUT_HANDLER_FUNCTION = ")(postMessage)}";
-function getCodeAndVars(createInputHandler, arrayOfGetDependenciesFunctions) {
-	const [functionDefinitions, vars] = createFunctionsCodeAndVars(arrayOfGetDependenciesFunctions);
-	return [functionDefinitions + ";var onMessage = function(data) {for (var key in data) {self[key] = data[key]}onMessage = (" + createInputHandler.toString() + JAVASCRIPT_CODE_AFTER_CREATE_INPUT_HANDLER_FUNCTION, vars];
+var Ma = ")(postMessage)}";
+function Na(e, t) {
+	let [n, r] = Pa(t);
+	return [n + ";var onMessage = function(data) {for (var key in data) {self[key] = data[key]}onMessage = (" + e.toString() + Ma, r];
 }
-function createFunctionsCodeAndVars(arrayOfGetDependenciesFunctions) {
-	let funcs = {};
-	let vars = {};
-	for (const getDependencies of arrayOfGetDependenciesFunctions) {
-		const { functions, variables } = stringifyFunctionReferences(getDependencies);
-		funcs = Object.assign(Object.assign({}, funcs), functions);
-		vars = Object.assign(Object.assign({}, vars), variables);
+function Pa(e) {
+	let t = {}, n = {};
+	for (let r of e) {
+		let { functions: e, variables: i } = ka(r);
+		t = Object.assign(Object.assign({}, t), e), n = Object.assign(Object.assign({}, n), i);
 	}
-	return [Object.keys(funcs).map((functionName) => {
-		return functionName + "=" + funcs[functionName];
-	}).join(";"), vars];
+	return [Object.keys(t).map((e) => e + "=" + t[e]).join(";"), n];
 }
 //#endregion
 //#region node_modules/worker-f/lib/createWorkerFunctionOrStream.js
-function createWorkerFunctionOrStream(createWorkerInEnvironment, fnOrAlias, createMethods, createInputHandler, handleError, handleOutput) {
-	let started = false;
-	let stopped = false;
-	let getDependenciesFunctions = [];
-	const dependenciesTransferList = void 0;
-	let inputTransferList = () => [];
-	let outputTransferList = () => [];
-	let alias = void 0;
-	let cacheValue = void 0;
-	const getFromCache = (cacheKey) => {
-		return CACHE[cacheKey];
-	};
-	const setInCache = (cacheKey, value) => {
-		CACHE[cacheKey] = value;
-	};
-	const mustHaveStarted = () => {
-		if (!started) throw new Error("Not started");
-	};
-	const mustNotHaveStarted = () => {
-		if (started) throw new Error("Was started");
-	};
-	const mustNotHaveStopped = () => {
-		if (stopped) throw new Error("Was stopped");
-	};
-	const mustNotHaveAlias = () => {
-		if (alias) throw new Error("Has alias");
-	};
-	const argumentMustBeFunction = (arg) => {
-		if (typeof arg !== "function") throw new TypeError("Argument must be a function");
-	};
-	let fn;
-	if (typeof fnOrAlias === "string") {
-		alias = fnOrAlias;
-		cacheValue = getFromCache(alias);
-		if (!cacheValue || !cacheValue.$) throw new Error("Not found");
-		fn = cacheValue.$[0];
-		getDependenciesFunctions = cacheValue.$[1];
-		inputTransferList = cacheValue.$[2];
-		outputTransferList = cacheValue.$[3];
-		cacheValue.$[4];
-	} else fn = fnOrAlias;
-	argumentMustBeFunction(fn);
-	let worker;
-	/**
-	* Adds external dependencies.
-	* These dependencies must not change after the function is started.
-	*
-	* @param {function} getDependencies — A "closure" function that returns an array of dependencies — global variables or functions — that will be used in this worker. If some dependencies get overlooked, the worker will throw "[name] is not defined".
-	*/
-	const addDependencies_ = (getDependencies) => {
-		mustNotHaveStopped();
-		mustNotHaveStarted();
-		argumentMustBeFunction(getDependencies);
-		getDependenciesFunctions.push(getDependencies);
-	};
-	const start = () => {
-		mustNotHaveStopped();
-		mustNotHaveStarted();
-		const getInitialDependencies = () => [
-			fn,
-			outputTransferList,
-			createInputHandler
-		];
-		addDependencies_(getInitialDependencies);
-		started = true;
-		worker.start(getDependenciesFunctions, dependenciesTransferList);
-	};
-	const stop = () => {
-		stopped = true;
-		worker.stop();
-	};
-	const sendToWorker = (inputArgs) => {
-		worker.ingest([Date.now(), inputArgs], inputTransferList(...inputArgs));
-	};
-	let numberOrUndefined;
-	const workerFn = Object.assign({
-		inputLatency: numberOrUndefined,
-		outputLatency: numberOrUndefined,
-		/**
-		* Adds external dependencies.
-		* These dependencies must not change after the function is started.
-		*
-		* @param {function} getDependencies — A "closure" function that returns an array of dependencies — global variables or functions — that will be used in this worker. If some dependencies get overlooked, the worker will throw "[name] is not defined".
-		*/
-		addDependencies(getDependencies) {
-			mustNotHaveAlias();
-			addDependencies_(getDependencies);
+function Fa(e, t, n, r, i, a) {
+	let o = !1, s = !1, c = [], l = () => [], u = () => [], d, f, p = (e) => Ia[e], m = (e, t) => {
+		Ia[e] = t;
+	}, h = () => {
+		if (!o) throw Error("Not started");
+	}, g = () => {
+		if (o) throw Error("Was started");
+	}, _ = () => {
+		if (s) throw Error("Was stopped");
+	}, v = () => {
+		if (d) throw Error("Has alias");
+	}, y = (e) => {
+		if (typeof e != "function") throw TypeError("Argument must be a function");
+	}, b;
+	if (typeof t == "string") {
+		if (d = t, f = p(d), !f || !f.$) throw Error("Not found");
+		b = f.$[0], c = f.$[1], l = f.$[2], u = f.$[3], f.$[4];
+	} else b = t;
+	y(b);
+	let x, S = (e) => {
+		_(), g(), y(e), c.push(e);
+	}, C = () => {
+		_(), g(), S(() => [
+			b,
+			u,
+			r
+		]), o = !0, x.start(c, void 0);
+	}, w = () => {
+		s = !0, x.stop();
+	}, ee = (e) => {
+		x.ingest([Date.now(), e], l(...e));
+	}, T, E = Object.assign({
+		inputLatency: T,
+		outputLatency: T,
+		addDependencies(e) {
+			v(), S(e);
 		},
-		inputTransferList: (fn) => {
-			mustNotHaveStopped();
-			mustNotHaveStarted();
-			mustNotHaveAlias();
-			argumentMustBeFunction(fn);
-			inputTransferList = fn;
+		inputTransferList: (e) => {
+			_(), g(), v(), y(e), l = e;
 		},
-		outputTransferList: (fn) => {
-			mustNotHaveStopped();
-			mustNotHaveStarted();
-			mustNotHaveAlias();
-			argumentMustBeFunction(fn);
-			outputTransferList = fn;
+		outputTransferList: (e) => {
+			_(), g(), v(), y(e), u = e;
 		},
-		alias(alias_) {
-			mustNotHaveStopped();
-			mustNotHaveStarted();
-			mustNotHaveAlias();
-			alias = alias_;
-			setInCache(alias, { $: [
-				fn,
-				getDependenciesFunctions,
-				inputTransferList,
-				outputTransferList
+		alias(e) {
+			_(), g(), v(), d = e, m(d, { $: [
+				b,
+				c,
+				l,
+				u
 			] });
 		},
-		start,
-		stop
-	}, createMethods(start, stop, started, stopped, sendToWorker, mustHaveStarted, mustNotHaveStarted, mustNotHaveStopped));
-	const getOtherFromCache = () => {
-		if (alias) {
-			const properties = getFromCache(alias);
-			if (properties) return properties.other;
-		}
-	};
-	const setOtherInCache = (value) => {
-		if (alias) setInCache(alias, Object.assign(Object.assign({}, getFromCache(alias)), { other: value }));
-	};
-	worker = createWorker(createWorkerInEnvironment, (sendOutput_) => {
-		let inputSentTimestamp = -1;
-		let inputReceivedTimestamp = -1;
-		const sendOutput = (output) => {
-			sendOutput_([
-				inputSentTimestamp,
-				inputReceivedTimestamp,
+		start: C,
+		stop: w
+	}, n(C, w, o, s, ee, h, g, _));
+	return x = ja(e, (e) => {
+		let t = -1, n = -1, i = r(b, (r) => {
+			e([
+				t,
+				n,
 				Date.now(),
-				output
-			], outputTransferList(output));
-		};
-		const inputHandler = createInputHandler(fn, sendOutput);
-		return ([inputSentAt, input]) => {
-			inputSentTimestamp = inputSentAt;
-			inputReceivedTimestamp = Date.now();
-			return inputHandler(input);
-		};
-	}, (error) => {
-		if (!stopped) handleError(error);
-	}, ([inputSentTimestamp, inputReceivedTimestamp, outputTimestamp, output]) => {
-		if (!stopped) {
-			if (inputSentTimestamp !== -1) workerFn.inputLatency = inputReceivedTimestamp - inputSentTimestamp;
-			workerFn.outputLatency = Date.now() - outputTimestamp;
-			handleOutput(output);
+				r
+			], u(r));
+		});
+		return ([e, r]) => (t = e, n = Date.now(), i(r));
+	}, (e) => {
+		s || i(e);
+	}, ([e, t, n, r]) => {
+		s || (e !== -1 && (E.inputLatency = t - e), E.outputLatency = Date.now() - n, a(r));
+	}, () => {
+		if (d) {
+			let e = p(d);
+			if (e) return e.other;
 		}
-	}, getOtherFromCache, setOtherInCache);
-	return workerFn;
+	}, (e) => {
+		d && m(d, Object.assign(Object.assign({}, p(d)), { other: e }));
+	}), E;
 }
-var CACHE = {};
+var Ia = {};
 //#endregion
 //#region node_modules/worker-f/lib/createWorkerFunction.js
-function createWorkerFunction(createWorkerInEnvironment, fnOrAlias) {
-	let resolveCall = void 0;
-	let rejectCall = void 0;
-	const createMethods = (start, stop, started, stopped, sendToWorker, mustHaveStarted, mustNotHaveStarted, mustNotHaveStopped) => ({
-		call(...args) {
-			mustNotHaveStopped();
-			mustHaveStarted();
-			if (resolveCall || rejectCall) throw new Error("Previous call not finished");
-			return new Promise((resolve, reject) => {
-				resolveCall = resolve;
-				rejectCall = reject;
-				sendToWorker(args);
+function La(e, t) {
+	let n, r;
+	return Fa(e, t, (e, t, i, a, o, s, c, l) => ({
+		call(...e) {
+			if (l(), s(), n || r) throw Error("Previous call not finished");
+			return new Promise((t, i) => {
+				n = t, r = i, o(e);
 			});
 		},
-		callOnce(...args) {
-			start();
-			return this.call(...args).finally(stop);
+		callOnce(...n) {
+			return e(), this.call(...n).finally(t);
 		}
+	}), (e, t) => {
+		let n = (e) => typeof e == "object" && !!e && typeof e.then == "function";
+		return (r) => {
+			let i = e(...r);
+			n(i) ? i.then(t) : t(i);
+		};
+	}, (e) => {
+		if (r) r(e), n = void 0, r = void 0;
+		else throw Error("`reject` callback not found");
+	}, (e) => {
+		if (n) n(e), n = void 0, r = void 0;
+		else throw Error("`resolve` callback not found");
 	});
-	const createInputHandler = (fn, emit) => {
-		const isPromise = (anything) => {
-			return anything !== null && typeof anything === "object" && typeof anything.then === "function";
-		};
-		return (args) => {
-			const result = fn(...args);
-			if (isPromise(result)) result.then(emit);
-			else emit(result);
-		};
-	};
-	const handleError = (error) => {
-		if (rejectCall) {
-			rejectCall(error);
-			resolveCall = void 0;
-			rejectCall = void 0;
-		} else throw new Error("`reject` callback not found");
-	};
-	const handleOutput = (output) => {
-		if (resolveCall) {
-			resolveCall(output);
-			resolveCall = void 0;
-			rejectCall = void 0;
-		} else throw new Error("`resolve` callback not found");
-	};
-	return createWorkerFunctionOrStream(createWorkerInEnvironment, fnOrAlias, createMethods, createInputHandler, handleError, handleOutput);
 }
 //#endregion
 //#region node_modules/worker-f/lib/environment/createWorkerInNode.js
-/**
-* Creates a worker in Node.js.
-*
-* Defines a `var postMessage = (data, [transferList]) => ...` function.
-* Requires a `var onMessage = (data) => ...` function to be defined.
-*
-* @param {string} javascriptCode
-* @param {function} getFromCache — Could be used to add caching. Has no arguments. Returns the cached value.
-* @param {function} setInCache — Could be used to add caching. Receives the value to cache as an argument. Doesn't return anything.
-* @param {function} onError — This function will be called every time when there was an error while processing an incoming message. It would be logical to call `worker.terminate()` inside this function.
-* @param {function} onOutput — This function will be called every time when done processing an incoming message.
-* @returns {Worker} — An object with methods: `ingest(data, transferList)`, `stop()`.
-*/
-function createWorkerInNode(javascriptCode, getFromCache, setInCache, onError, onOutput) {
-	let requestedTermination = false;
-	let processedError = false;
-	let code = getFromCache();
-	if (!code) {
-		code = createWorkerCode(javascriptCode);
-		setInCache(code);
-	}
-	const worker = new Worker(code, { eval: true }).on("error", (error) => {
-		processedError = true;
-		onError(error);
-	}).on("message", (message) => {
-		onOutput(message);
-	}).on("exit", (exitCode) => {
-		if (exitCode && !processedError && !requestedTermination) onError(/* @__PURE__ */ new Error("Exited with code " + exitCode));
+function Ra(e, t, n, r, i) {
+	let a = !1, o = !1, s = t();
+	s || (s = za(e), n(s));
+	let c = new D(s, { eval: !0 }).on("error", (e) => {
+		o = !0, r(e);
+	}).on("message", (e) => {
+		i(e);
+	}).on("exit", (e) => {
+		e && !o && !a && r(/* @__PURE__ */ Error("Exited with code " + e));
 	});
-	const stop = () => {
-		requestedTermination = true;
-		Worker.prototype.terminate.call(worker);
-	};
 	return {
-		stop,
-		ingest: worker.postMessage.bind(worker)
+		stop: () => {
+			a = !0, D.prototype.terminate.call(c);
+		},
+		ingest: c.postMessage.bind(c)
 	};
 }
-function createWorkerCode(javascriptCode) {
-	return javascriptCode + ";" + JAVASCRIPT_CODE_ADDITIONAL;
+function za(e) {
+	return e + ";" + Ba;
 }
-var JAVASCRIPT_CODE_ADDITIONAL = "var workerThreads = require(\"worker_threads\");workerThreads.parentPort.on(\"message\", function(data) {onMessage(data)});var postMessage = function(data, transferList) {workerThreads.parentPort.postMessage(data, transferList)};self = global";
+var Ba = "var workerThreads = require(\"worker_threads\");workerThreads.parentPort.on(\"message\", function(data) {onMessage(data)});var postMessage = function(data, transferList) {workerThreads.parentPort.postMessage(data, transferList)};self = global";
 //#endregion
 //#region node_modules/worker-f/lib/export/node/createWorkerFunctionInNode.js
-function createWorkerFunctionInNode(fnOrAlias) {
-	return createWorkerFunction(createWorkerInNode, fnOrAlias);
+function Va(e) {
+	return La(Ra, e);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/saxen/parser.js
-function _typeof$8(o) {
+function Ha(e) {
 	"@babel/helpers - typeof";
-	return _typeof$8 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$8(o);
+	return Ha = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, Ha(e);
 }
-function Parser_(options) {
-	var fromCharCode = String.fromCharCode;
-	var hasOwnProperty = Object.prototype.hasOwnProperty;
-	var ENTITY_PATTERN = /&#(\d+);|&#x([0-9a-f]+);|&(\w+);/gi;
-	var ENTITY_MAPPING = {
-		"amp": "&",
-		"apos": "'",
-		"gt": ">",
-		"lt": "<",
-		"quot": "\""
+function Ua(e) {
+	var t = String.fromCharCode, n = Object.prototype.hasOwnProperty, r = /&#(\d+);|&#x([0-9a-f]+);|&(\w+);/gi, i = {
+		amp: "&",
+		apos: "'",
+		gt: ">",
+		lt: "<",
+		quot: "\""
 	};
-	Object.keys(ENTITY_MAPPING).forEach(function(k) {
-		ENTITY_MAPPING[k.toUpperCase()] = ENTITY_MAPPING[k];
+	Object.keys(i).forEach(function(e) {
+		i[e.toUpperCase()] = i[e];
 	});
-	function replaceEntities(_, d, x, z) {
-		if (z) {
-			if (hasOwnProperty.call(ENTITY_MAPPING, z)) return ENTITY_MAPPING[z];
-			else return "&" + z + ";";
-		}
-		if (d) return fromCharCode(d);
-		return fromCharCode(parseInt(x, 16));
+	function a(e, r, a, o) {
+		return o ? n.call(i, o) ? i[o] : "&" + o + ";" : t(r || parseInt(a, 16));
 	}
-	/**
-	* A basic entity decoder that can decode a minimal
-	* sub-set of reserved names (&amp;) as well as
-	* hex (&#xaaf;) and decimal (&#1231;) encoded characters.
-	*
-	* @param {string} s
-	*
-	* @return {string} decoded string
-	*/
-	function decodeEntities(s) {
-		if (s.length > 3 && s.indexOf("&") !== -1) return s.replace(ENTITY_PATTERN, replaceEntities);
-		return s;
+	function o(e) {
+		return e.length > 3 && e.indexOf("&") !== -1 ? e.replace(r, a) : e;
 	}
-	var NON_WHITESPACE_OUTSIDE_ROOT_NODE = "non-whitespace outside of root node";
-	function error(msg) {
-		return new Error(msg);
+	var s = "non-whitespace outside of root node";
+	function c(e) {
+		return Error(e);
 	}
-	function missingNamespaceForPrefix(prefix) {
-		return "missing namespace for prefix <" + prefix + ">";
+	function l(e) {
+		return "missing namespace for prefix <" + e + ">";
 	}
-	function getter(getFn) {
+	function u(e) {
 		return {
-			"get": getFn,
-			"enumerable": true
+			get: e,
+			enumerable: !0
 		};
 	}
-	function cloneNsMatrix(nsMatrix) {
-		var clone = {}, key;
-		for (key in nsMatrix) clone[key] = nsMatrix[key];
-		return clone;
+	function d(e) {
+		var t = {}, n;
+		for (n in e) t[n] = e[n];
+		return t;
 	}
-	var NAME_CACHE = Symbol("nameCache");
-	function uriPrefix(prefix) {
-		return prefix + "$uri";
+	var f = Symbol("nameCache");
+	function p(e) {
+		return e + "$uri";
 	}
-	function buildNsMatrix(nsUriToPrefix) {
-		var nsMatrix = {}, uri, prefix;
-		for (uri in nsUriToPrefix) {
-			prefix = nsUriToPrefix[uri];
-			nsMatrix[prefix] = prefix;
-			nsMatrix[uriPrefix(prefix)] = uri;
-		}
-		return nsMatrix;
+	function m(e) {
+		var t = {}, n, r;
+		for (n in e) r = e[n], t[r] = r, t[p(r)] = n;
+		return t;
 	}
-	function noopGetContext() {
+	function h() {
 		return {
 			line: 0,
 			column: 0
 		};
 	}
-	function throwFunc(err) {
-		throw err;
+	function g(e) {
+		throw e;
 	}
-	/**
-	* Creates a new parser with the given options.
-	*
-	* @constructor
-	*
-	* @param  {!Object<string, ?>=} options
-	*/
-	function Parser(options) {
-		if (!this) return new Parser(options);
-		var proxy = options && options["proxy"];
-		var onText, onOpenTag, onCloseTag, onCDATA, onError = throwFunc, onWarning, onComment, onQuestion, onAttention;
-		var getContext = noopGetContext;
-		/**
-		* Are we currently consuming a chunked stream of XML,
-		* i.e. is a `write` call in progress that may be followed
-		* by more chunks?
-		*
-		* @type {boolean}
-		*/
-		var streaming = false;
-		/**
-		* Did we already encounter the root tag?
-		*
-		* Persisted across `write` calls so we can detect a missing
-		* start tag once the stream ends.
-		*
-		* @type {boolean}
-		*/
-		var rootTagFound = false;
-		/**
-		* Not yet parsed remainder of the previously written chunk,
-		* i.e. an incomplete token that awaits more input.
-		*
-		* @type {string}
-		*/
-		var leftoverXml = "";
-		/**
-		* Do we need to parse the current elements attributes for namespaces?
-		*
-		* @type {boolean}
-		*/
-		var maybeNS = false;
-		/**
-		* Do we process namespaces at all?
-		*
-		* @type {boolean}
-		*/
-		var isNamespace = false;
-		/**
-		* The caught error returned on parse end
-		*
-		* @type {Error}
-		*/
-		var returnError = null;
-		/**
-		* Should we stop parsing?
-		*
-		* @type {boolean}
-		*/
-		var parseStop = false;
-		/**
-		* Namespace + node state shared across (streamed) parse runs.
-		*/
-		var nsMatrixStack, nsMatrix, nodeStack;
-		/**
-		* A map of { uri: prefix } used by the parser.
-		*
-		* This map will ensure we can normalize prefixes during processing;
-		* for each uri, only one prefix will be exposed to the handlers.
-		*
-		* @type {!Object<string, string>}}
-		*/
-		var nsUriToPrefix;
-		/**
-		* Handle parse error.
-		*
-		* @param  {string|Error} err
-		*/
-		function handleError(err) {
-			if (!(err instanceof Error)) err = error(err);
-			returnError = err;
-			onError(err, getContext);
+	function _(e) {
+		if (!this) return new _(e);
+		var t = e && e.proxy, n, r, i, a, v = g, y, b, x, S, C = h, w = !1, ee = !1, T = "", E = !1, D = !1, O = null, k = !1, te, A, ne, re;
+		function j(e) {
+			e instanceof Error || (e = c(e)), O = e, v(e, C);
 		}
-		/**
-		* Handle parse error.
-		*
-		* @param  {string|Error} err
-		*/
-		function handleWarning(err) {
-			if (!onWarning) return;
-			if (!(err instanceof Error)) err = error(err);
-			onWarning(err, getContext);
+		function M(e) {
+			y && (e instanceof Error || (e = c(e)), y(e, C));
 		}
-		/**
-		* Register parse listener.
-		*
-		* @param  {string}   name
-		* @param  {Function} cb
-		*
-		* @return {Parser}
-		*/
-		this["on"] = function(name, cb) {
-			if (typeof cb !== "function") throw error("required args <name, cb>");
-			switch (name) {
+		this.on = function(e, t) {
+			if (typeof t != "function") throw c("required args <name, cb>");
+			switch (e) {
 				case "openTag":
-					onOpenTag = cb;
+					r = t;
 					break;
 				case "text":
-					onText = cb;
+					n = t;
 					break;
 				case "closeTag":
-					onCloseTag = cb;
+					i = t;
 					break;
 				case "error":
-					onError = cb;
+					v = t;
 					break;
 				case "warn":
-					onWarning = cb;
+					y = t;
 					break;
 				case "cdata":
-					onCDATA = cb;
+					a = t;
 					break;
 				case "attention":
-					onAttention = cb;
+					S = t;
 					break;
 				case "question":
-					onQuestion = cb;
+					x = t;
 					break;
 				case "comment":
-					onComment = cb;
+					b = t;
 					break;
-				default: throw error("unsupported event: " + name);
+				default: throw c("unsupported event: " + e);
 			}
 			return this;
+		}, this.ns = function(e) {
+			if (e === void 0 && (e = {}), Ha(e) !== "object") throw c("required args <nsMap={}>");
+			var t = {}, n;
+			for (n in e) t[n] = e[n];
+			return D = !0, re = t, this;
 		};
-		/**
-		* Set the namespace to prefix mapping.
-		*
-		* @example
-		*
-		* parser.ns({
-		*   'http://foo': 'foo',
-		*   'http://bar': 'bar'
-		* });
-		*
-		* @param  {!Object<string, string>} nsMap
-		*
-		* @return {Parser}
-		*/
-		this["ns"] = function(nsMap) {
-			if (typeof nsMap === "undefined") nsMap = {};
-			if (_typeof$8(nsMap) !== "object") throw error("required args <nsMap={}>");
-			var _nsUriToPrefix = {}, k;
-			for (k in nsMap) _nsUriToPrefix[k] = nsMap[k];
-			isNamespace = true;
-			nsUriToPrefix = _nsUriToPrefix;
-			return this;
-		};
-		/**
-		* Reset the parser state before a (streamed) parse run.
-		*/
-		function resetState() {
-			nsMatrixStack = isNamespace ? [] : null;
-			nsMatrix = isNamespace ? buildNsMatrix(nsUriToPrefix) : null;
-			nodeStack = [];
-			getContext = noopGetContext;
-			parseStop = false;
-			returnError = null;
-			rootTagFound = false;
-			leftoverXml = "";
+		function ie() {
+			te = D ? [] : null, A = D ? m(re) : null, ne = [], C = h, k = !1, O = null, ee = !1, T = "";
 		}
-		/**
-		* Parse a complete xml string.
-		*
-		* @param  {string} xml
-		*
-		* @return {Error} returnError, if not thrown
-		*/
-		this["parse"] = function(xml) {
-			if (typeof xml !== "string") throw error("required args <xml=string>");
-			if (streaming) throw error("parse during stream; call end() first");
-			resetState();
-			parse(xml);
-			getContext = noopGetContext;
-			parseStop = false;
-			return returnError;
+		this.parse = function(e) {
+			if (typeof e != "string") throw c("required args <xml=string>");
+			if (w) throw c("parse during stream; call end() first");
+			return ie(), N(e), C = h, k = !1, O;
+		}, this.write = function(e) {
+			if (typeof e != "string") throw c("required args <xml=string>");
+			return w ||= (ie(), !0), O || (T = N(T + e, !0) || ""), this;
+		}, this.end = function() {
+			return w || ie(), w = !1, O || N(T), T = "", C = h, k = !1, O;
+		}, this.stop = function() {
+			k = !0;
 		};
-		/**
-		* Write the next chunk of a streamed xml string.
-		*
-		* Parse events are emitted for all complete tokens; an
-		* incomplete trailing token is buffered until the next
-		* `write` or, ultimately, reported as an error on `end`.
-		*
-		* @param  {string} xml
-		*
-		* @return {Parser} self
-		*/
-		this["write"] = function(xml) {
-			if (typeof xml !== "string") throw error("required args <xml=string>");
-			if (!streaming) {
-				resetState();
-				streaming = true;
+		function N(e) {
+			var c = arguments.length > 1 && arguments[1] !== void 0 && arguments[1], m = null, h = null, g, _ = 0, v = !1, y = !1, w = 0, T = 0, O, ie, N, P, F, ae, I, oe, se, L = "", ce = 0, le;
+			function ue(e, t) {
+				var n = e.indexOf(":");
+				if (n === -1) return e;
+				var r = A[e.substring(0, n)];
+				return r ? t === r ? e.substr(n + 1) : r + e.substr(n) : (M(l(e.substring(0, n))), null);
 			}
-			if (!returnError) leftoverXml = parse(leftoverXml + xml, true) || "";
-			return this;
-		};
-		/**
-		* Finish parsing a streamed xml string, i.e. signal that
-		* no more chunks will be written.
-		*
-		* @return {Error} returnError, if not thrown
-		*/
-		this["end"] = function() {
-			if (!streaming) resetState();
-			streaming = false;
-			if (!returnError) parse(leftoverXml);
-			leftoverXml = "";
-			getContext = noopGetContext;
-			parseStop = false;
-			return returnError;
-		};
-		/**
-		* Stop parsing.
-		*/
-		this["stop"] = function() {
-			parseStop = true;
-		};
-		/**
-		* Parse string, invoking configured listeners on element.
-		*
-		* Namespace and node stack state is shared across (streamed)
-		* invocations via the enclosing parser scope.
-		*
-		* Internal note: while `streaming`, an incomplete trailing token
-		* is not treated as an error but returned so `write` can buffer it
-		* and prepend it to the next chunk. This buffered remainder is an
-		* implementation detail of the streaming buffer, not a public API;
-		* outside of that case the return value is `undefined`.
-		*
-		* @param {string} xml
-		* @param {boolean} streaming
-		*
-		* @return {string|undefined} buffered remainder, streaming internal use only
-		*/
-		function parse(xml) {
-			var streaming = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : false;
-			var elNameCache = null, elNameCacheMatrix = null;
-			var _nsMatrix, anonymousNsCount = 0, tagStart = false, tagEnd = false, i = 0, j = 0, x, y, q, w, v, xmlns, elementName, _elementName, elementProxy;
-			var attrsString = "", attrsStart = 0, cachedAttrs;
-			/**
-			* Normalize a namespaced attribute name against the current
-			* namespace matrix.
-			*
-			* @param {string} name
-			* @param {string|boolean} defaultAlias
-			*
-			* @return {string|null} normalized name, or `null` when the prefix
-			*                       has no namespace (a warning is emitted)
-			*/
-			function normalizeAttrName(name, defaultAlias) {
-				var w = name.indexOf(":");
-				if (w === -1) return name;
-				var nsName = nsMatrix[name.substring(0, w)];
-				if (!nsName) {
-					handleWarning(missingNamespaceForPrefix(name.substring(0, w)));
-					return null;
-				}
-				return defaultAlias === nsName ? name.substr(w + 1) : nsName + name.substr(w);
-			}
-			/**
-			* Parse attributes on demand and returns the parsed attributes.
-			*
-			* Return semantics: (1) `false` on attribute parse error,
-			* (2) object hash on extracted attrs.
-			*
-			* @return {boolean|Object}
-			*/
-			function getAttrs() {
-				if (cachedAttrs !== null) return cachedAttrs;
-				var nsUri, nsUriPrefix, defaultAlias = isNamespace && nsMatrix["xmlns"], attrList = isNamespace && maybeNS ? [] : null, i = attrsStart, s = attrsString, l = s.length, hasNewMatrix, newalias, value, alias, name, attrs = {}, seenAttrs = /* @__PURE__ */ new Set(), skipAttr, w, j;
-				parseAttr: for (; i < l; i++) {
-					skipAttr = false;
-					w = s.charCodeAt(i);
-					if (w === 32 || w < 14 && w > 8) continue;
-					if (w < 65 || w > 122 || w > 90 && w < 97) {
-						if (w !== 95 && w !== 58) {
-							handleWarning("illegal first char attribute name");
-							skipAttr = true;
-						}
-					}
-					for (j = i + 1; j < l; j++) {
-						w = s.charCodeAt(j);
-						if (w > 96 && w < 123 || w > 64 && w < 91 || w > 47 && w < 59 || w === 46 || w === 45 || w === 95) continue;
-						if (w === 32 || w < 14 && w > 8) {
-							handleWarning("missing attribute value");
-							i = j;
+			function de() {
+				if (le !== null) return le;
+				var e, t, n = D && A.xmlns, r = D && E ? [] : null, i = ce, a = L, s = a.length, c, l, u, f, m, h = {}, g = /* @__PURE__ */ new Set(), v, y, b;
+				parseAttr: for (; i < s; i++) if (v = !1, y = a.charCodeAt(i), !(y === 32 || y < 14 && y > 8)) {
+					for ((y < 65 || y > 122 || y > 90 && y < 97) && y !== 95 && y !== 58 && (M("illegal first char attribute name"), v = !0), b = i + 1; b < s; b++) if (y = a.charCodeAt(b), !(y > 96 && y < 123 || y > 64 && y < 91 || y > 47 && y < 59 || y === 46 || y === 45 || y === 95)) {
+						if (y === 32 || y < 14 && y > 8) {
+							M("missing attribute value"), i = b;
 							continue parseAttr;
 						}
-						if (w === 61) break;
-						handleWarning("illegal attribute name char");
-						skipAttr = true;
+						if (y === 61) break;
+						M("illegal attribute name char"), v = !0;
 					}
-					name = s.substring(i, j);
-					if (name === "xmlns:xmlns") {
-						handleWarning("illegal declaration of xmlns");
-						skipAttr = true;
-					}
-					w = s.charCodeAt(j + 1);
-					if (w === 34) {
-						j = s.indexOf("\"", i = j + 2);
-						if (j === -1) {
-							j = s.indexOf("'", i);
-							if (j !== -1) {
-								handleWarning("attribute value quote missmatch");
-								skipAttr = true;
-							}
-						}
-					} else if (w === 39) {
-						j = s.indexOf("'", i = j + 2);
-						if (j === -1) {
-							j = s.indexOf("\"", i);
-							if (j !== -1) {
-								handleWarning("attribute value quote missmatch");
-								skipAttr = true;
-							}
-						}
-					} else {
-						handleWarning("missing attribute value quotes");
-						skipAttr = true;
-						for (j = j + 1; j < l; j++) {
-							w = s.charCodeAt(j + 1);
-							if (w === 32 || w < 14 && w > 8) break;
-						}
-					}
-					if (j === -1) {
-						handleWarning("missing closing quotes");
-						j = l;
-						skipAttr = true;
-					}
-					if (!skipAttr) value = s.substring(i, j);
-					i = j;
-					for (; j + 1 < l; j++) {
-						w = s.charCodeAt(j + 1);
-						if (w === 32 || w < 14 && w > 8) break;
-						if (i === j) {
-							handleWarning("illegal character after attribute end");
-							skipAttr = true;
-						}
-					}
-					i = j + 1;
-					if (skipAttr) continue parseAttr;
-					if (seenAttrs.has(name)) {
-						handleWarning("attribute <" + name + "> already defined");
+					if (m = a.substring(i, b), m === "xmlns:xmlns" && (M("illegal declaration of xmlns"), v = !0), y = a.charCodeAt(b + 1), y === 34) b = a.indexOf("\"", i = b + 2), b === -1 && (b = a.indexOf("'", i), b !== -1 && (M("attribute value quote missmatch"), v = !0));
+					else if (y === 39) b = a.indexOf("'", i = b + 2), b === -1 && (b = a.indexOf("\"", i), b !== -1 && (M("attribute value quote missmatch"), v = !0));
+					else for (M("missing attribute value quotes"), v = !0, b += 1; b < s && (y = a.charCodeAt(b + 1), !(y === 32 || y < 14 && y > 8)); b++);
+					for (b === -1 && (M("missing closing quotes"), b = s, v = !0), v || (u = a.substring(i, b)), i = b; b + 1 < s && (y = a.charCodeAt(b + 1), !(y === 32 || y < 14 && y > 8)); b++) i === b && (M("illegal character after attribute end"), v = !0);
+					if (i = b + 1, v) continue parseAttr;
+					if (g.has(m)) {
+						M("attribute <" + m + "> already defined");
 						continue;
 					}
-					seenAttrs.add(name);
-					if (!isNamespace) {
-						attrs[name] = value;
+					if (g.add(m), !D) {
+						h[m] = u;
 						continue;
 					}
-					if (maybeNS) {
-						newalias = name === "xmlns" ? "xmlns" : name.charCodeAt(0) === 120 && name.substr(0, 6) === "xmlns:" ? name.substr(6) : null;
-						if (newalias !== null) {
-							nsUri = decodeEntities(value);
-							nsUriPrefix = uriPrefix(newalias);
-							alias = nsUriToPrefix[nsUri];
-							if (!alias) {
-								if (newalias === "xmlns" || nsUriPrefix in nsMatrix && nsMatrix[nsUriPrefix] !== nsUri) do
-									alias = "ns" + anonymousNsCount++;
-								while (typeof nsMatrix[alias] !== "undefined");
-								else alias = newalias;
-								nsUriToPrefix[nsUri] = alias;
+					if (E) {
+						if (l = m === "xmlns" ? "xmlns" : m.charCodeAt(0) === 120 && m.substr(0, 6) === "xmlns:" ? m.substr(6) : null, l !== null) {
+							if (e = o(u), t = p(l), f = re[e], !f) {
+								if (l === "xmlns" || t in A && A[t] !== e) do
+									f = "ns" + _++;
+								while (A[f] !== void 0);
+								else f = l;
+								re[e] = f;
 							}
-							if (nsMatrix[newalias] !== alias) {
-								if (!hasNewMatrix) {
-									nsMatrix = cloneNsMatrix(nsMatrix);
-									hasNewMatrix = true;
-								}
-								nsMatrix[newalias] = alias;
-								if (newalias === "xmlns") {
-									nsMatrix[uriPrefix(alias)] = nsUri;
-									defaultAlias = alias;
-								}
-								nsMatrix[nsUriPrefix] = nsUri;
-							}
-							attrs[name] = value;
+							A[l] !== f && (c ||= (A = d(A), !0), A[l] = f, l === "xmlns" && (A[p(f)] = e, n = f), A[t] = e), h[m] = u;
 							continue;
 						}
-						attrList.push(name, value);
+						r.push(m, u);
 						continue;
 					}
-					name = normalizeAttrName(name, defaultAlias);
-					if (name === null) continue;
-					attrs[name] = value;
+					m = ue(m, n), m !== null && (h[m] = u);
 				}
-				if (maybeNS) for (i = 0, l = attrList.length; i < l; i++) {
-					name = normalizeAttrName(attrList[i++], defaultAlias);
-					value = attrList[i];
-					if (name === null) continue;
-					attrs[name] = value;
-				}
-				return cachedAttrs = attrs;
+				if (E) for (i = 0, s = r.length; i < s; i++) m = ue(r[i++], n), u = r[i], m !== null && (h[m] = u);
+				return le = h;
 			}
-			/**
-			* Extract the parse context { line, column, part }
-			* from the current parser position.
-			*
-			* @return {Object} parse context
-			*/
-			function getParseContext() {
-				var splitsRe = /(\r\n|\r|\n)/g;
-				var line = 0;
-				var column = 0;
-				var startOfLine = 0;
-				var endOfLine = j;
-				var match;
-				var data;
-				while (i >= startOfLine) {
-					match = splitsRe.exec(xml);
-					if (!match) break;
-					endOfLine = match[0].length + match.index;
-					if (endOfLine > i) break;
-					line += 1;
-					startOfLine = endOfLine;
-				}
-				if (i == -1) {
-					column = endOfLine;
-					data = xml.substring(j);
-				} else if (j === 0) data = xml.substring(j, i);
-				else {
-					column = i - startOfLine;
-					data = j == -1 ? xml.substring(i) : xml.substring(i, j + 1);
-				}
-				return {
-					"data": data,
-					"line": line,
-					"column": column
+			function fe() {
+				for (var t = /(\r\n|\r|\n)/g, n = 0, r = 0, i = 0, a = T, o, s; w >= i && (o = t.exec(e), !(!o || (a = o[0].length + o.index, a > w)));) n += 1, i = a;
+				return w == -1 ? (r = a, s = e.substring(T)) : T === 0 ? s = e.substring(T, w) : (r = w - i, s = T == -1 ? e.substring(w) : e.substring(w, T + 1)), {
+					data: s,
+					line: n,
+					column: r
 				};
 			}
-			getContext = getParseContext;
-			if (proxy) elementProxy = Object.create({}, {
-				"name": getter(function() {
-					return elementName;
+			for (C = fe, t && (se = Object.create({}, {
+				name: u(function() {
+					return I;
 				}),
-				"originalName": getter(function() {
-					return _elementName;
+				originalName: u(function() {
+					return oe;
 				}),
-				"attrs": getter(getAttrs),
-				"ns": getter(function() {
-					return nsMatrix;
+				attrs: u(de),
+				ns: u(function() {
+					return A;
 				})
-			});
-			while (j !== -1) {
-				if (xml.charCodeAt(j) === 60) i = j;
-				else i = xml.indexOf("<", j);
-				if (i === -1) {
-					if (streaming) return xml.substring(j);
-					if (nodeStack.length) return handleError("unexpected end of file");
-					if (!rootTagFound) return handleError("missing start tag");
-					if (j < xml.length) {
-						if (xml.substring(j).trim()) handleWarning(NON_WHITESPACE_OUTSIDE_ROOT_NODE);
-					}
+			})); T !== -1;) {
+				if (w = e.charCodeAt(T) === 60 ? T : e.indexOf("<", T), w === -1) {
+					if (c) return e.substring(T);
+					if (ne.length) return j("unexpected end of file");
+					if (!ee) return j("missing start tag");
+					T < e.length && e.substring(T).trim() && M(s);
 					return;
 				}
-				if (!rootTagFound) rootTagFound = true;
-				if (j !== i) {
-					if (nodeStack.length) {
-						if (onText) {
-							onText(xml.substring(j, i), decodeEntities, getContext);
-							if (parseStop) return;
-						}
-					} else if (xml.substring(j, i).trim()) {
-						handleWarning(NON_WHITESPACE_OUTSIDE_ROOT_NODE);
-						if (parseStop) return;
-					}
+				if (ee ||= !0, T !== w) {
+					if (ne.length) {
+						if (n && (n(e.substring(T, w), o, C), k)) return;
+					} else if (e.substring(T, w).trim() && (M(s), k)) return;
 				}
-				w = xml.charCodeAt(i + 1);
-				if (w === 33) {
-					q = xml.charCodeAt(i + 2);
-					if (q === 91 && xml.substr(i + 3, 6) === "CDATA[") {
-						j = xml.indexOf("]]>", i);
-						if (j === -1) {
-							if (streaming) return xml.substring(i);
-							return handleError("unclosed cdata");
-						}
-						if (onCDATA) {
-							onCDATA(xml.substring(i + 9, j), getContext);
-							if (parseStop) return;
-						}
-						j += 3;
+				if (P = e.charCodeAt(w + 1), P === 33) {
+					if (N = e.charCodeAt(w + 2), N === 91 && e.substr(w + 3, 6) === "CDATA[") {
+						if (T = e.indexOf("]]>", w), T === -1) return c ? e.substring(w) : j("unclosed cdata");
+						if (a && (a(e.substring(w + 9, T), C), k)) return;
+						T += 3;
 						continue;
 					}
-					if (q === 45 && xml.charCodeAt(i + 3) === 45) {
-						j = xml.indexOf("-->", i);
-						if (j === -1) {
-							if (streaming) return xml.substring(i);
-							return handleError("unclosed comment");
-						}
-						if (onComment) {
-							onComment(xml.substring(i + 4, j), decodeEntities, getContext);
-							if (parseStop) return;
-						}
-						j += 3;
+					if (N === 45 && e.charCodeAt(w + 3) === 45) {
+						if (T = e.indexOf("-->", w), T === -1) return c ? e.substring(w) : j("unclosed comment");
+						if (b && (b(e.substring(w + 4, T), o, C), k)) return;
+						T += 3;
 						continue;
 					}
 				}
-				if (w === 63) {
-					j = xml.indexOf("?>", i);
-					if (j === -1) {
-						if (streaming) return xml.substring(i);
-						return handleError("unclosed question");
-					}
-					if (onQuestion) {
-						onQuestion(xml.substring(i, j + 2), getContext);
-						if (parseStop) return;
-					}
-					j += 2;
+				if (P === 63) {
+					if (T = e.indexOf("?>", w), T === -1) return c ? e.substring(w) : j("unclosed question");
+					if (x && (x(e.substring(w, T + 2), C), k)) return;
+					T += 2;
 					continue;
 				}
-				for (x = i + 1;; x++) {
-					v = xml.charCodeAt(x);
-					if (isNaN(v)) {
-						if (streaming) return xml.substring(i);
-						j = -1;
-						return handleError("unclosed tag");
-					}
-					if (v === 34) {
-						q = xml.indexOf("\"", x + 1);
-						x = q !== -1 ? q : x;
-					} else if (v === 39) {
-						q = xml.indexOf("'", x + 1);
-						x = q !== -1 ? q : x;
-					} else if (v === 62) {
-						j = x;
+				for (O = w + 1;; O++) {
+					if (F = e.charCodeAt(O), isNaN(F)) return c ? e.substring(w) : (T = -1, j("unclosed tag"));
+					if (F === 34) N = e.indexOf("\"", O + 1), O = N === -1 ? O : N;
+					else if (F === 39) N = e.indexOf("'", O + 1), O = N === -1 ? O : N;
+					else if (F === 62) {
+						T = O;
 						break;
 					}
 				}
-				if (w === 33) {
-					if (onAttention) {
-						onAttention(xml.substring(i, j + 1), decodeEntities, getContext);
-						if (parseStop) return;
-					}
-					j += 1;
+				if (P === 33) {
+					if (S && (S(e.substring(w, T + 1), o, C), k)) return;
+					T += 1;
 					continue;
 				}
-				cachedAttrs = {};
-				if (w === 47) {
-					tagStart = false;
-					tagEnd = true;
-					if (!nodeStack.length) return handleError("missing open tag");
-					x = elementName = nodeStack.pop();
-					q = i + 2 + x.length;
-					if (xml.substring(i + 2, q) !== x) return handleError("closing tag mismatch");
-					for (; q < j; q++) {
-						w = xml.charCodeAt(q);
-						if (w === 32 || w > 8 && w < 14) continue;
-						return handleError("close tag");
-					}
+				if (le = {}, P === 47) {
+					if (v = !1, y = !0, !ne.length) return j("missing open tag");
+					if (O = I = ne.pop(), N = w + 2 + O.length, e.substring(w + 2, N) !== O) return j("closing tag mismatch");
+					for (; N < T; N++) if (P = e.charCodeAt(N), !(P === 32 || P > 8 && P < 14)) return j("close tag");
 				} else {
-					if (xml.charCodeAt(j - 1) === 47) {
-						x = elementName = xml.substring(i + 1, j - 1);
-						tagStart = true;
-						tagEnd = true;
-					} else {
-						x = elementName = xml.substring(i + 1, j);
-						tagStart = true;
-						tagEnd = false;
-					}
-					if (!(w > 96 && w < 123 || w > 64 && w < 91 || w === 95 || w === 58)) return handleError("illegal first char nodeName");
-					for (q = 1, y = x.length; q < y; q++) {
-						w = x.charCodeAt(q);
-						if (w > 96 && w < 123 || w > 64 && w < 91 || w > 47 && w < 59 || w === 45 || w === 95 || w == 46) continue;
-						if (w === 32 || w < 14 && w > 8) {
-							elementName = x.substring(0, q);
-							cachedAttrs = null;
+					if (e.charCodeAt(T - 1) === 47 ? (O = I = e.substring(w + 1, T - 1), v = !0, y = !0) : (O = I = e.substring(w + 1, T), v = !0, y = !1), !(P > 96 && P < 123 || P > 64 && P < 91 || P === 95 || P === 58)) return j("illegal first char nodeName");
+					for (N = 1, ie = O.length; N < ie; N++) if (P = O.charCodeAt(N), !(P > 96 && P < 123 || P > 64 && P < 91 || P > 47 && P < 59 || P === 45 || P === 95 || P == 46)) {
+						if (P === 32 || P < 14 && P > 8) {
+							I = O.substring(0, N), le = null;
 							break;
 						}
-						return handleError("invalid nodeName");
+						return j("invalid nodeName");
 					}
-					if (!tagEnd) nodeStack.push(elementName);
+					y || ne.push(I);
 				}
-				if (isNamespace) {
-					_nsMatrix = nsMatrix;
-					if (tagStart) {
-						if (!tagEnd) nsMatrixStack.push(_nsMatrix);
-						if (cachedAttrs === null) {
-							if (maybeNS = x.indexOf("xmlns", q) !== -1) {
-								attrsStart = q;
-								attrsString = x;
-								getAttrs();
-								maybeNS = false;
-							}
-						}
-					}
-					_elementName = elementName;
-					if (elNameCacheMatrix !== nsMatrix) {
-						elNameCache = nsMatrix[NAME_CACHE];
-						if (elNameCache === void 0) elNameCache = nsMatrix[NAME_CACHE] = {};
-						elNameCacheMatrix = nsMatrix;
-					}
-					var _cachedName = elNameCache[elementName];
-					if (_cachedName !== void 0) elementName = _cachedName;
+				if (D) {
+					g = A, v && (y || te.push(g), le === null && (E = O.indexOf("xmlns", N) !== -1) && (ce = N, L = O, de(), E = !1)), oe = I, h !== A && (m = A[f], m === void 0 && (m = A[f] = {}), h = A);
+					var R = m[I];
+					if (R !== void 0) I = R;
 					else {
-						w = elementName.indexOf(":");
-						if (w !== -1) {
-							xmlns = nsMatrix[elementName.substring(0, w)];
-							if (!xmlns) return handleError("missing namespace on <" + _elementName + ">");
-							elementName = elementName.substr(w + 1);
-						} else xmlns = nsMatrix["xmlns"];
-						if (xmlns) elementName = xmlns + ":" + elementName;
-						elNameCache[_elementName] = elementName;
+						if (P = I.indexOf(":"), P !== -1) {
+							if (ae = A[I.substring(0, P)], !ae) return j("missing namespace on <" + oe + ">");
+							I = I.substr(P + 1);
+						} else ae = A.xmlns;
+						ae && (I = ae + ":" + I), m[oe] = I;
 					}
 				}
-				if (tagStart) {
-					attrsStart = q;
-					attrsString = x;
-					if (onOpenTag) {
-						if (proxy) onOpenTag(elementProxy, decodeEntities, tagEnd, getContext);
-						else onOpenTag(elementName, getAttrs, decodeEntities, tagEnd, getContext);
-						if (parseStop) return;
-					}
+				if (v && (ce = N, L = O, r && (t ? r(se, o, y, C) : r(I, de, o, y, C), k))) return;
+				if (y) {
+					if (i && (i(t ? se : I, o, v, C), k)) return;
+					D && (A = v ? g : te.pop());
 				}
-				if (tagEnd) {
-					if (onCloseTag) {
-						onCloseTag(proxy ? elementProxy : elementName, decodeEntities, tagStart, getContext);
-						if (parseStop) return;
-					}
-					if (isNamespace) {
-						if (!tagStart) nsMatrix = nsMatrixStack.pop();
-						else nsMatrix = _nsMatrix;
-					}
-				}
-				j += 1;
+				T += 1;
 			}
 		}
 	}
-	return new Parser(options);
+	return new _(e);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xml/parseXmlStream.saxen.js
-/**
-* Parses XML markup in a streaming fashion by calling the supplied callback functions as the XML markup is being input.
-* @param {any} state — The initial `state`. This `state` will supposedly be modified by the callback functions as the XML is being parsed.
-* @param {function} [onOpenTag]
-* @param {function} [onCloseTag]
-* @param {function} [onText]
-* @returns {object} An object with properties: `promise`, `write(string)`, `end()`. The `promise` resolves with nothing.
-*/
-function parseXmlStream(state, onOpenTag, onCloseTag, onText) {
-	var errored = false;
-	var mustNotHaveErrored = function mustNotHaveErrored() {
-		if (errored) throw new Error("Errored");
-	};
-	var resolvePromise;
-	var parser = new Parser_();
+function Wa(e, t, n, r) {
+	var i = !1, a = function() {
+		if (i) throw Error("Errored");
+	}, o, s = new Ua();
 	return {
-		promise: new Promise(function(resolve, reject) {
-			resolvePromise = resolve;
-			var onerror = function onerror(error) {
-				errored = true;
-				throw error;
-			};
-			var ontext = function ontext(text, decodeEntities) {
-				if (onText) onText(decodeEntities(text), state);
-			};
-			var onopentag = function onopentag(elementName, getAttributes, decodeEntities, selfClosing, getContext) {
-				if (onOpenTag) {
-					var attributes = getAttributes();
-					for (var name in attributes) attributes[trimXmlnsPrefix(name, true)] = decodeEntities(attributes[name]);
-					onOpenTag(trimXmlnsPrefix(elementName), attributes, state);
+		promise: new Promise(function(a, c) {
+			o = a, s.on("error", function(e) {
+				throw i = !0, e;
+			}), s.on("text", function(t, n) {
+				r && r(n(t), e);
+			}), s.on("openTag", function(n, r, i, a, o) {
+				if (t) {
+					var s = r();
+					for (var c in s) s[Ga(c, !0)] = i(s[c]);
+					t(Ga(n), s, e);
 				}
-			};
-			var onclosetag = function onclosetag(elementName) {
-				if (onCloseTag) onCloseTag(trimXmlnsPrefix(elementName), state);
-			};
-			parser.on("error", onerror);
-			parser.on("text", ontext);
-			parser.on("openTag", onopentag);
-			parser.on("closeTag", onclosetag);
+			}), s.on("closeTag", function(t) {
+				n && n(Ga(t), e);
+			});
 		}),
-		write: function write(xml) {
-			mustNotHaveErrored();
-			parser.write(xml);
+		write: function(e) {
+			a(), s.write(e);
 		},
-		end: function end() {
-			mustNotHaveErrored();
-			parser.end();
-			resolvePromise();
+		end: function() {
+			a(), s.end(), o();
 		}
 	};
 }
-function trimXmlnsPrefix(string, isAttributeName) {
-	var i = 0;
-	while (i < string.length) {
-		if (string[i] === ":") {
-			if (isAttributeName && i === 5 && string.slice(0, 5) === "xmlns") {} else return string.slice(i + 1);
-		}
-		i++;
+function Ga(e, t) {
+	for (var n = 0; n < e.length;) {
+		if (e[n] === ":" && !(t && n === 5 && e.slice(0, 5) === "xmlns")) return e.slice(n + 1);
+		n++;
 	}
-	return string;
+	return e;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/InvalidSpreadsheetError.js
-function _typeof$7(o) {
+function Ka(e) {
 	"@babel/helpers - typeof";
-	return _typeof$7 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$7(o);
+	return Ka = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, Ka(e);
 }
-function _defineProperties$4(target, props) {
-	for (var i = 0; i < props.length; i++) {
-		var descriptor = props[i];
-		descriptor.enumerable = descriptor.enumerable || false;
-		descriptor.configurable = true;
-		if ("value" in descriptor) descriptor.writable = true;
-		Object.defineProperty(target, _toPropertyKey$6(descriptor.key), descriptor);
+function qa(e, t) {
+	for (var n = 0; n < t.length; n++) {
+		var r = t[n];
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Ya(r.key), r);
 	}
 }
-function _createClass$4(Constructor, protoProps, staticProps) {
-	if (protoProps) _defineProperties$4(Constructor.prototype, protoProps);
-	if (staticProps) _defineProperties$4(Constructor, staticProps);
-	Object.defineProperty(Constructor, "prototype", { writable: false });
-	return Constructor;
+function Ja(e, t, n) {
+	return t && qa(e.prototype, t), n && qa(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function _toPropertyKey$6(arg) {
-	var key = _toPrimitive$6(arg, "string");
-	return _typeof$7(key) === "symbol" ? key : String(key);
+function Ya(e) {
+	var t = Xa(e, "string");
+	return Ka(t) === "symbol" ? t : String(t);
 }
-function _toPrimitive$6(input, hint) {
-	if (_typeof$7(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof$7(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
+function Xa(e, t) {
+	if (Ka(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (Ka(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
-	return (hint === "string" ? String : Number)(input);
+	return (t === "string" ? String : Number)(e);
 }
-function _classCallCheck$4(instance, Constructor) {
-	if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
+function Za(e, t) {
+	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function _inherits$4(subClass, superClass) {
-	if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
-	subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: {
-		value: subClass,
-		writable: true,
-		configurable: true
-	} });
-	Object.defineProperty(subClass, "prototype", { writable: false });
-	if (superClass) _setPrototypeOf$4(subClass, superClass);
+function Qa(e, t) {
+	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
+	e.prototype = Object.create(t && t.prototype, { constructor: {
+		value: e,
+		writable: !0,
+		configurable: !0
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && oo(e, t);
 }
-function _createSuper$4(Derived) {
-	var hasNativeReflectConstruct = _isNativeReflectConstruct$4();
-	return function _createSuperInternal() {
-		var Super = _getPrototypeOf$4(Derived), result;
-		if (hasNativeReflectConstruct) {
-			var NewTarget = _getPrototypeOf$4(this).constructor;
-			result = Reflect.construct(Super, arguments, NewTarget);
-		} else result = Super.apply(this, arguments);
-		return _possibleConstructorReturn$4(this, result);
+function $a(e) {
+	var t = io();
+	return function() {
+		var n = so(e), r;
+		if (t) {
+			var i = so(this).constructor;
+			r = Reflect.construct(n, arguments, i);
+		} else r = n.apply(this, arguments);
+		return eo(this, r);
 	};
 }
-function _possibleConstructorReturn$4(self, call) {
-	if (call && (_typeof$7(call) === "object" || typeof call === "function")) return call;
-	else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-	return _assertThisInitialized$4(self);
+function eo(e, t) {
+	if (t && (Ka(t) === "object" || typeof t == "function")) return t;
+	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
+	return to(e);
 }
-function _assertThisInitialized$4(self) {
-	if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-	return self;
+function to(e) {
+	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
+	return e;
 }
-function _wrapNativeSuper$3(Class) {
-	var _cache = typeof Map === "function" ? /* @__PURE__ */ new Map() : void 0;
-	_wrapNativeSuper$3 = function _wrapNativeSuper(Class) {
-		if (Class === null || !_isNativeFunction$3(Class)) return Class;
-		if (typeof Class !== "function") throw new TypeError("Super expression must either be null or a function");
-		if (typeof _cache !== "undefined") {
-			if (_cache.has(Class)) return _cache.get(Class);
-			_cache.set(Class, Wrapper);
+function no(e) {
+	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
+	return no = function(e) {
+		if (e === null || !ao(e)) return e;
+		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
+		if (t !== void 0) {
+			if (t.has(e)) return t.get(e);
+			t.set(e, n);
 		}
-		function Wrapper() {
-			return _construct$3(Class, arguments, _getPrototypeOf$4(this).constructor);
+		function n() {
+			return ro(e, arguments, so(this).constructor);
 		}
-		Wrapper.prototype = Object.create(Class.prototype, { constructor: {
-			value: Wrapper,
-			enumerable: false,
-			writable: true,
-			configurable: true
-		} });
-		return _setPrototypeOf$4(Wrapper, Class);
-	};
-	return _wrapNativeSuper$3(Class);
+		return n.prototype = Object.create(e.prototype, { constructor: {
+			value: n,
+			enumerable: !1,
+			writable: !0,
+			configurable: !0
+		} }), oo(n, e);
+	}, no(e);
 }
-function _construct$3(Parent, args, Class) {
-	if (_isNativeReflectConstruct$4()) _construct$3 = Reflect.construct.bind();
-	else _construct$3 = function _construct(Parent, args, Class) {
-		var a = [null];
-		a.push.apply(a, args);
-		var instance = new (Function.bind.apply(Parent, a))();
-		if (Class) _setPrototypeOf$4(instance, Class.prototype);
-		return instance;
-	};
-	return _construct$3.apply(null, arguments);
+function ro(e, t, n) {
+	return ro = io() ? Reflect.construct.bind() : function(e, t, n) {
+		var r = [null];
+		r.push.apply(r, t);
+		var i = new (Function.bind.apply(e, r))();
+		return n && oo(i, n.prototype), i;
+	}, ro.apply(null, arguments);
 }
-function _isNativeReflectConstruct$4() {
-	if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-	if (Reflect.construct.sham) return false;
-	if (typeof Proxy === "function") return true;
+function io() {
+	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
+	if (typeof Proxy == "function") return !0;
 	try {
-		Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
-		return true;
-	} catch (e) {
-		return false;
+		return Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {})), !0;
+	} catch {
+		return !1;
 	}
 }
-function _isNativeFunction$3(fn) {
-	return Function.toString.call(fn).indexOf("[native code]") !== -1;
+function ao(e) {
+	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function _setPrototypeOf$4(o, p) {
-	_setPrototypeOf$4 = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
-		o.__proto__ = p;
-		return o;
-	};
-	return _setPrototypeOf$4(o, p);
+function oo(e, t) {
+	return oo = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+		return e.__proto__ = t, e;
+	}, oo(e, t);
 }
-function _getPrototypeOf$4(o) {
-	_getPrototypeOf$4 = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
-		return o.__proto__ || Object.getPrototypeOf(o);
-	};
-	return _getPrototypeOf$4(o);
+function so(e) {
+	return so = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+		return e.__proto__ || Object.getPrototypeOf(e);
+	}, so(e);
 }
-var InvalidSpreadsheetError = /*#__PURE__*/ function(_Error) {
-	_inherits$4(InvalidSpreadsheetError, _Error);
-	var _super = _createSuper$4(InvalidSpreadsheetError);
-	function InvalidSpreadsheetError(message) {
-		var _this;
-		_classCallCheck$4(this, InvalidSpreadsheetError);
-		_this = _super.call(this, message);
-		_this.name = "InvalidSpreadsheetError";
-		return _this;
+var co = /*#__PURE__*/ function(e) {
+	Qa(n, e);
+	var t = $a(n);
+	function n(e) {
+		var r;
+		return Za(this, n), r = t.call(this, e), r.name = "InvalidSpreadsheetError", r;
 	}
-	return _createClass$4(InvalidSpreadsheetError);
-}(/*#__PURE__*/ _wrapNativeSuper$3(Error));
+	return Ja(n);
+}(/*#__PURE__*/ no(Error));
 //#endregion
 //#region node_modules/read-excel-file/modules/xml/parseXml.js
-/**
-* Parses XML markup by calling the supplied callback functions.
-* @param {string} xml
-* @param {any} state — The initial `state`. This `state` will supposedly be modified by the callback functions as the XML is being parsed.
-* @param {function} [onOpenTag]
-* @param {function} [onCloseTag]
-* @param {function} [onText]
-* @param {function} [onProgress] — If defined, will be called every time it finishes parsing yet another chunk of XML.
-* @returns {Promise<void>} Returns a `Promise` that resolves to nothing. Inspect the passed `state` argument for changes.
-*/
-function parseXml(xml, state, onOpenTag, onCloseTag, onText, onProgress) {
-	var parser = parseXmlStream(state, onOpenTag, onCloseTag, onText);
-	if (onProgress) parseXmlInChunks(parser, xml, onProgress);
-	else {
-		parser.write(xml);
-		parser.end();
-	}
-	return parser.promise.then(function(result) {
-		return result;
-	}, function(error) {
-		var spreadsheetError = new InvalidSpreadsheetError(error.message);
-		spreadsheetError.stack = error.stack;
-		spreadsheetError.cause = error;
-		throw spreadsheetError;
+function lo(e, t, n, r, i, a) {
+	var o = Wa(t, n, r, i);
+	return a ? s(o, e, a) : (o.write(e), o.end()), o.promise.then(function(e) {
+		return e;
+	}, function(e) {
+		var t = new co(e.message);
+		throw t.stack = e.stack, t.cause = e, t;
 	});
-	/**
-	* Parses XML in chunks.
-	* @param {object} parser — An object returned from `parseXmlStream()` function.
-	* @param {string} xml
-	* @param {function} [onProgress] — Will be called after yet another chunk of XML has been parsed.
-	* @param {boolean} [nonBlocking] — If `true` is passed then it won't block the current thread while parsing. Otherwise, it will block the current thread until all the XML is parsed.
-	*/
-	function parseXmlInChunks(parser, xml, onProgress, nonBlocking) {
-		var MAX_CHUNK_PROCESSING_TIME = 7;
-		var INITIAL_CHUNK_SIZE = 65536;
-		var chunksCount = 0;
-		var chunkSize = INITIAL_CHUNK_SIZE;
-		/**
-		* Parses next chunk of XML.
-		* @returns {boolean} Returns `true` if there're more chunks to write.
-		*/
-		var parseNextChunk = function parseNextChunk() {
-			chunksCount++;
-			var startedAt = Date.now();
-			if (xml.length > chunkSize) {
-				parser.write(xml.slice(0, chunkSize));
-				if (onProgress) onProgress(false);
-				xml = xml.slice(chunkSize);
-				var chunkProcessingTime = Date.now() - startedAt;
-				if (chunkProcessingTime < MAX_CHUNK_PROCESSING_TIME * .5) chunkSize *= 2;
-				else if (chunkProcessingTime > MAX_CHUNK_PROCESSING_TIME) chunkSize /= 2;
-				return true;
-			} else {
-				parser.write(xml);
-				parser.end();
-				if (onProgress) onProgress(true);
-				return false;
+	function s(e, t, n, r) {
+		var i = 65536, a = 0, o = i, s = function() {
+			a++;
+			var r = Date.now();
+			if (t.length > o) {
+				e.write(t.slice(0, o)), n && n(!1), t = t.slice(o);
+				var i = Date.now() - r;
+				return i < 3.5 ? o *= 2 : i > 7 && (o /= 2), !0;
 			}
+			return e.write(t), e.end(), n && n(!0), !1;
 		};
-		(function loop() {
-			if (parseNextChunk()) {
-				if (nonBlocking) {
-					if (typeof setImmediate !== "undefined") setImmediate(loop);
-					else setTimeout(loop, 0);
-				} else loop();
-			}
+		(function e() {
+			s() && (r ? typeof setImmediate < "u" ? setImmediate(e) : setTimeout(e, 0) : e());
 		})();
 	}
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/ZipFileError.js
-var ZipFileError = class extends Error {
-	constructor(code, message) {
-		super(message || code);
-		this.code = code;
+var uo = class extends Error {
+	constructor(e, t) {
+		super(t || e), this.code = e;
 	}
 };
-function createZipFileError(error) {
-	const zipFileError = new ZipFileError(error.code, error.message);
-	if (error.stack) zipFileError.stack = error.stack;
-	Error.captureStackTrace(zipFileError, createZipFileError);
-	zipFileError.cause = error;
-	return zipFileError;
+function fo(e) {
+	let t = new uo(e.code, e.message);
+	return e.stack && (t.stack = e.stack), Error.captureStackTrace(t, fo), t.cause = e, t;
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/PullStream.js
-var FUNCTION_STRING = "function";
-var PullStreamConstructor = function() {
+var po = "function", mo = function() {
 	this.buffer = Buffer.from("");
-	const self = this;
-	self.on("finish", function() {
-		self.finished = true;
-		self.emit("chunk", false);
+	let e = this;
+	e.on("finish", function() {
+		e.finished = !0, e.emit("chunk", !1);
 	});
-};
-var _write = function(chunk, e, cb) {
-	this.buffer = Buffer.concat([this.buffer, chunk]);
-	this.cb = cb;
-	this.emit("chunk");
-};
-var stream = function(eof, includeEof) {
-	const p = new PassThrough();
-	let done;
-	const self = this;
-	function cb() {
-		if (typeof self.cb === FUNCTION_STRING) {
-			const callback = self.cb;
-			self.cb = void 0;
-			return callback();
+}, ho = function(e, t, n) {
+	this.buffer = Buffer.concat([this.buffer, e]), this.cb = n, this.emit("chunk");
+}, go = function(e, t) {
+	let n = new te(), r, i = this;
+	function a() {
+		if (typeof i.cb === po) {
+			let e = i.cb;
+			return i.cb = void 0, e();
 		}
 	}
-	function pull() {
-		let packet;
-		if (self.buffer && self.buffer.length) {
-			if (typeof eof === "number") {
-				packet = self.buffer.slice(0, eof);
-				self.buffer = self.buffer.slice(eof);
-				eof -= packet.length;
-				done = done || !eof;
-			} else {
-				let match = self.buffer.indexOf(eof);
-				if (match !== -1) {
-					self.match = match;
-					if (includeEof) match = match + eof.length;
-					packet = self.buffer.slice(0, match);
-					self.buffer = self.buffer.slice(match);
-					done = true;
-				} else {
-					const len = self.buffer.length - eof.length;
-					if (len <= 0) cb();
-					else {
-						packet = self.buffer.slice(0, len);
-						self.buffer = self.buffer.slice(len);
-					}
+	function o() {
+		let s;
+		if (i.buffer && i.buffer.length) {
+			if (typeof e == "number") s = i.buffer.slice(0, e), i.buffer = i.buffer.slice(e), e -= s.length, r ||= !e;
+			else {
+				let n = i.buffer.indexOf(e);
+				if (n !== -1) i.match = n, t && (n += e.length), s = i.buffer.slice(0, n), i.buffer = i.buffer.slice(n), r = !0;
+				else {
+					let t = i.buffer.length - e.length;
+					t <= 0 ? a() : (s = i.buffer.slice(0, t), i.buffer = i.buffer.slice(t));
 				}
 			}
-			if (packet) p.write(packet, function() {
-				if (self.buffer.length === 0 || eof.length && self.buffer.length <= eof.length) cb();
+			s && n.write(s, function() {
+				(i.buffer.length === 0 || e.length && i.buffer.length <= e.length) && a();
 			});
 		}
-		if (!done) {
-			if (self.finished) {
-				self.removeListener("chunk", pull);
-				self.emit("error", new ZipFileError("FILE_ENDED"));
-				return;
-			}
-		} else {
-			self.removeListener("chunk", pull);
-			p.end();
+		if (r) i.removeListener("chunk", o), n.end();
+		else if (i.finished) {
+			i.removeListener("chunk", o), i.emit("error", new uo("FILE_ENDED"));
+			return;
 		}
 	}
-	self.on("chunk", pull);
-	pull();
-	return p;
-};
-var pull = function(eof, includeEof) {
-	if (eof === 0) return Promise.resolve("");
-	if (!isNaN(eof) && this.buffer.length > eof) {
-		const data = this.buffer.slice(0, eof);
-		this.buffer = this.buffer.slice(eof);
-		return Promise.resolve(data);
+	return i.on("chunk", o), o(), n;
+}, _o = function(e, t) {
+	if (e === 0) return Promise.resolve("");
+	if (!isNaN(e) && this.buffer.length > e) {
+		let t = this.buffer.slice(0, e);
+		return this.buffer = this.buffer.slice(e), Promise.resolve(t);
 	}
-	let buffer = Buffer.from("");
-	const self = this;
-	const concatStream = new Transform({ transform });
-	function transform(d, e, cb) {
-		buffer = Buffer.concat([buffer, d]);
-		cb();
+	let n = Buffer.from(""), r = this, i = new A({ transform: a });
+	function a(e, t, r) {
+		n = Buffer.concat([n, e]), r();
 	}
-	let rejectHandler;
-	let pullStreamRejectHandler;
-	return new Promise(function(resolve, reject) {
-		rejectHandler = reject;
-		pullStreamRejectHandler = function(e) {
-			self.__emittedError = e;
-			reject(e);
-		};
-		if (self.finished) return reject(new ZipFileError("FILE_ENDED"));
-		self.once("error", pullStreamRejectHandler);
-		self.stream(eof, includeEof).on("error", reject).pipe(concatStream).on("finish", function() {
-			resolve(buffer);
-		}).on("error", reject);
+	let o, s;
+	return new Promise(function(a, c) {
+		if (o = c, s = function(e) {
+			r.__emittedError = e, c(e);
+		}, r.finished) return c(new uo("FILE_ENDED"));
+		r.once("error", s), r.stream(e, t).on("error", c).pipe(i).on("finish", function() {
+			a(n);
+		}).on("error", c);
 	}).finally(function() {
-		self.removeListener("error", rejectHandler);
-		self.removeListener("error", pullStreamRejectHandler);
+		r.removeListener("error", o), r.removeListener("error", s);
 	});
-};
-var PullStream = class extends Duplex {
+}, vo = class extends k {
 	constructor() {
 		super({
-			decodeStrings: false,
-			objectMode: true
-		});
-		PullStreamConstructor.call(this);
+			decodeStrings: !1,
+			objectMode: !0
+		}), mo.call(this);
 	}
-	_write(chunk, e, cb) {
-		return _write.call(this, chunk, e, cb);
+	_write(e, t, n) {
+		return ho.call(this, e, t, n);
 	}
-	stream(eof, includeEof) {
-		return stream.call(this, eof, includeEof);
+	stream(e, t) {
+		return go.call(this, e, t);
 	}
-	pull(eof, includeEof) {
-		return pull.call(this, eof, includeEof);
+	pull(e, t) {
+		return _o.call(this, e, t);
 	}
 	_read() {}
-};
-//#endregion
-//#region node_modules/unzipper-esm/lib/NoopStream.js
-var NoopStream = class extends Transform {
-	_transform(d, e, cb) {
-		cb();
+}, yo = class extends A {
+	_transform(e, t, n) {
+		n();
 	}
 };
 //#endregion
 //#region node_modules/unzipper-esm/lib/BufferStream.js
-/**
-* Reads an entry as a `Buffer`.
-* @param {*} entry
-* @returns {Promise<Buffer>}
-*/
-function readAsBuffer(entry) {
-	return new Promise(function(resolve, reject) {
-		const chunks = [];
-		const bufferStream = new Transform({ transform }).on("finish", function() {
-			resolve(Buffer.concat(chunks));
-		}).on("error", reject);
-		function transform(d, e, cb) {
-			chunks.push(d);
-			cb();
+function bo(e) {
+	return new Promise(function(t, n) {
+		let r = [], i = new A({ transform: a }).on("finish", function() {
+			t(Buffer.concat(r));
+		}).on("error", n);
+		function a(e, t, n) {
+			r.push(e), n();
 		}
-		entry.on("error", reject).pipe(bufferStream);
+		e.on("error", n).pipe(i);
 	});
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parseBuffer.js
-function parseUIntLE(buffer, offset, size) {
-	let result;
-	switch (size) {
+function xo(e, t, n) {
+	let r;
+	switch (n) {
 		case 1:
-			result = buffer.readUInt8(offset);
+			r = e.readUInt8(t);
 			break;
 		case 2:
-			result = buffer.readUInt16LE(offset);
+			r = e.readUInt16LE(t);
 			break;
 		case 4:
-			result = buffer.readUInt32LE(offset);
+			r = e.readUInt32LE(t);
 			break;
 		case 8:
-			result = Number(buffer.readBigUInt64LE(offset));
+			r = Number(e.readBigUInt64LE(t));
 			break;
-		default: throw new Error("Unsupported UInt LE size!");
+		default: throw Error("Unsupported UInt LE size!");
 	}
-	return result;
+	return r;
 }
-/**
-* Parses sequential unsigned little endian numbers from the head of the passed buffer according to
-* the specified format passed.  If the buffer is not large enough to satisfy the full format,
-* null values will be assigned to the remaining keys.
-* @param {*} buffer The buffer to sequentially extract numbers from.
-* @param {*} format Expected format to follow when extrcting values from the buffer.  A list of list entries
-* with the following structure:
-* [
-*   [
-*     <key>,  // Name of the key to assign the extracted number to.
-*     <size>  // The size in bytes of the number to extract. possible values are 1, 2, 4, 8.
-*   ],
-*   ...
-* ]
-* @returns An object with keys set to their associated extracted values.
-*/
-function parse(buffer, format) {
-	const result = {};
-	let offset = 0;
-	for (const [key, size] of format) {
-		if (buffer.length >= offset + size) result[key] = parseUIntLE(buffer, offset, size);
-		else result[key] = null;
-		offset += size;
-	}
-	return result;
+function So(e, t) {
+	let n = {}, r = 0;
+	for (let [i, a] of t) n[i] = e.length >= r + a ? xo(e, r, a) : null, r += a;
+	return n;
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parseExtraField.js
-function parseExtraField(extraField, vars) {
-	let extra;
-	while (!extra && extraField && extraField.length) {
-		const candidateExtra = parse(extraField, [["signature", 2], ["partSize", 2]]);
-		if (candidateExtra.signature === 1) {
-			const fieldsToExpect = [];
-			if (vars.uncompressedSize === 4294967295) fieldsToExpect.push(["uncompressedSize", 8]);
-			if (vars.compressedSize === 4294967295) fieldsToExpect.push(["compressedSize", 8]);
-			if (vars.offsetToLocalFileHeader === 4294967295) fieldsToExpect.push(["offsetToLocalFileHeader", 8]);
-			extra = parse(extraField.slice(4), fieldsToExpect);
-		} else extraField = extraField.slice(candidateExtra.partSize + 4);
+function Co(e, t) {
+	let n;
+	for (; !n && e && e.length;) {
+		let r = So(e, [["signature", 2], ["partSize", 2]]);
+		if (r.signature === 1) {
+			let r = [];
+			t.uncompressedSize === 4294967295 && r.push(["uncompressedSize", 8]), t.compressedSize === 4294967295 && r.push(["compressedSize", 8]), t.offsetToLocalFileHeader === 4294967295 && r.push(["offsetToLocalFileHeader", 8]), n = So(e.slice(4), r);
+		} else e = e.slice(r.partSize + 4);
 	}
-	extra = extra || {};
-	if (vars.compressedSize === 4294967295) vars.compressedSize = extra.compressedSize;
-	if (vars.uncompressedSize === 4294967295) vars.uncompressedSize = extra.uncompressedSize;
-	if (vars.offsetToLocalFileHeader === 4294967295) vars.offsetToLocalFileHeader = extra.offsetToLocalFileHeader;
-	return extra;
+	return n ||= {}, t.compressedSize === 4294967295 && (t.compressedSize = n.compressedSize), t.uncompressedSize === 4294967295 && (t.uncompressedSize = n.uncompressedSize), t.offsetToLocalFileHeader === 4294967295 && (t.offsetToLocalFileHeader = n.offsetToLocalFileHeader), n;
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parseDateTime.js
-function parseDateTime(date, time) {
-	const day = date & 31;
-	const month = date >> 5 & 15;
-	const year = (date >> 9 & 127) + 1980;
-	const seconds = time ? (time & 31) * 2 : 0;
-	const minutes = time ? time >> 5 & 63 : 0;
-	const hours = time ? time >> 11 : 0;
-	return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+function wo(e, t) {
+	let n = e & 31, r = e >> 5 & 15, i = (e >> 9 & 127) + 1980, a = t ? (t & 31) * 2 : 0, o = t ? t >> 5 & 63 : 0, s = t ? t >> 11 : 0;
+	return new Date(Date.UTC(i, r - 1, n, s, o, a));
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parse.js
-var endDirectorySignature = Buffer.alloc(4);
-endDirectorySignature.writeUInt32LE(101010256, 0);
-function Parse(opts) {
-	return new Parser(opts);
+var To = Buffer.alloc(4);
+To.writeUInt32LE(101010256, 0);
+function Eo(e) {
+	return new Fo(e);
 }
-var ParserConstructor = function(opts) {
-	this._opts = opts;
-	const self = this;
-	self.on("finish", function() {
-		self.emit("end");
-		self.emit("close");
+var Do = function(e) {
+	this._opts = e;
+	let t = this;
+	t.on("finish", function() {
+		t.emit("end"), t.emit("close");
+	}), t._readRecord().catch(function(e) {
+		(!t.__emittedError || t.__emittedError !== e) && t.emit("error", e);
 	});
-	self._readRecord().catch(function(e) {
-		if (!self.__emittedError || self.__emittedError !== e) self.emit("error", e);
-	});
-};
-var _readRecord = function() {
-	const self = this;
-	return self.pull(4).then(function(data) {
-		if (data.length === 0) return;
-		const signature = data.readUInt32LE(0);
-		if (signature === 875721283) return self._readCrxHeader();
-		if (signature === 67324752) return self._readFile();
-		else if (signature === 33639248) {
-			self.reachedCD = true;
-			return self._readCentralDirectoryFileHeader();
-		} else if (signature === 101010256) return self._readEndOfCentralDirectoryRecord();
-		else if (self.reachedCD) return self.pull(endDirectorySignature, true).then(function() {
-			return self._readEndOfCentralDirectoryRecord();
+}, Oo = function() {
+	let e = this;
+	return e.pull(4).then(function(t) {
+		if (t.length === 0) return;
+		let n = t.readUInt32LE(0);
+		if (n === 875721283) return e._readCrxHeader();
+		if (n === 67324752) return e._readFile();
+		if (n === 33639248) return e.reachedCD = !0, e._readCentralDirectoryFileHeader();
+		if (n === 101010256) return e._readEndOfCentralDirectoryRecord();
+		if (e.reachedCD) return e.pull(To, !0).then(function() {
+			return e._readEndOfCentralDirectoryRecord();
 		});
-		else self.emit("error", new ZipFileError("INVALID_SIGNATURE", "invalid signature: 0x" + signature.toString(16)));
-	}).then((function(loop) {
-		if (loop) return self._readRecord();
+		e.emit("error", new uo("INVALID_SIGNATURE", "invalid signature: 0x" + n.toString(16)));
+	}).then((function(t) {
+		if (t) return e._readRecord();
 	}));
-};
-var _readCrxHeader = function() {
-	const self = this;
-	return self.pull(12).then(function(data) {
-		self.crxHeader = parse(data, [
+}, ko = function() {
+	let e = this;
+	return e.pull(12).then(function(t) {
+		return e.crxHeader = So(t, [
 			["version", 4],
 			["pubKeyLength", 4],
 			["signatureLength", 4]
-		]);
-		return self.pull(self.crxHeader.pubKeyLength + self.crxHeader.signatureLength);
-	}).then(function(data) {
-		self.crxHeader.publicKey = data.slice(0, self.crxHeader.pubKeyLength);
-		self.crxHeader.signature = data.slice(self.crxHeader.pubKeyLength);
-		self.emit("crx-header", self.crxHeader);
-		return true;
+		]), e.pull(e.crxHeader.pubKeyLength + e.crxHeader.signatureLength);
+	}).then(function(t) {
+		return e.crxHeader.publicKey = t.slice(0, e.crxHeader.pubKeyLength), e.crxHeader.signature = t.slice(e.crxHeader.pubKeyLength), e.emit("crx-header", e.crxHeader), !0;
 	});
-};
-var _readFile = function() {
-	const self = this;
-	return self.pull(26).then(function(data) {
-		const vars = parse(data, [
+}, Ao = function() {
+	let e = this;
+	return e.pull(26).then(function(t) {
+		let n = So(t, [
 			["versionsNeededToExtract", 2],
 			["flags", 2],
 			["compressionMethod", 2],
@@ -4797,92 +2969,49 @@ var _readFile = function() {
 			["fileNameLength", 2],
 			["extraFieldLength", 2]
 		]);
-		vars.lastModifiedDateTime = parseDateTime(vars.lastModifiedDate, vars.lastModifiedTime);
-		if (self.crxHeader) vars.crxHeader = self.crxHeader;
-		return self.pull(vars.fileNameLength).then(function(fileNameBuffer) {
-			const fileName = fileNameBuffer.toString("utf8");
-			const entry = new PassThrough();
-			let __autodraining = false;
-			entry.autodrain = function() {
-				__autodraining = true;
-				const draining = entry.pipe(new NoopStream());
-				draining.promise = function() {
-					return new Promise(function(resolve, reject) {
-						draining.on("finish", resolve);
-						draining.on("error", reject);
+		return n.lastModifiedDateTime = wo(n.lastModifiedDate, n.lastModifiedTime), e.crxHeader && (n.crxHeader = e.crxHeader), e.pull(n.fileNameLength).then(function(t) {
+			let r = t.toString("utf8"), i = new te(), a = !1;
+			return i.autodrain = function() {
+				a = !0;
+				let e = i.pipe(new yo());
+				return e.promise = function() {
+					return new Promise(function(t, n) {
+						e.on("finish", t), e.on("error", n);
 					});
-				};
-				return draining;
-			};
-			entry.buffer = function() {
-				return readAsBuffer(entry);
-			};
-			entry.path = fileName;
-			entry.props = {};
-			entry.props.path = fileName;
-			entry.props.pathBuffer = fileNameBuffer;
-			entry.props.flags = { "isUnicode": (vars.flags & 2048) != 0 };
-			entry.type = vars.uncompressedSize === 0 && /[/\\]$/.test(fileName) ? "Directory" : "File";
-			if (self._opts.verbose) {
-				if (entry.type === "Directory") console.log("   creating:", fileName);
-				else if (entry.type === "File") {
-					if (vars.compressionMethod === 0) console.log(" extracting:", fileName);
-					else console.log("  inflating:", fileName);
-				}
-			}
-			return self.pull(vars.extraFieldLength).then(function(extraField) {
-				const extra = parseExtraField(extraField, vars);
-				entry.vars = vars;
-				entry.extra = extra;
-				if (self._opts.forceStream) self.push(entry);
-				else {
-					self.emit("entry", entry);
-					if (self._readableState.pipesCount || self._readableState.pipes && self._readableState.pipes.length) self.push(entry);
-				}
-				if (self._opts.verbose) console.log({
-					filename: fileName,
-					vars,
-					extra
+				}, e;
+			}, i.buffer = function() {
+				return bo(i);
+			}, i.path = r, i.props = {}, i.props.path = r, i.props.pathBuffer = t, i.props.flags = { isUnicode: !!(n.flags & 2048) }, i.type = n.uncompressedSize === 0 && /[/\\]$/.test(r) ? "Directory" : "File", e._opts.verbose && (i.type === "Directory" ? console.log("   creating:", r) : i.type === "File" && (n.compressionMethod === 0 ? console.log(" extracting:", r) : console.log("  inflating:", r))), e.pull(n.extraFieldLength).then(function(t) {
+				let o = Co(t, n);
+				i.vars = n, i.extra = o, e._opts.forceStream ? e.push(i) : (e.emit("entry", i), (e._readableState.pipesCount || e._readableState.pipes && e._readableState.pipes.length) && e.push(i)), e._opts.verbose && console.log({
+					filename: r,
+					vars: n,
+					extra: o
 				});
-				const fileSizeKnown = !(vars.flags & 8) || vars.compressedSize > 0;
-				let eof;
-				entry.__autodraining = __autodraining;
-				const inflater = vars.compressionMethod && !__autodraining ? zlib.createInflateRaw() : PassThrough();
-				if (fileSizeKnown) {
-					entry.size = vars.uncompressedSize;
-					eof = vars.compressedSize;
-				} else {
-					eof = Buffer.alloc(4);
-					eof.writeUInt32LE(134695760, 0);
-				}
-				return new Promise(function(resolve, reject) {
-					pipeline(self.stream(eof), inflater, entry, function(err) {
-						if (err) {
-							if (err.code === "Z_DATA_ERROR") err = createZipFileError(err);
-							return reject(err);
-						}
-						return fileSizeKnown ? resolve(fileSizeKnown) : self._processDataDescriptor(entry).then(resolve).catch(reject);
+				let s = !(n.flags & 8) || n.compressedSize > 0, c;
+				i.__autodraining = a;
+				let l = n.compressionMethod && !a ? O.createInflateRaw() : te();
+				return s ? (i.size = n.uncompressedSize, c = n.compressedSize) : (c = Buffer.alloc(4), c.writeUInt32LE(134695760, 0)), new Promise(function(t, n) {
+					ne(e.stream(c), l, i, function(r) {
+						return r ? (r.code === "Z_DATA_ERROR" && (r = fo(r)), n(r)) : s ? t(s) : e._processDataDescriptor(i).then(t).catch(n);
 					});
 				});
 			});
 		});
 	});
-};
-var _processDataDescriptor = function(entry) {
-	return this.pull(16).then(function(data) {
-		entry.size = parse(data, [
+}, jo = function(e) {
+	return this.pull(16).then(function(t) {
+		return e.size = So(t, [
 			["dataDescriptorSignature", 4],
 			["crc32", 4],
 			["compressedSize", 4],
 			["uncompressedSize", 4]
-		]).uncompressedSize;
-		return true;
+		]).uncompressedSize, !0;
 	});
-};
-var _readCentralDirectoryFileHeader = function() {
-	const self = this;
-	return self.pull(42).then(function(data) {
-		const vars = parse(data, [
+}, Mo = function() {
+	let e = this;
+	return e.pull(42).then(function(t) {
+		let n = So(t, [
 			["versionMadeBy", 2],
 			["versionsNeededToExtract", 2],
 			["flags", 2],
@@ -4900,20 +3029,18 @@ var _readCentralDirectoryFileHeader = function() {
 			["externalFileAttributes", 4],
 			["offsetToLocalFileHeader", 4]
 		]);
-		return self.pull(vars.fileNameLength).then(function(fileName) {
-			vars.fileName = fileName.toString("utf8");
-			return self.pull(vars.extraFieldLength);
+		return e.pull(n.fileNameLength).then(function(t) {
+			return n.fileName = t.toString("utf8"), e.pull(n.extraFieldLength);
 		}).then(function() {
-			return self.pull(vars.fileCommentLength);
+			return e.pull(n.fileCommentLength);
 		}).then(function() {
-			return true;
+			return !0;
 		});
 	});
-};
-var _readEndOfCentralDirectoryRecord = function() {
-	const self = this;
-	return self.pull(18).then(function(data) {
-		const vars = parse(data, [
+}, No = function() {
+	let e = this;
+	return e.pull(18).then(function(t) {
+		let n = So(t, [
 			["diskNumber", 2],
 			["diskStart", 2],
 			["numberOfRecordsOnDisk", 2],
@@ -4922,1128 +3049,755 @@ var _readEndOfCentralDirectoryRecord = function() {
 			["offsetToStartOfCentralDirectory", 4],
 			["commentLength", 2]
 		]);
-		return self.pull(vars.commentLength).then(function() {
-			self.end();
-			self.push(null);
+		return e.pull(n.commentLength).then(function() {
+			e.end(), e.push(null);
 		});
 	});
-};
-var promise = function() {
-	const self = this;
-	return new Promise(function(resolve, reject) {
-		self.on("finish", resolve);
-		self.on("error", reject);
+}, Po = function() {
+	let e = this;
+	return new Promise(function(t, n) {
+		e.on("finish", t), e.on("error", n);
 	});
-};
-var Parser = class extends PullStream {
-	constructor(opts = { verbose: false }) {
-		super(opts);
-		ParserConstructor.call(this, opts);
+}, Fo = class extends vo {
+	constructor(e = { verbose: !1 }) {
+		super(e), Do.call(this, e);
 	}
 	_readRecord() {
-		return _readRecord.call(this);
+		return Oo.call(this);
 	}
 	_readCrxHeader() {
-		return _readCrxHeader.call(this);
+		return ko.call(this);
 	}
 	_readFile() {
-		return _readFile.call(this);
+		return Ao.call(this);
 	}
-	_processDataDescriptor(entry) {
-		return _processDataDescriptor.call(this, entry);
+	_processDataDescriptor(e) {
+		return jo.call(this, e);
 	}
 	_readCentralDirectoryFileHeader() {
-		return _readCentralDirectoryFileHeader.call(this);
+		return Mo.call(this);
 	}
 	_readEndOfCentralDirectoryRecord() {
-		return _readEndOfCentralDirectoryRecord.call(this);
+		return No.call(this);
 	}
 	promise() {
-		return promise.call(this);
+		return Po.call(this);
 	}
-};
-//#endregion
-//#region node_modules/graceful-fs/polyfills.js
-var require_polyfills = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var constants = __require("constants");
-	var origCwd = process.cwd;
-	var cwd = null;
-	var platform = process.env.GRACEFUL_FS_PLATFORM || process.platform;
+}, Io = /* @__PURE__ */ P(((e, t) => {
+	var n = F("constants"), r = process.cwd, i = null, a = process.env.GRACEFUL_FS_PLATFORM || process.platform;
 	process.cwd = function() {
-		if (!cwd) cwd = origCwd.call(process);
-		return cwd;
+		return i ||= r.call(process), i;
 	};
 	try {
 		process.cwd();
-	} catch (er) {}
-	if (typeof process.chdir === "function") {
-		var chdir = process.chdir;
-		process.chdir = function(d) {
-			cwd = null;
-			chdir.call(process, d);
-		};
-		if (Object.setPrototypeOf) Object.setPrototypeOf(process.chdir, chdir);
+	} catch {}
+	if (typeof process.chdir == "function") {
+		var o = process.chdir;
+		process.chdir = function(e) {
+			i = null, o.call(process, e);
+		}, Object.setPrototypeOf && Object.setPrototypeOf(process.chdir, o);
 	}
-	module.exports = patch;
-	function patch(fs) {
-		if (constants.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) patchLchmod(fs);
-		if (!fs.lutimes) patchLutimes(fs);
-		fs.chown = chownFix(fs.chown);
-		fs.fchown = chownFix(fs.fchown);
-		fs.lchown = chownFix(fs.lchown);
-		fs.chmod = chmodFix(fs.chmod);
-		fs.fchmod = chmodFix(fs.fchmod);
-		fs.lchmod = chmodFix(fs.lchmod);
-		fs.chownSync = chownFixSync(fs.chownSync);
-		fs.fchownSync = chownFixSync(fs.fchownSync);
-		fs.lchownSync = chownFixSync(fs.lchownSync);
-		fs.chmodSync = chmodFixSync(fs.chmodSync);
-		fs.fchmodSync = chmodFixSync(fs.fchmodSync);
-		fs.lchmodSync = chmodFixSync(fs.lchmodSync);
-		fs.stat = statFix(fs.stat);
-		fs.fstat = statFix(fs.fstat);
-		fs.lstat = statFix(fs.lstat);
-		fs.statSync = statFixSync(fs.statSync);
-		fs.fstatSync = statFixSync(fs.fstatSync);
-		fs.lstatSync = statFixSync(fs.lstatSync);
-		if (fs.chmod && !fs.lchmod) {
-			fs.lchmod = function(path, mode, cb) {
-				if (cb) process.nextTick(cb);
-			};
-			fs.lchmodSync = function() {};
-		}
-		if (fs.chown && !fs.lchown) {
-			fs.lchown = function(path, uid, gid, cb) {
-				if (cb) process.nextTick(cb);
-			};
-			fs.lchownSync = function() {};
-		}
-		if (platform === "win32") fs.rename = typeof fs.rename !== "function" ? fs.rename : (function(fs$rename) {
-			function rename(from, to, cb) {
-				var start = Date.now();
-				var backoff = 0;
-				fs$rename(from, to, function CB(er) {
-					if (er && (er.code === "EACCES" || er.code === "EPERM" || er.code === "EBUSY") && Date.now() - start < 6e4) {
+	t.exports = s;
+	function s(e) {
+		n.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./) && t(e), e.lutimes || r(e), e.chown = s(e.chown), e.fchown = s(e.fchown), e.lchown = s(e.lchown), e.chmod = i(e.chmod), e.fchmod = i(e.fchmod), e.lchmod = i(e.lchmod), e.chownSync = c(e.chownSync), e.fchownSync = c(e.fchownSync), e.lchownSync = c(e.lchownSync), e.chmodSync = o(e.chmodSync), e.fchmodSync = o(e.fchmodSync), e.lchmodSync = o(e.lchmodSync), e.stat = l(e.stat), e.fstat = l(e.fstat), e.lstat = l(e.lstat), e.statSync = u(e.statSync), e.fstatSync = u(e.fstatSync), e.lstatSync = u(e.lstatSync), e.chmod && !e.lchmod && (e.lchmod = function(e, t, n) {
+			n && process.nextTick(n);
+		}, e.lchmodSync = function() {}), e.chown && !e.lchown && (e.lchown = function(e, t, n, r) {
+			r && process.nextTick(r);
+		}, e.lchownSync = function() {}), a === "win32" && (e.rename = typeof e.rename == "function" ? (function(t) {
+			function n(n, r, i) {
+				var a = Date.now(), o = 0;
+				t(n, r, function s(c) {
+					if (c && (c.code === "EACCES" || c.code === "EPERM" || c.code === "EBUSY") && Date.now() - a < 6e4) {
 						setTimeout(function() {
-							fs.stat(to, function(stater, st) {
-								if (stater && stater.code === "ENOENT") fs$rename(from, to, CB);
-								else cb(er);
+							e.stat(r, function(e, a) {
+								e && e.code === "ENOENT" ? t(n, r, s) : i(c);
 							});
-						}, backoff);
-						if (backoff < 100) backoff += 10;
+						}, o), o < 100 && (o += 10);
 						return;
 					}
-					if (cb) cb(er);
+					i && i(c);
 				});
 			}
-			if (Object.setPrototypeOf) Object.setPrototypeOf(rename, fs$rename);
-			return rename;
-		})(fs.rename);
-		fs.read = typeof fs.read !== "function" ? fs.read : (function(fs$read) {
-			function read(fd, buffer, offset, length, position, callback_) {
-				var callback;
-				if (callback_ && typeof callback_ === "function") {
-					var eagCounter = 0;
-					callback = function(er, _, __) {
-						if (er && er.code === "EAGAIN" && eagCounter < 10) {
-							eagCounter++;
-							return fs$read.call(fs, fd, buffer, offset, length, position, callback);
-						}
-						callback_.apply(this, arguments);
+			return Object.setPrototypeOf && Object.setPrototypeOf(n, t), n;
+		})(e.rename) : e.rename), e.read = typeof e.read == "function" ? (function(t) {
+			function n(n, r, i, a, o, s) {
+				var c;
+				if (s && typeof s == "function") {
+					var l = 0;
+					c = function(u, d, f) {
+						if (u && u.code === "EAGAIN" && l < 10) return l++, t.call(e, n, r, i, a, o, c);
+						s.apply(this, arguments);
 					};
 				}
-				return fs$read.call(fs, fd, buffer, offset, length, position, callback);
+				return t.call(e, n, r, i, a, o, c);
 			}
-			if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read);
-			return read;
-		})(fs.read);
-		fs.readSync = typeof fs.readSync !== "function" ? fs.readSync : (function(fs$readSync) {
-			return function(fd, buffer, offset, length, position) {
-				var eagCounter = 0;
-				while (true) try {
-					return fs$readSync.call(fs, fd, buffer, offset, length, position);
-				} catch (er) {
-					if (er.code === "EAGAIN" && eagCounter < 10) {
-						eagCounter++;
+			return Object.setPrototypeOf && Object.setPrototypeOf(n, t), n;
+		})(e.read) : e.read, e.readSync = typeof e.readSync == "function" ? (function(t) {
+			return function(n, r, i, a, o) {
+				for (var s = 0;;) try {
+					return t.call(e, n, r, i, a, o);
+				} catch (e) {
+					if (e.code === "EAGAIN" && s < 10) {
+						s++;
 						continue;
 					}
-					throw er;
+					throw e;
 				}
 			};
-		})(fs.readSync);
-		function patchLchmod(fs) {
-			fs.lchmod = function(path, mode, callback) {
-				fs.open(path, constants.O_WRONLY | constants.O_SYMLINK, mode, function(err, fd) {
-					if (err) {
-						if (callback) callback(err);
+		})(e.readSync) : e.readSync;
+		function t(e) {
+			e.lchmod = function(t, r, i) {
+				e.open(t, n.O_WRONLY | n.O_SYMLINK, r, function(t, n) {
+					if (t) {
+						i && i(t);
 						return;
 					}
-					fs.fchmod(fd, mode, function(err) {
-						fs.close(fd, function(err2) {
-							if (callback) callback(err || err2);
+					e.fchmod(n, r, function(t) {
+						e.close(n, function(e) {
+							i && i(t || e);
 						});
 					});
 				});
-			};
-			fs.lchmodSync = function(path, mode) {
-				var fd = fs.openSync(path, constants.O_WRONLY | constants.O_SYMLINK, mode);
-				var threw = true;
-				var ret;
+			}, e.lchmodSync = function(t, r) {
+				var i = e.openSync(t, n.O_WRONLY | n.O_SYMLINK, r), a = !0, o;
 				try {
-					ret = fs.fchmodSync(fd, mode);
-					threw = false;
+					o = e.fchmodSync(i, r), a = !1;
 				} finally {
-					if (threw) try {
-						fs.closeSync(fd);
-					} catch (er) {}
-					else fs.closeSync(fd);
+					if (a) try {
+						e.closeSync(i);
+					} catch {}
+					else e.closeSync(i);
 				}
-				return ret;
+				return o;
 			};
 		}
-		function patchLutimes(fs) {
-			if (constants.hasOwnProperty("O_SYMLINK") && fs.futimes) {
-				fs.lutimes = function(path, at, mt, cb) {
-					fs.open(path, constants.O_SYMLINK, function(er, fd) {
-						if (er) {
-							if (cb) cb(er);
-							return;
-						}
-						fs.futimes(fd, at, mt, function(er) {
-							fs.close(fd, function(er2) {
-								if (cb) cb(er || er2);
-							});
+		function r(e) {
+			n.hasOwnProperty("O_SYMLINK") && e.futimes ? (e.lutimes = function(t, r, i, a) {
+				e.open(t, n.O_SYMLINK, function(t, n) {
+					if (t) {
+						a && a(t);
+						return;
+					}
+					e.futimes(n, r, i, function(t) {
+						e.close(n, function(e) {
+							a && a(t || e);
 						});
 					});
-				};
-				fs.lutimesSync = function(path, at, mt) {
-					var fd = fs.openSync(path, constants.O_SYMLINK);
-					var ret;
-					var threw = true;
-					try {
-						ret = fs.futimesSync(fd, at, mt);
-						threw = false;
-					} finally {
-						if (threw) try {
-							fs.closeSync(fd);
-						} catch (er) {}
-						else fs.closeSync(fd);
-					}
-					return ret;
-				};
-			} else if (fs.futimes) {
-				fs.lutimes = function(_a, _b, _c, cb) {
-					if (cb) process.nextTick(cb);
-				};
-				fs.lutimesSync = function() {};
-			}
+				});
+			}, e.lutimesSync = function(t, r, i) {
+				var a = e.openSync(t, n.O_SYMLINK), o, s = !0;
+				try {
+					o = e.futimesSync(a, r, i), s = !1;
+				} finally {
+					if (s) try {
+						e.closeSync(a);
+					} catch {}
+					else e.closeSync(a);
+				}
+				return o;
+			}) : e.futimes && (e.lutimes = function(e, t, n, r) {
+				r && process.nextTick(r);
+			}, e.lutimesSync = function() {});
 		}
-		function chmodFix(orig) {
-			if (!orig) return orig;
-			return function(target, mode, cb) {
-				return orig.call(fs, target, mode, function(er) {
-					if (chownErOk(er)) er = null;
-					if (cb) cb.apply(this, arguments);
+		function i(t) {
+			return t && function(n, r, i) {
+				return t.call(e, n, r, function(e) {
+					d(e) && (e = null), i && i.apply(this, arguments);
 				});
 			};
 		}
-		function chmodFixSync(orig) {
-			if (!orig) return orig;
-			return function(target, mode) {
+		function o(t) {
+			return t && function(n, r) {
 				try {
-					return orig.call(fs, target, mode);
-				} catch (er) {
-					if (!chownErOk(er)) throw er;
+					return t.call(e, n, r);
+				} catch (e) {
+					if (!d(e)) throw e;
 				}
 			};
 		}
-		function chownFix(orig) {
-			if (!orig) return orig;
-			return function(target, uid, gid, cb) {
-				return orig.call(fs, target, uid, gid, function(er) {
-					if (chownErOk(er)) er = null;
-					if (cb) cb.apply(this, arguments);
+		function s(t) {
+			return t && function(n, r, i, a) {
+				return t.call(e, n, r, i, function(e) {
+					d(e) && (e = null), a && a.apply(this, arguments);
 				});
 			};
 		}
-		function chownFixSync(orig) {
-			if (!orig) return orig;
-			return function(target, uid, gid) {
+		function c(t) {
+			return t && function(n, r, i) {
 				try {
-					return orig.call(fs, target, uid, gid);
-				} catch (er) {
-					if (!chownErOk(er)) throw er;
+					return t.call(e, n, r, i);
+				} catch (e) {
+					if (!d(e)) throw e;
 				}
 			};
 		}
-		function statFix(orig) {
-			if (!orig) return orig;
-			return function(target, options, cb) {
-				if (typeof options === "function") {
-					cb = options;
-					options = null;
+		function l(t) {
+			return t && function(n, r, i) {
+				typeof r == "function" && (i = r, r = null);
+				function a(e, t) {
+					t && (t.uid < 0 && (t.uid += 4294967296), t.gid < 0 && (t.gid += 4294967296)), i && i.apply(this, arguments);
 				}
-				function callback(er, stats) {
-					if (stats) {
-						if (stats.uid < 0) stats.uid += 4294967296;
-						if (stats.gid < 0) stats.gid += 4294967296;
-					}
-					if (cb) cb.apply(this, arguments);
-				}
-				return options ? orig.call(fs, target, options, callback) : orig.call(fs, target, callback);
+				return r ? t.call(e, n, r, a) : t.call(e, n, a);
 			};
 		}
-		function statFixSync(orig) {
-			if (!orig) return orig;
-			return function(target, options) {
-				var stats = options ? orig.call(fs, target, options) : orig.call(fs, target);
-				if (stats) {
-					if (stats.uid < 0) stats.uid += 4294967296;
-					if (stats.gid < 0) stats.gid += 4294967296;
-				}
-				return stats;
+		function u(t) {
+			return t && function(n, r) {
+				var i = r ? t.call(e, n, r) : t.call(e, n);
+				return i && (i.uid < 0 && (i.uid += 4294967296), i.gid < 0 && (i.gid += 4294967296)), i;
 			};
 		}
-		function chownErOk(er) {
-			if (!er) return true;
-			if (er.code === "ENOSYS") return true;
-			if (!process.getuid || process.getuid() !== 0) {
-				if (er.code === "EINVAL" || er.code === "EPERM") return true;
-			}
-			return false;
+		function d(e) {
+			return !(e && e.code !== "ENOSYS" && (process.getuid && process.getuid() === 0 || e.code !== "EINVAL" && e.code !== "EPERM"));
 		}
 	}
-}));
-//#endregion
-//#region node_modules/graceful-fs/legacy-streams.js
-var require_legacy_streams = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var Stream$1 = __require("stream").Stream;
-	module.exports = legacy;
-	function legacy(fs) {
+})), Lo = /* @__PURE__ */ P(((e, t) => {
+	var n = F("stream").Stream;
+	t.exports = r;
+	function r(e) {
 		return {
-			ReadStream,
-			WriteStream
+			ReadStream: t,
+			WriteStream: r
 		};
-		function ReadStream(path, options) {
-			if (!(this instanceof ReadStream)) return new ReadStream(path, options);
-			Stream$1.call(this);
-			var self = this;
-			this.path = path;
-			this.fd = null;
-			this.readable = true;
-			this.paused = false;
-			this.flags = "r";
-			this.mode = 438;
-			this.bufferSize = 65536;
-			options = options || {};
-			var keys = Object.keys(options);
-			for (var index = 0, length = keys.length; index < length; index++) {
-				var key = keys[index];
-				this[key] = options[key];
+		function t(r, i) {
+			if (!(this instanceof t)) return new t(r, i);
+			n.call(this);
+			var a = this;
+			this.path = r, this.fd = null, this.readable = !0, this.paused = !1, this.flags = "r", this.mode = 438, this.bufferSize = 65536, i ||= {};
+			for (var o = Object.keys(i), s = 0, c = o.length; s < c; s++) {
+				var l = o[s];
+				this[l] = i[l];
 			}
-			if (this.encoding) this.setEncoding(this.encoding);
-			if (this.start !== void 0) {
-				if ("number" !== typeof this.start) throw TypeError("start must be a Number");
+			if (this.encoding && this.setEncoding(this.encoding), this.start !== void 0) {
+				if (typeof this.start != "number") throw TypeError("start must be a Number");
 				if (this.end === void 0) this.end = Infinity;
-				else if ("number" !== typeof this.end) throw TypeError("end must be a Number");
-				if (this.start > this.end) throw new Error("start must be <= end");
+				else if (typeof this.end != "number") throw TypeError("end must be a Number");
+				if (this.start > this.end) throw Error("start must be <= end");
 				this.pos = this.start;
 			}
 			if (this.fd !== null) {
 				process.nextTick(function() {
-					self._read();
+					a._read();
 				});
 				return;
 			}
-			fs.open(this.path, this.flags, this.mode, function(err, fd) {
-				if (err) {
-					self.emit("error", err);
-					self.readable = false;
+			e.open(this.path, this.flags, this.mode, function(e, t) {
+				if (e) {
+					a.emit("error", e), a.readable = !1;
 					return;
 				}
-				self.fd = fd;
-				self.emit("open", fd);
-				self._read();
+				a.fd = t, a.emit("open", t), a._read();
 			});
 		}
-		function WriteStream(path, options) {
-			if (!(this instanceof WriteStream)) return new WriteStream(path, options);
-			Stream$1.call(this);
-			this.path = path;
-			this.fd = null;
-			this.writable = true;
-			this.flags = "w";
-			this.encoding = "binary";
-			this.mode = 438;
-			this.bytesWritten = 0;
-			options = options || {};
-			var keys = Object.keys(options);
-			for (var index = 0, length = keys.length; index < length; index++) {
-				var key = keys[index];
-				this[key] = options[key];
+		function r(t, i) {
+			if (!(this instanceof r)) return new r(t, i);
+			n.call(this), this.path = t, this.fd = null, this.writable = !0, this.flags = "w", this.encoding = "binary", this.mode = 438, this.bytesWritten = 0, i ||= {};
+			for (var a = Object.keys(i), o = 0, s = a.length; o < s; o++) {
+				var c = a[o];
+				this[c] = i[c];
 			}
 			if (this.start !== void 0) {
-				if ("number" !== typeof this.start) throw TypeError("start must be a Number");
-				if (this.start < 0) throw new Error("start must be >= zero");
+				if (typeof this.start != "number") throw TypeError("start must be a Number");
+				if (this.start < 0) throw Error("start must be >= zero");
 				this.pos = this.start;
 			}
-			this.busy = false;
-			this._queue = [];
-			if (this.fd === null) {
-				this._open = fs.open;
-				this._queue.push([
-					this._open,
-					this.path,
-					this.flags,
-					this.mode,
-					void 0
-				]);
-				this.flush();
-			}
+			this.busy = !1, this._queue = [], this.fd === null && (this._open = e.open, this._queue.push([
+				this._open,
+				this.path,
+				this.flags,
+				this.mode,
+				void 0
+			]), this.flush());
 		}
 	}
-}));
-//#endregion
-//#region node_modules/graceful-fs/clone.js
-var require_clone = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	module.exports = clone;
-	var getPrototypeOf = Object.getPrototypeOf || function(obj) {
-		return obj.__proto__;
+})), Ro = /* @__PURE__ */ P(((e, t) => {
+	t.exports = r;
+	var n = Object.getPrototypeOf || function(e) {
+		return e.__proto__;
 	};
-	function clone(obj) {
-		if (obj === null || typeof obj !== "object") return obj;
-		if (obj instanceof Object) var copy = { __proto__: getPrototypeOf(obj) };
-		else var copy = Object.create(null);
-		Object.getOwnPropertyNames(obj).forEach(function(key) {
-			Object.defineProperty(copy, key, Object.getOwnPropertyDescriptor(obj, key));
-		});
-		return copy;
+	function r(e) {
+		if (typeof e != "object" || !e) return e;
+		if (e instanceof Object) var t = { __proto__: n(e) };
+		else var t = Object.create(null);
+		return Object.getOwnPropertyNames(e).forEach(function(n) {
+			Object.defineProperty(t, n, Object.getOwnPropertyDescriptor(e, n));
+		}), t;
 	}
-}));
-//#endregion
-//#region node_modules/graceful-fs/graceful-fs.js
-var require_graceful_fs = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var fs$2 = __require("fs");
-	var polyfills = require_polyfills();
-	var legacy = require_legacy_streams();
-	var clone = require_clone();
-	var util = __require("util");
-	/* istanbul ignore next - node 0.x polyfill */
-	var gracefulQueue;
-	var previousSymbol;
+})), zo = /* @__PURE__ */ P(((e, t) => {
+	var n = F("fs"), r = Io(), i = Lo(), a = Ro(), o = F("util"), s, c;
 	/* istanbul ignore else - node 0.x polyfill */
-	if (typeof Symbol === "function" && typeof Symbol.for === "function") {
-		gracefulQueue = Symbol.for("graceful-fs.queue");
-		previousSymbol = Symbol.for("graceful-fs.previous");
-	} else {
-		gracefulQueue = "___graceful-fs.queue";
-		previousSymbol = "___graceful-fs.previous";
-	}
-	function noop() {}
-	function publishQueue(context, queue) {
-		Object.defineProperty(context, gracefulQueue, { get: function() {
-			return queue;
+	typeof Symbol == "function" && typeof Symbol.for == "function" ? (s = Symbol.for("graceful-fs.queue"), c = Symbol.for("graceful-fs.previous")) : (s = "___graceful-fs.queue", c = "___graceful-fs.previous");
+	function l() {}
+	function u(e, t) {
+		Object.defineProperty(e, s, { get: function() {
+			return t;
 		} });
 	}
-	var debug = noop;
-	if (util.debuglog) debug = util.debuglog("gfs4");
-	else if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || "")) debug = function() {
-		var m = util.format.apply(util, arguments);
-		m = "GFS4: " + m.split(/\n/).join("\nGFS4: ");
-		console.error(m);
-	};
-	if (!fs$2[gracefulQueue]) {
-		publishQueue(fs$2, global[gracefulQueue] || []);
-		fs$2.close = (function(fs$close) {
-			function close(fd, cb) {
-				return fs$close.call(fs$2, fd, function(err) {
-					if (!err) resetQueue();
-					if (typeof cb === "function") cb.apply(this, arguments);
-				});
-			}
-			Object.defineProperty(close, previousSymbol, { value: fs$close });
-			return close;
-		})(fs$2.close);
-		fs$2.closeSync = (function(fs$closeSync) {
-			function closeSync(fd) {
-				fs$closeSync.apply(fs$2, arguments);
-				resetQueue();
-			}
-			Object.defineProperty(closeSync, previousSymbol, { value: fs$closeSync });
-			return closeSync;
-		})(fs$2.closeSync);
-		if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || "")) process.on("exit", function() {
-			debug(fs$2[gracefulQueue]);
-			__require("assert").equal(fs$2[gracefulQueue].length, 0);
-		});
-	}
-	if (!global[gracefulQueue]) publishQueue(global, fs$2[gracefulQueue]);
-	module.exports = patch(clone(fs$2));
-	if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs$2.__patched) {
-		module.exports = patch(fs$2);
-		fs$2.__patched = true;
-	}
-	function patch(fs) {
-		polyfills(fs);
-		fs.gracefulify = patch;
-		fs.createReadStream = createReadStream;
-		fs.createWriteStream = createWriteStream;
-		var fs$readFile = fs.readFile;
-		fs.readFile = readFile;
-		function readFile(path, options, cb) {
-			if (typeof options === "function") cb = options, options = null;
-			return go$readFile(path, options, cb);
-			function go$readFile(path, options, cb, startTime) {
-				return fs$readFile(path, options, function(err) {
-					if (err && (err.code === "EMFILE" || err.code === "ENFILE")) enqueue([
-						go$readFile,
+	var d = l;
+	o.debuglog ? d = o.debuglog("gfs4") : /\bgfs4\b/i.test(process.env.NODE_DEBUG || "") && (d = function() {
+		var e = o.format.apply(o, arguments);
+		e = "GFS4: " + e.split(/\n/).join("\nGFS4: "), console.error(e);
+	}), n[s] || (u(n, global[s] || []), n.close = (function(e) {
+		function t(t, r) {
+			return e.call(n, t, function(e) {
+				e || h(), typeof r == "function" && r.apply(this, arguments);
+			});
+		}
+		return Object.defineProperty(t, c, { value: e }), t;
+	})(n.close), n.closeSync = (function(e) {
+		function t(t) {
+			e.apply(n, arguments), h();
+		}
+		return Object.defineProperty(t, c, { value: e }), t;
+	})(n.closeSync), /\bgfs4\b/i.test(process.env.NODE_DEBUG || "") && process.on("exit", function() {
+		d(n[s]), F("assert").equal(n[s].length, 0);
+	})), global[s] || u(global, n[s]), t.exports = f(a(n)), process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !n.__patched && (t.exports = f(n), n.__patched = !0);
+	function f(e) {
+		r(e), e.gracefulify = f, e.createReadStream = ee, e.createWriteStream = T;
+		var t = e.readFile;
+		e.readFile = n;
+		function n(e, n, r) {
+			return typeof n == "function" && (r = n, n = null), i(e, n, r);
+			function i(e, n, r, a) {
+				return t(e, n, function(t) {
+					t && (t.code === "EMFILE" || t.code === "ENFILE") ? p([
+						i,
 						[
-							path,
-							options,
-							cb
+							e,
+							n,
+							r
 						],
-						err,
-						startTime || Date.now(),
+						t,
+						a || Date.now(),
 						Date.now()
-					]);
-					else if (typeof cb === "function") cb.apply(this, arguments);
+					]) : typeof r == "function" && r.apply(this, arguments);
 				});
 			}
 		}
-		var fs$writeFile = fs.writeFile;
-		fs.writeFile = writeFile;
-		function writeFile(path, data, options, cb) {
-			if (typeof options === "function") cb = options, options = null;
-			return go$writeFile(path, data, options, cb);
-			function go$writeFile(path, data, options, cb, startTime) {
-				return fs$writeFile(path, data, options, function(err) {
-					if (err && (err.code === "EMFILE" || err.code === "ENFILE")) enqueue([
-						go$writeFile,
+		var a = e.writeFile;
+		e.writeFile = o;
+		function o(e, t, n, r) {
+			return typeof n == "function" && (r = n, n = null), i(e, t, n, r);
+			function i(e, t, n, r, o) {
+				return a(e, t, n, function(a) {
+					a && (a.code === "EMFILE" || a.code === "ENFILE") ? p([
+						i,
 						[
-							path,
-							data,
-							options,
-							cb
+							e,
+							t,
+							n,
+							r
 						],
-						err,
-						startTime || Date.now(),
+						a,
+						o || Date.now(),
 						Date.now()
-					]);
-					else if (typeof cb === "function") cb.apply(this, arguments);
+					]) : typeof r == "function" && r.apply(this, arguments);
 				});
 			}
 		}
-		var fs$appendFile = fs.appendFile;
-		if (fs$appendFile) fs.appendFile = appendFile;
-		function appendFile(path, data, options, cb) {
-			if (typeof options === "function") cb = options, options = null;
-			return go$appendFile(path, data, options, cb);
-			function go$appendFile(path, data, options, cb, startTime) {
-				return fs$appendFile(path, data, options, function(err) {
-					if (err && (err.code === "EMFILE" || err.code === "ENFILE")) enqueue([
-						go$appendFile,
+		var s = e.appendFile;
+		s && (e.appendFile = c);
+		function c(e, t, n, r) {
+			return typeof n == "function" && (r = n, n = null), i(e, t, n, r);
+			function i(e, t, n, r, a) {
+				return s(e, t, n, function(o) {
+					o && (o.code === "EMFILE" || o.code === "ENFILE") ? p([
+						i,
 						[
-							path,
-							data,
-							options,
-							cb
+							e,
+							t,
+							n,
+							r
 						],
-						err,
-						startTime || Date.now(),
+						o,
+						a || Date.now(),
 						Date.now()
-					]);
-					else if (typeof cb === "function") cb.apply(this, arguments);
+					]) : typeof r == "function" && r.apply(this, arguments);
 				});
 			}
 		}
-		var fs$copyFile = fs.copyFile;
-		if (fs$copyFile) fs.copyFile = copyFile;
-		function copyFile(src, dest, flags, cb) {
-			if (typeof flags === "function") {
-				cb = flags;
-				flags = 0;
-			}
-			return go$copyFile(src, dest, flags, cb);
-			function go$copyFile(src, dest, flags, cb, startTime) {
-				return fs$copyFile(src, dest, flags, function(err) {
-					if (err && (err.code === "EMFILE" || err.code === "ENFILE")) enqueue([
-						go$copyFile,
+		var l = e.copyFile;
+		l && (e.copyFile = u);
+		function u(e, t, n, r) {
+			return typeof n == "function" && (r = n, n = 0), i(e, t, n, r);
+			function i(e, t, n, r, a) {
+				return l(e, t, n, function(o) {
+					o && (o.code === "EMFILE" || o.code === "ENFILE") ? p([
+						i,
 						[
-							src,
-							dest,
-							flags,
-							cb
+							e,
+							t,
+							n,
+							r
 						],
-						err,
-						startTime || Date.now(),
+						o,
+						a || Date.now(),
 						Date.now()
-					]);
-					else if (typeof cb === "function") cb.apply(this, arguments);
+					]) : typeof r == "function" && r.apply(this, arguments);
 				});
 			}
 		}
-		var fs$readdir = fs.readdir;
-		fs.readdir = readdir;
-		var noReaddirOptionVersions = /^v[0-5]\./;
-		function readdir(path, options, cb) {
-			if (typeof options === "function") cb = options, options = null;
-			var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir(path, options, cb, startTime) {
-				return fs$readdir(path, fs$readdirCallback(path, options, cb, startTime));
-			} : function go$readdir(path, options, cb, startTime) {
-				return fs$readdir(path, options, fs$readdirCallback(path, options, cb, startTime));
+		var d = e.readdir;
+		e.readdir = h;
+		var m = /^v[0-5]\./;
+		function h(e, t, n) {
+			typeof t == "function" && (n = t, t = null);
+			var r = m.test(process.version) ? function(e, t, n, r) {
+				return d(e, i(e, t, n, r));
+			} : function(e, t, n, r) {
+				return d(e, t, i(e, t, n, r));
 			};
-			return go$readdir(path, options, cb);
-			function fs$readdirCallback(path, options, cb, startTime) {
-				return function(err, files) {
-					if (err && (err.code === "EMFILE" || err.code === "ENFILE")) enqueue([
-						go$readdir,
+			return r(e, t, n);
+			function i(e, t, n, i) {
+				return function(a, o) {
+					a && (a.code === "EMFILE" || a.code === "ENFILE") ? p([
+						r,
 						[
-							path,
-							options,
-							cb
+							e,
+							t,
+							n
 						],
-						err,
-						startTime || Date.now(),
+						a,
+						i || Date.now(),
 						Date.now()
-					]);
-					else {
-						if (files && files.sort) files.sort();
-						if (typeof cb === "function") cb.call(this, err, files);
-					}
+					]) : (o && o.sort && o.sort(), typeof n == "function" && n.call(this, a, o));
 				};
 			}
 		}
 		if (process.version.substr(0, 4) === "v0.8") {
-			var legStreams = legacy(fs);
-			ReadStream = legStreams.ReadStream;
-			WriteStream = legStreams.WriteStream;
+			var g = i(e);
+			x = g.ReadStream, C = g.WriteStream;
 		}
-		var fs$ReadStream = fs.ReadStream;
-		if (fs$ReadStream) {
-			ReadStream.prototype = Object.create(fs$ReadStream.prototype);
-			ReadStream.prototype.open = ReadStream$open;
+		var _ = e.ReadStream;
+		_ && (x.prototype = Object.create(_.prototype), x.prototype.open = S);
+		var v = e.WriteStream;
+		v && (C.prototype = Object.create(v.prototype), C.prototype.open = w), Object.defineProperty(e, "ReadStream", {
+			get: function() {
+				return x;
+			},
+			set: function(e) {
+				x = e;
+			},
+			enumerable: !0,
+			configurable: !0
+		}), Object.defineProperty(e, "WriteStream", {
+			get: function() {
+				return C;
+			},
+			set: function(e) {
+				C = e;
+			},
+			enumerable: !0,
+			configurable: !0
+		});
+		var y = x;
+		Object.defineProperty(e, "FileReadStream", {
+			get: function() {
+				return y;
+			},
+			set: function(e) {
+				y = e;
+			},
+			enumerable: !0,
+			configurable: !0
+		});
+		var b = C;
+		Object.defineProperty(e, "FileWriteStream", {
+			get: function() {
+				return b;
+			},
+			set: function(e) {
+				b = e;
+			},
+			enumerable: !0,
+			configurable: !0
+		});
+		function x(e, t) {
+			return this instanceof x ? (_.apply(this, arguments), this) : x.apply(Object.create(x.prototype), arguments);
 		}
-		var fs$WriteStream = fs.WriteStream;
-		if (fs$WriteStream) {
-			WriteStream.prototype = Object.create(fs$WriteStream.prototype);
-			WriteStream.prototype.open = WriteStream$open;
-		}
-		Object.defineProperty(fs, "ReadStream", {
-			get: function() {
-				return ReadStream;
-			},
-			set: function(val) {
-				ReadStream = val;
-			},
-			enumerable: true,
-			configurable: true
-		});
-		Object.defineProperty(fs, "WriteStream", {
-			get: function() {
-				return WriteStream;
-			},
-			set: function(val) {
-				WriteStream = val;
-			},
-			enumerable: true,
-			configurable: true
-		});
-		var FileReadStream = ReadStream;
-		Object.defineProperty(fs, "FileReadStream", {
-			get: function() {
-				return FileReadStream;
-			},
-			set: function(val) {
-				FileReadStream = val;
-			},
-			enumerable: true,
-			configurable: true
-		});
-		var FileWriteStream = WriteStream;
-		Object.defineProperty(fs, "FileWriteStream", {
-			get: function() {
-				return FileWriteStream;
-			},
-			set: function(val) {
-				FileWriteStream = val;
-			},
-			enumerable: true,
-			configurable: true
-		});
-		function ReadStream(path, options) {
-			if (this instanceof ReadStream) return fs$ReadStream.apply(this, arguments), this;
-			else return ReadStream.apply(Object.create(ReadStream.prototype), arguments);
-		}
-		function ReadStream$open() {
-			var that = this;
-			open(that.path, that.flags, that.mode, function(err, fd) {
-				if (err) {
-					if (that.autoClose) that.destroy();
-					that.emit("error", err);
-				} else {
-					that.fd = fd;
-					that.emit("open", fd);
-					that.read();
-				}
+		function S() {
+			var e = this;
+			D(e.path, e.flags, e.mode, function(t, n) {
+				t ? (e.autoClose && e.destroy(), e.emit("error", t)) : (e.fd = n, e.emit("open", n), e.read());
 			});
 		}
-		function WriteStream(path, options) {
-			if (this instanceof WriteStream) return fs$WriteStream.apply(this, arguments), this;
-			else return WriteStream.apply(Object.create(WriteStream.prototype), arguments);
+		function C(e, t) {
+			return this instanceof C ? (v.apply(this, arguments), this) : C.apply(Object.create(C.prototype), arguments);
 		}
-		function WriteStream$open() {
-			var that = this;
-			open(that.path, that.flags, that.mode, function(err, fd) {
-				if (err) {
-					that.destroy();
-					that.emit("error", err);
-				} else {
-					that.fd = fd;
-					that.emit("open", fd);
-				}
+		function w() {
+			var e = this;
+			D(e.path, e.flags, e.mode, function(t, n) {
+				t ? (e.destroy(), e.emit("error", t)) : (e.fd = n, e.emit("open", n));
 			});
 		}
-		function createReadStream(path, options) {
-			return new fs.ReadStream(path, options);
+		function ee(t, n) {
+			return new e.ReadStream(t, n);
 		}
-		function createWriteStream(path, options) {
-			return new fs.WriteStream(path, options);
+		function T(t, n) {
+			return new e.WriteStream(t, n);
 		}
-		var fs$open = fs.open;
-		fs.open = open;
-		function open(path, flags, mode, cb) {
-			if (typeof mode === "function") cb = mode, mode = null;
-			return go$open(path, flags, mode, cb);
-			function go$open(path, flags, mode, cb, startTime) {
-				return fs$open(path, flags, mode, function(err, fd) {
-					if (err && (err.code === "EMFILE" || err.code === "ENFILE")) enqueue([
-						go$open,
+		var E = e.open;
+		e.open = D;
+		function D(e, t, n, r) {
+			return typeof n == "function" && (r = n, n = null), i(e, t, n, r);
+			function i(e, t, n, r, a) {
+				return E(e, t, n, function(o, s) {
+					o && (o.code === "EMFILE" || o.code === "ENFILE") ? p([
+						i,
 						[
-							path,
-							flags,
-							mode,
-							cb
+							e,
+							t,
+							n,
+							r
 						],
-						err,
-						startTime || Date.now(),
+						o,
+						a || Date.now(),
 						Date.now()
-					]);
-					else if (typeof cb === "function") cb.apply(this, arguments);
+					]) : typeof r == "function" && r.apply(this, arguments);
 				});
 			}
 		}
-		return fs;
+		return e;
 	}
-	function enqueue(elem) {
-		debug("ENQUEUE", elem[0].name, elem[1]);
-		fs$2[gracefulQueue].push(elem);
-		retry();
+	function p(e) {
+		d("ENQUEUE", e[0].name, e[1]), n[s].push(e), g();
 	}
-	var retryTimer;
-	function resetQueue() {
-		var now = Date.now();
-		for (var i = 0; i < fs$2[gracefulQueue].length; ++i) if (fs$2[gracefulQueue][i].length > 2) {
-			fs$2[gracefulQueue][i][3] = now;
-			fs$2[gracefulQueue][i][4] = now;
+	var m;
+	function h() {
+		for (var e = Date.now(), t = 0; t < n[s].length; ++t) n[s][t].length > 2 && (n[s][t][3] = e, n[s][t][4] = e);
+		g();
+	}
+	function g() {
+		if (clearTimeout(m), m = void 0, n[s].length !== 0) {
+			var e = n[s].shift(), t = e[0], r = e[1], i = e[2], a = e[3], o = e[4];
+			if (a === void 0) d("RETRY", t.name, r), t.apply(null, r);
+			else if (Date.now() - a >= 6e4) {
+				d("TIMEOUT", t.name, r);
+				var c = r.pop();
+				typeof c == "function" && c.call(null, i);
+			} else {
+				var l = Date.now() - o, u = Math.max(o - a, 1);
+				l >= Math.min(u * 1.2, 100) ? (d("RETRY", t.name, r), t.apply(null, r.concat([a]))) : n[s].push(e);
+			}
+			m === void 0 && (m = setTimeout(g, 0));
 		}
-		retry();
-	}
-	function retry() {
-		clearTimeout(retryTimer);
-		retryTimer = void 0;
-		if (fs$2[gracefulQueue].length === 0) return;
-		var elem = fs$2[gracefulQueue].shift();
-		var fn = elem[0];
-		var args = elem[1];
-		var err = elem[2];
-		var startTime = elem[3];
-		var lastTime = elem[4];
-		if (startTime === void 0) {
-			debug("RETRY", fn.name, args);
-			fn.apply(null, args);
-		} else if (Date.now() - startTime >= 6e4) {
-			debug("TIMEOUT", fn.name, args);
-			var cb = args.pop();
-			if (typeof cb === "function") cb.call(null, err);
-		} else {
-			var sinceAttempt = Date.now() - lastTime;
-			var sinceStart = Math.max(lastTime - startTime, 1);
-			if (sinceAttempt >= Math.min(sinceStart * 1.2, 100)) {
-				debug("RETRY", fn.name, args);
-				fn.apply(null, args.concat([startTime]));
-			} else fs$2[gracefulQueue].push(elem);
-		}
-		if (retryTimer === void 0) retryTimer = setTimeout(retry, 0);
 	}
 }));
-(/* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var VAL32 = 4294967296;
-	var _HEX = [];
-	for (var i = 0; i < 256; i++) _HEX[i] = (i > 15 ? "" : "0") + i.toString(16);
-	/**
-	* Constructor accepts any of the following argument types:
-	*
-	* new Int64(buffer[, offset=0]) - Existing Buffer with byte offset
-	* new Int64(Uint8Array[, offset=0]) - Existing Uint8Array with a byte offset
-	* new Int64(string)             - Hex string (throws if n is outside int64 range)
-	* new Int64(number)             - Number (throws if n is outside int64 range)
-	* new Int64(hi, lo)             - Raw bits as two 32-bit values
-	*/
-	var Int64 = module.exports = function(a1, a2) {
-		if (a1 instanceof Buffer) {
-			this.buffer = a1;
-			this.offset = a2 || 0;
-		} else if (Object.prototype.toString.call(a1) == "[object Uint8Array]") {
-			this.buffer = new Buffer(a1);
-			this.offset = a2 || 0;
-		} else {
-			this.buffer = this.buffer || new Buffer(8);
-			this.offset = 0;
-			this.setValue.apply(this, arguments);
-		}
+(/* @__PURE__ */ P(((e, t) => {
+	for (var n = 4294967296, r = [], i = 0; i < 256; i++) r[i] = (i > 15 ? "" : "0") + i.toString(16);
+	var a = t.exports = function(e, t) {
+		e instanceof Buffer ? (this.buffer = e, this.offset = t || 0) : Object.prototype.toString.call(e) == "[object Uint8Array]" ? (this.buffer = new Buffer(e), this.offset = t || 0) : (this.buffer = this.buffer || new Buffer(8), this.offset = 0, this.setValue.apply(this, arguments));
 	};
-	Int64.MAX_INT = Math.pow(2, 53);
-	Int64.MIN_INT = -Math.pow(2, 53);
-	Int64.prototype = {
-		constructor: Int64,
-		/**
-		* Do in-place 2's compliment.  See
-		* http://en.wikipedia.org/wiki/Two's_complement
-		*/
+	a.MAX_INT = 2 ** 53, a.MIN_INT = -(2 ** 53), a.prototype = {
+		constructor: a,
 		_2scomp: function() {
-			var b = this.buffer, o = this.offset, carry = 1;
-			for (var i = o + 7; i >= o; i--) {
-				var v = (b[i] ^ 255) + carry;
-				b[i] = v & 255;
-				carry = v >> 8;
+			for (var e = this.buffer, t = this.offset, n = 1, r = t + 7; r >= t; r--) {
+				var i = (e[r] ^ 255) + n;
+				e[r] = i & 255, n = i >> 8;
 			}
 		},
-		/**
-		* Set the value. Takes any of the following arguments:
-		*
-		* setValue(string) - A hexidecimal string
-		* setValue(number) - Number (throws if n is outside int64 range)
-		* setValue(hi, lo) - Raw bits as two 32-bit values
-		*/
-		setValue: function(hi, lo) {
-			var negate = false;
+		setValue: function(e, t) {
+			var r = !1;
 			if (arguments.length == 1) {
-				if (typeof hi == "number") {
-					negate = hi < 0;
-					hi = Math.abs(hi);
-					lo = hi % VAL32;
-					hi = hi / VAL32;
-					if (hi > VAL32) throw new RangeError(hi + " is outside Int64 range");
-					hi = hi | 0;
-				} else if (typeof hi == "string") {
-					hi = (hi + "").replace(/^0x/, "");
-					lo = hi.substr(-8);
-					hi = hi.length > 8 ? hi.substr(0, hi.length - 8) : "";
-					hi = parseInt(hi, 16);
-					lo = parseInt(lo, 16);
-				} else throw new Error(hi + " must be a Number or String");
+				if (typeof e == "number") {
+					if (r = e < 0, e = Math.abs(e), t = e % n, e /= n, e > n) throw RangeError(e + " is outside Int64 range");
+					e |= 0;
+				} else if (typeof e == "string") e = (e + "").replace(/^0x/, ""), t = e.substr(-8), e = e.length > 8 ? e.substr(0, e.length - 8) : "", e = parseInt(e, 16), t = parseInt(t, 16);
+				else throw Error(e + " must be a Number or String");
 			}
-			var b = this.buffer, o = this.offset;
-			for (var i = 7; i >= 0; i--) {
-				b[o + i] = lo & 255;
-				lo = i == 4 ? hi : lo >>> 8;
-			}
-			if (negate) this._2scomp();
+			for (var i = this.buffer, a = this.offset, o = 7; o >= 0; o--) i[a + o] = t & 255, t = o == 4 ? e : t >>> 8;
+			r && this._2scomp();
 		},
-		/**
-		* Convert to a native JS number.
-		*
-		* WARNING: Do not expect this value to be accurate to integer precision for
-		* large (positive or negative) numbers!
-		*
-		* @param allowImprecise If true, no check is performed to verify the
-		* returned value is accurate to integer precision.  If false, imprecise
-		* numbers (very large positive or negative numbers) will be forced to +/-
-		* Infinity.
-		*/
-		toNumber: function(allowImprecise) {
-			var b = this.buffer, o = this.offset;
-			var negate = b[o] & 128, x = 0, carry = 1;
-			for (var i = 7, m = 1; i >= 0; i--, m *= 256) {
-				var v = b[o + i];
-				if (negate) {
-					v = (v ^ 255) + carry;
-					carry = v >> 8;
-					v = v & 255;
-				}
-				x += v * m;
+		toNumber: function(e) {
+			for (var t = this.buffer, n = this.offset, r = t[n] & 128, i = 0, o = 1, s = 7, c = 1; s >= 0; s--, c *= 256) {
+				var l = t[n + s];
+				r && (l = (l ^ 255) + o, o = l >> 8, l &= 255), i += l * c;
 			}
-			if (!allowImprecise && x >= Int64.MAX_INT) return negate ? -Infinity : Infinity;
-			return negate ? -x : x;
+			return !e && i >= a.MAX_INT ? r ? -Infinity : Infinity : r ? -i : i;
 		},
-		/**
-		* Convert to a JS Number. Returns +/-Infinity for values that can't be
-		* represented to integer precision.
-		*/
 		valueOf: function() {
-			return this.toNumber(false);
+			return this.toNumber(!1);
 		},
-		/**
-		* Return string value
-		*
-		* @param radix Just like Number#toString()'s radix
-		*/
-		toString: function(radix) {
-			return this.valueOf().toString(radix || 10);
+		toString: function(e) {
+			return this.valueOf().toString(e || 10);
 		},
-		/**
-		* Return a string showing the buffer octets, with MSB on the left.
-		*
-		* @param sep separator string. default is '' (empty string)
-		*/
-		toOctetString: function(sep) {
-			var out = new Array(8);
-			var b = this.buffer, o = this.offset;
-			for (var i = 0; i < 8; i++) out[i] = _HEX[b[o + i]];
-			return out.join(sep || "");
+		toOctetString: function(e) {
+			for (var t = Array(8), n = this.buffer, i = this.offset, a = 0; a < 8; a++) t[a] = r[n[i + a]];
+			return t.join(e || "");
 		},
-		/**
-		* Returns the int64's 8 bytes in a buffer.
-		*
-		* @param {bool} [rawBuffer=false]  If no offset and this is true, return the internal buffer.  Should only be used if
-		*                                  you're discarding the Int64 afterwards, as it breaks encapsulation.
-		*/
-		toBuffer: function(rawBuffer) {
-			if (rawBuffer && this.offset === 0) return this.buffer;
-			var out = new Buffer(8);
-			this.buffer.copy(out, 0, this.offset, this.offset + 8);
-			return out;
+		toBuffer: function(e) {
+			if (e && this.offset === 0) return this.buffer;
+			var t = new Buffer(8);
+			return this.buffer.copy(t, 0, this.offset, this.offset + 8), t;
 		},
-		/**
-		* Copy 8 bytes of int64 into target buffer at target offset.
-		*
-		* @param {Buffer} targetBuffer       Buffer to copy into.
-		* @param {number} [targetOffset=0]   Offset into target buffer.
-		*/
-		copy: function(targetBuffer, targetOffset) {
-			this.buffer.copy(targetBuffer, targetOffset || 0, this.offset, this.offset + 8);
+		copy: function(e, t) {
+			this.buffer.copy(e, t || 0, this.offset, this.offset + 8);
 		},
-		/**
-		* Returns a number indicating whether this comes before or after or is the
-		* same as the other in sort order.
-		*
-		* @param {Int64} other  Other Int64 to compare.
-		*/
-		compare: function(other) {
-			if ((this.buffer[this.offset] & 128) != (other.buffer[other.offset] & 128)) return other.buffer[other.offset] - this.buffer[this.offset];
-			for (var i = 0; i < 8; i++) if (this.buffer[this.offset + i] !== other.buffer[other.offset + i]) return this.buffer[this.offset + i] - other.buffer[other.offset + i];
+		compare: function(e) {
+			if ((this.buffer[this.offset] & 128) != (e.buffer[e.offset] & 128)) return e.buffer[e.offset] - this.buffer[this.offset];
+			for (var t = 0; t < 8; t++) if (this.buffer[this.offset + t] !== e.buffer[e.offset + t]) return this.buffer[this.offset + t] - e.buffer[e.offset + t];
 			return 0;
 		},
-		/**
-		* Returns a boolean indicating if this integer is equal to other.
-		*
-		* @param {Int64} other  Other Int64 to compare.
-		*/
-		equals: function(other) {
-			return this.compare(other) === 0;
+		equals: function(e) {
+			return this.compare(e) === 0;
 		},
-		/**
-		* Pretty output in console.log
-		*/
 		inspect: function() {
 			return "[Int64 value:" + this + " octets:" + this.toOctetString(" ") + "]";
 		}
 	};
-})))();
-Buffer.alloc(4).writeUInt32LE(101010256, 0);
-require_graceful_fs();
+})))(), Buffer.alloc(4).writeUInt32LE(101010256, 0), zo();
 //#endregion
 //#region node_modules/read-excel-file/modules/zip/UnzipError.js
-function _typeof$6(o) {
+function Bo(e) {
 	"@babel/helpers - typeof";
-	return _typeof$6 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$6(o);
+	return Bo = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, Bo(e);
 }
-function _defineProperties$3(target, props) {
-	for (var i = 0; i < props.length; i++) {
-		var descriptor = props[i];
-		descriptor.enumerable = descriptor.enumerable || false;
-		descriptor.configurable = true;
-		if ("value" in descriptor) descriptor.writable = true;
-		Object.defineProperty(target, _toPropertyKey$5(descriptor.key), descriptor);
+function Vo(e, t) {
+	for (var n = 0; n < t.length; n++) {
+		var r = t[n];
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Uo(r.key), r);
 	}
 }
-function _createClass$3(Constructor, protoProps, staticProps) {
-	if (protoProps) _defineProperties$3(Constructor.prototype, protoProps);
-	if (staticProps) _defineProperties$3(Constructor, staticProps);
-	Object.defineProperty(Constructor, "prototype", { writable: false });
-	return Constructor;
+function Ho(e, t, n) {
+	return t && Vo(e.prototype, t), n && Vo(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function _toPropertyKey$5(arg) {
-	var key = _toPrimitive$5(arg, "string");
-	return _typeof$6(key) === "symbol" ? key : String(key);
+function Uo(e) {
+	var t = Wo(e, "string");
+	return Bo(t) === "symbol" ? t : String(t);
 }
-function _toPrimitive$5(input, hint) {
-	if (_typeof$6(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof$6(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
+function Wo(e, t) {
+	if (Bo(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (Bo(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
-	return (hint === "string" ? String : Number)(input);
+	return (t === "string" ? String : Number)(e);
 }
-function _classCallCheck$3(instance, Constructor) {
-	if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
+function Go(e, t) {
+	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function _inherits$3(subClass, superClass) {
-	if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
-	subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: {
-		value: subClass,
-		writable: true,
-		configurable: true
-	} });
-	Object.defineProperty(subClass, "prototype", { writable: false });
-	if (superClass) _setPrototypeOf$3(subClass, superClass);
+function Ko(e, t) {
+	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
+	e.prototype = Object.create(t && t.prototype, { constructor: {
+		value: e,
+		writable: !0,
+		configurable: !0
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && es(e, t);
 }
-function _createSuper$3(Derived) {
-	var hasNativeReflectConstruct = _isNativeReflectConstruct$3();
-	return function _createSuperInternal() {
-		var Super = _getPrototypeOf$3(Derived), result;
-		if (hasNativeReflectConstruct) {
-			var NewTarget = _getPrototypeOf$3(this).constructor;
-			result = Reflect.construct(Super, arguments, NewTarget);
-		} else result = Super.apply(this, arguments);
-		return _possibleConstructorReturn$3(this, result);
+function qo(e) {
+	var t = Qo();
+	return function() {
+		var n = ts(e), r;
+		if (t) {
+			var i = ts(this).constructor;
+			r = Reflect.construct(n, arguments, i);
+		} else r = n.apply(this, arguments);
+		return Jo(this, r);
 	};
 }
-function _possibleConstructorReturn$3(self, call) {
-	if (call && (_typeof$6(call) === "object" || typeof call === "function")) return call;
-	else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-	return _assertThisInitialized$3(self);
+function Jo(e, t) {
+	if (t && (Bo(t) === "object" || typeof t == "function")) return t;
+	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
+	return Yo(e);
 }
-function _assertThisInitialized$3(self) {
-	if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-	return self;
+function Yo(e) {
+	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
+	return e;
 }
-function _wrapNativeSuper$2(Class) {
-	var _cache = typeof Map === "function" ? /* @__PURE__ */ new Map() : void 0;
-	_wrapNativeSuper$2 = function _wrapNativeSuper(Class) {
-		if (Class === null || !_isNativeFunction$2(Class)) return Class;
-		if (typeof Class !== "function") throw new TypeError("Super expression must either be null or a function");
-		if (typeof _cache !== "undefined") {
-			if (_cache.has(Class)) return _cache.get(Class);
-			_cache.set(Class, Wrapper);
+function Xo(e) {
+	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
+	return Xo = function(e) {
+		if (e === null || !$o(e)) return e;
+		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
+		if (t !== void 0) {
+			if (t.has(e)) return t.get(e);
+			t.set(e, n);
 		}
-		function Wrapper() {
-			return _construct$2(Class, arguments, _getPrototypeOf$3(this).constructor);
+		function n() {
+			return Zo(e, arguments, ts(this).constructor);
 		}
-		Wrapper.prototype = Object.create(Class.prototype, { constructor: {
-			value: Wrapper,
-			enumerable: false,
-			writable: true,
-			configurable: true
-		} });
-		return _setPrototypeOf$3(Wrapper, Class);
-	};
-	return _wrapNativeSuper$2(Class);
+		return n.prototype = Object.create(e.prototype, { constructor: {
+			value: n,
+			enumerable: !1,
+			writable: !0,
+			configurable: !0
+		} }), es(n, e);
+	}, Xo(e);
 }
-function _construct$2(Parent, args, Class) {
-	if (_isNativeReflectConstruct$3()) _construct$2 = Reflect.construct.bind();
-	else _construct$2 = function _construct(Parent, args, Class) {
-		var a = [null];
-		a.push.apply(a, args);
-		var instance = new (Function.bind.apply(Parent, a))();
-		if (Class) _setPrototypeOf$3(instance, Class.prototype);
-		return instance;
-	};
-	return _construct$2.apply(null, arguments);
+function Zo(e, t, n) {
+	return Zo = Qo() ? Reflect.construct.bind() : function(e, t, n) {
+		var r = [null];
+		r.push.apply(r, t);
+		var i = new (Function.bind.apply(e, r))();
+		return n && es(i, n.prototype), i;
+	}, Zo.apply(null, arguments);
 }
-function _isNativeReflectConstruct$3() {
-	if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-	if (Reflect.construct.sham) return false;
-	if (typeof Proxy === "function") return true;
+function Qo() {
+	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
+	if (typeof Proxy == "function") return !0;
 	try {
-		Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
-		return true;
-	} catch (e) {
-		return false;
+		return Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {})), !0;
+	} catch {
+		return !1;
 	}
 }
-function _isNativeFunction$2(fn) {
-	return Function.toString.call(fn).indexOf("[native code]") !== -1;
+function $o(e) {
+	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function _setPrototypeOf$3(o, p) {
-	_setPrototypeOf$3 = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
-		o.__proto__ = p;
-		return o;
-	};
-	return _setPrototypeOf$3(o, p);
+function es(e, t) {
+	return es = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+		return e.__proto__ = t, e;
+	}, es(e, t);
 }
-function _getPrototypeOf$3(o) {
-	_getPrototypeOf$3 = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
-		return o.__proto__ || Object.getPrototypeOf(o);
-	};
-	return _getPrototypeOf$3(o);
+function ts(e) {
+	return ts = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+		return e.__proto__ || Object.getPrototypeOf(e);
+	}, ts(e);
 }
-var UnzipError = /*#__PURE__*/ function(_Error) {
-	_inherits$3(UnzipError, _Error);
-	var _super = _createSuper$3(UnzipError);
-	function UnzipError() {
-		_classCallCheck$3(this, UnzipError);
-		return _super.apply(this, arguments);
+var ns = /*#__PURE__*/ function(e) {
+	Ko(n, e);
+	var t = qo(n);
+	function n() {
+		return Go(this, n), t.apply(this, arguments);
 	}
-	return _createClass$3(UnzipError);
-}(/*#__PURE__*/ _wrapNativeSuper$2(Error));
-function createUnzipError(error) {
-	var unzipError = new UnzipError(error.message);
-	if (error.stack) unzipError.stack = error.stack;
-	if (Error.captureStackTrace) Error.captureStackTrace(unzipError, createUnzipError);
-	unzipError.cause = error;
-	return unzipError;
+	return Ho(n);
+}(/*#__PURE__*/ Xo(Error));
+function rs(e) {
+	var t = new ns(e.message);
+	return e.stack && (t.stack = e.stack), Error.captureStackTrace && Error.captureStackTrace(t, rs), t.cause = e, t;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/zip/unzipFromStream.unzipper.js
-var PROMISE_RESOLVE_VALUE = void 0;
-/**
-* Reads `*.zip` file contents.
-* @param  {Stream} stream
-* @param  {function} onFile
-* @param  {function} onFileData
-* @param  {function} onFileDataEnd
-* @return {Promise<void>}
-*/
-function unzipFromStream_(stream, onFile, onFileData, onFileDataEnd) {
-	return new Promise(function(resolve, reject) {
-		var promises = [];
-		var errored = false;
-		var onError = function onError(error) {
-			if (error instanceof ZipFileError) error = createUnzipError(error);
-			if (!errored) {
-				errored = true;
-				reject(error);
-			}
+var is = void 0;
+function as(e, t, n, r) {
+	return new Promise(function(i, a) {
+		var o = [], s = !1, c = function(e) {
+			e instanceof uo && (e = rs(e)), s || (s = !0, a(e));
 		};
-		stream.on("error", onError).pipe(Parse()).on("error", onError).on("finish", function() {
-			if (!errored) Promise.all(promises).then(function() {
-				resolve(PROMISE_RESOLVE_VALUE);
-			}, onError);
-		}).on("entry", function(entry) {
-			var ignore = false;
-			if (entry.type === "Directory") ignore = true;
-			if (errored) ignore = true;
-			var uncompressedFileSize = !(entry.vars.flags & 8) || entry.vars.compressedSize > 0 ? entry.vars.uncompressedSize : void 0;
-			if (onFile(entry.path, uncompressedFileSize) === false) ignore = true;
-			if (ignore) {
-				entry.autodrain().on("error", onError);
+		e.on("error", c).pipe(Eo()).on("error", c).on("finish", function() {
+			s || Promise.all(o).then(function() {
+				i(is);
+			}, c);
+		}).on("entry", function(e) {
+			var i = !1;
+			e.type === "Directory" && (i = !0), s && (i = !0);
+			var a = !(e.vars.flags & 8) || e.vars.compressedSize > 0 ? e.vars.uncompressedSize : void 0;
+			if (t(e.path, a) === !1 && (i = !0), i) {
+				e.autodrain().on("error", c);
 				return;
 			}
-			promises.push(new Promise(function(resolve) {
-				entry.on("data", function(data) {
-					onFileData(entry.path, data);
-				}).on("error", function(error) {
-					onError(error);
+			o.push(new Promise(function(t) {
+				e.on("data", function(t) {
+					n(e.path, t);
+				}).on("error", function(e) {
+					c(e);
 				}).on("finish", function() {
-					onFileDataEnd(entry.path);
-					resolve();
+					r(e.path), t();
 				});
 			}));
 		});
@@ -6051,923 +3805,673 @@ function unzipFromStream_(stream, onFile, onFileData, onFileDataEnd) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/zip/unzipFromStream.js
-function _createForOfIteratorHelperLoose$3(o, allowArrayLike) {
-	var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
-	if (it) return (it = it.call(o)).next.bind(it);
-	if (Array.isArray(o) || (it = _unsupportedIterableToArray$4(o)) || allowArrayLike && o && typeof o.length === "number") {
-		if (it) o = it;
-		var i = 0;
+function os(e, t) {
+	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
+	if (n) return (n = n.call(e)).next.bind(n);
+	if (Array.isArray(e) || (n = ss(e)) || t && e && typeof e.length == "number") {
+		n && (e = n);
+		var r = 0;
 		return function() {
-			if (i >= o.length) return { done: true };
-			return {
-				done: false,
-				value: o[i++]
+			return r >= e.length ? { done: !0 } : {
+				done: !1,
+				value: e[r++]
 			};
 		};
 	}
-	throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function _unsupportedIterableToArray$4(o, minLen) {
-	if (!o) return;
-	if (typeof o === "string") return _arrayLikeToArray$4(o, minLen);
-	var n = Object.prototype.toString.call(o).slice(8, -1);
-	if (n === "Object" && o.constructor) n = o.constructor.name;
-	if (n === "Map" || n === "Set") return Array.from(o);
-	if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray$4(o, minLen);
+function ss(e, t) {
+	if (e) {
+		if (typeof e == "string") return cs(e, t);
+		var n = Object.prototype.toString.call(e).slice(8, -1);
+		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return cs(e, t);
+	}
 }
-function _arrayLikeToArray$4(arr, len) {
-	if (len == null || len > arr.length) len = arr.length;
-	for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-	return arr2;
+function cs(e, t) {
+	(t == null || t > e.length) && (t = e.length);
+	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
+	return r;
 }
-/**
-* Reads `*.zip` file contents.
-* @param  {Stream} stream
-* @return {Promise<Record<string,Buffer>>} Resolves to an object holding `*.zip` file entries. P.S. `Buffer` is a `Uint8Array`.
-*/
-function unzipFromStream(stream) {
-	var filter = (arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}).filter;
-	var files = {};
-	var filesData = {};
-	return unzipFromStream_(stream, function onFile(filePath, fileSize) {
-		if (filter && !filter({ path: filePath })) return false;
-		filesData[filePath] = {
-			size: fileSize,
+function ls(e) {
+	var t = (arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}).filter, n = {}, r = {};
+	return as(e, function(e, n) {
+		if (t && !t({ path: e })) return !1;
+		r[e] = {
+			size: n,
 			chunks: [],
-			buffer: fileSize === void 0 ? void 0 : Buffer.alloc(fileSize),
+			buffer: n === void 0 ? void 0 : Buffer.alloc(n),
 			position: 0
 		};
-	}, function onFileData(filePath, chunk) {
-		if (filesData[filePath].size === void 0) filesData[filePath].chunks.push(chunk);
-		else filesData[filePath].position += chunk.copy(filesData[filePath].buffer, filesData[filePath].position);
-	}, function onFileDataEnd(filePath) {
-		if (filesData[filePath].size === void 0) files[filePath] = concatChunksToNonPooledBuffer(filesData[filePath].chunks);
-		else files[filePath] = filesData[filePath].buffer;
-		delete filesData[filePath];
+	}, function(e, t) {
+		r[e].size === void 0 ? r[e].chunks.push(t) : r[e].position += t.copy(r[e].buffer, r[e].position);
+	}, function(e) {
+		n[e] = r[e].size === void 0 ? us(r[e].chunks) : r[e].buffer, delete r[e];
 	}).then(function() {
-		return files;
+		return n;
 	});
 }
-function concatChunksToNonPooledBuffer(chunks) {
-	var totalLength = chunks.reduce(function(sum, chunk) {
-		return sum + chunk.length;
-	}, 0);
-	var buffer = Buffer.allocUnsafeSlow(totalLength);
-	var offset = 0;
-	for (var _iterator = _createForOfIteratorHelperLoose$3(chunks), _step; !(_step = _iterator()).done;) {
-		var chunk = _step.value;
-		chunk.copy(buffer, offset);
-		offset += chunk.length;
+function us(e) {
+	for (var t = e.reduce(function(e, t) {
+		return e + t.length;
+	}, 0), n = Buffer.allocUnsafeSlow(t), r = 0, i = os(e), a; !(a = i()).done;) {
+		var o = a.value;
+		o.copy(n, r), r += o.length;
 	}
-	return buffer;
+	return n;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/InvalidInputError.js
-function _typeof$5(o) {
+function ds(e) {
 	"@babel/helpers - typeof";
-	return _typeof$5 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$5(o);
+	return ds = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, ds(e);
 }
-function _defineProperties$2(target, props) {
-	for (var i = 0; i < props.length; i++) {
-		var descriptor = props[i];
-		descriptor.enumerable = descriptor.enumerable || false;
-		descriptor.configurable = true;
-		if ("value" in descriptor) descriptor.writable = true;
-		Object.defineProperty(target, _toPropertyKey$4(descriptor.key), descriptor);
+function fs(e, t) {
+	for (var n = 0; n < t.length; n++) {
+		var r = t[n];
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, ms(r.key), r);
 	}
 }
-function _createClass$2(Constructor, protoProps, staticProps) {
-	if (protoProps) _defineProperties$2(Constructor.prototype, protoProps);
-	if (staticProps) _defineProperties$2(Constructor, staticProps);
-	Object.defineProperty(Constructor, "prototype", { writable: false });
-	return Constructor;
+function ps(e, t, n) {
+	return t && fs(e.prototype, t), n && fs(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function _toPropertyKey$4(arg) {
-	var key = _toPrimitive$4(arg, "string");
-	return _typeof$5(key) === "symbol" ? key : String(key);
+function ms(e) {
+	var t = hs(e, "string");
+	return ds(t) === "symbol" ? t : String(t);
 }
-function _toPrimitive$4(input, hint) {
-	if (_typeof$5(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof$5(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
+function hs(e, t) {
+	if (ds(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (ds(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
-	return (hint === "string" ? String : Number)(input);
+	return (t === "string" ? String : Number)(e);
 }
-function _classCallCheck$2(instance, Constructor) {
-	if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
+function gs(e, t) {
+	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function _inherits$2(subClass, superClass) {
-	if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
-	subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: {
-		value: subClass,
-		writable: true,
-		configurable: true
-	} });
-	Object.defineProperty(subClass, "prototype", { writable: false });
-	if (superClass) _setPrototypeOf$2(subClass, superClass);
+function _s(e, t) {
+	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
+	e.prototype = Object.create(t && t.prototype, { constructor: {
+		value: e,
+		writable: !0,
+		configurable: !0
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Ts(e, t);
 }
-function _createSuper$2(Derived) {
-	var hasNativeReflectConstruct = _isNativeReflectConstruct$2();
-	return function _createSuperInternal() {
-		var Super = _getPrototypeOf$2(Derived), result;
-		if (hasNativeReflectConstruct) {
-			var NewTarget = _getPrototypeOf$2(this).constructor;
-			result = Reflect.construct(Super, arguments, NewTarget);
-		} else result = Super.apply(this, arguments);
-		return _possibleConstructorReturn$2(this, result);
+function vs(e) {
+	var t = Cs();
+	return function() {
+		var n = Es(e), r;
+		if (t) {
+			var i = Es(this).constructor;
+			r = Reflect.construct(n, arguments, i);
+		} else r = n.apply(this, arguments);
+		return ys(this, r);
 	};
 }
-function _possibleConstructorReturn$2(self, call) {
-	if (call && (_typeof$5(call) === "object" || typeof call === "function")) return call;
-	else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-	return _assertThisInitialized$2(self);
+function ys(e, t) {
+	if (t && (ds(t) === "object" || typeof t == "function")) return t;
+	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
+	return bs(e);
 }
-function _assertThisInitialized$2(self) {
-	if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-	return self;
+function bs(e) {
+	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
+	return e;
 }
-function _wrapNativeSuper$1(Class) {
-	var _cache = typeof Map === "function" ? /* @__PURE__ */ new Map() : void 0;
-	_wrapNativeSuper$1 = function _wrapNativeSuper(Class) {
-		if (Class === null || !_isNativeFunction$1(Class)) return Class;
-		if (typeof Class !== "function") throw new TypeError("Super expression must either be null or a function");
-		if (typeof _cache !== "undefined") {
-			if (_cache.has(Class)) return _cache.get(Class);
-			_cache.set(Class, Wrapper);
+function xs(e) {
+	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
+	return xs = function(e) {
+		if (e === null || !ws(e)) return e;
+		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
+		if (t !== void 0) {
+			if (t.has(e)) return t.get(e);
+			t.set(e, n);
 		}
-		function Wrapper() {
-			return _construct$1(Class, arguments, _getPrototypeOf$2(this).constructor);
+		function n() {
+			return Ss(e, arguments, Es(this).constructor);
 		}
-		Wrapper.prototype = Object.create(Class.prototype, { constructor: {
-			value: Wrapper,
-			enumerable: false,
-			writable: true,
-			configurable: true
-		} });
-		return _setPrototypeOf$2(Wrapper, Class);
-	};
-	return _wrapNativeSuper$1(Class);
+		return n.prototype = Object.create(e.prototype, { constructor: {
+			value: n,
+			enumerable: !1,
+			writable: !0,
+			configurable: !0
+		} }), Ts(n, e);
+	}, xs(e);
 }
-function _construct$1(Parent, args, Class) {
-	if (_isNativeReflectConstruct$2()) _construct$1 = Reflect.construct.bind();
-	else _construct$1 = function _construct(Parent, args, Class) {
-		var a = [null];
-		a.push.apply(a, args);
-		var instance = new (Function.bind.apply(Parent, a))();
-		if (Class) _setPrototypeOf$2(instance, Class.prototype);
-		return instance;
-	};
-	return _construct$1.apply(null, arguments);
+function Ss(e, t, n) {
+	return Ss = Cs() ? Reflect.construct.bind() : function(e, t, n) {
+		var r = [null];
+		r.push.apply(r, t);
+		var i = new (Function.bind.apply(e, r))();
+		return n && Ts(i, n.prototype), i;
+	}, Ss.apply(null, arguments);
 }
-function _isNativeReflectConstruct$2() {
-	if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-	if (Reflect.construct.sham) return false;
-	if (typeof Proxy === "function") return true;
+function Cs() {
+	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
+	if (typeof Proxy == "function") return !0;
 	try {
-		Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
-		return true;
-	} catch (e) {
-		return false;
+		return Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {})), !0;
+	} catch {
+		return !1;
 	}
 }
-function _isNativeFunction$1(fn) {
-	return Function.toString.call(fn).indexOf("[native code]") !== -1;
+function ws(e) {
+	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function _setPrototypeOf$2(o, p) {
-	_setPrototypeOf$2 = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
-		o.__proto__ = p;
-		return o;
-	};
-	return _setPrototypeOf$2(o, p);
+function Ts(e, t) {
+	return Ts = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+		return e.__proto__ = t, e;
+	}, Ts(e, t);
 }
-function _getPrototypeOf$2(o) {
-	_getPrototypeOf$2 = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
-		return o.__proto__ || Object.getPrototypeOf(o);
-	};
-	return _getPrototypeOf$2(o);
+function Es(e) {
+	return Es = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+		return e.__proto__ || Object.getPrototypeOf(e);
+	}, Es(e);
 }
-var MESSAGES = {
+var Ds = {
 	XLS_FILE_NOT_SUPPORTED: "You passed a legacy `.xls` file. Only `.xlsx` files are supported",
 	FILE_NOT_SUPPORTED: "Doesn't look like an `.xlsx` file",
 	INVALID_ZIP: "Couldn't unzip `.xlsx` file contents",
 	NO_DATA: "No data"
-};
-var InvalidInputError = /*#__PURE__*/ function(_Error) {
-	_inherits$2(InvalidInputError, _Error);
-	var _super = _createSuper$2(InvalidInputError);
-	/**
-	* Creates an `InvalidInputError` instance.
-	* @param {string} code
-	* @param {any} [cause]
-	*/
-	function InvalidInputError(code, cause) {
-		var _this;
-		_classCallCheck$2(this, InvalidInputError);
-		_this = _super.call(this, MESSAGES[code] || code);
-		_this.code = code;
-		_this.name = "InvalidInputError";
-		_this.cause = cause;
-		return _this;
+}, Os = /*#__PURE__*/ function(e) {
+	_s(n, e);
+	var t = vs(n);
+	function n(e, r) {
+		var i;
+		return gs(this, n), i = t.call(this, Ds[e] || e), i.code = e, i.name = "InvalidInputError", i.cause = r, i;
 	}
-	return _createClass$2(InvalidInputError);
-}(/*#__PURE__*/ _wrapNativeSuper$1(Error));
+	return ps(n);
+}(/*#__PURE__*/ xs(Error));
 //#endregion
 //#region node_modules/read-excel-file/modules/export/convertInputToNodeStream.js
-/**
-* Converts Node.js input argument to a stream.
-* @param  {(string|Stream|Buffer|Blob)} input - A Node.js readable stream or a `Buffer` or a `Blob` or a path to a file.
-* @returns {Stream}
-*/
-function convertInputToNodeStream(input) {
-	return input instanceof Stream ? input : input instanceof Buffer ? createReadableStreamFromBuffer(input) : input instanceof Blob ? createReadableStreamFromBlob(input) : fs.createReadStream(input);
+function ks(e) {
+	return e instanceof j ? e : e instanceof Buffer ? As(e) : e instanceof re ? js(e) : l.createReadStream(e);
 }
-function createReadableStreamFromBuffer(buffer) {
-	return Readable.from(buffer);
+function As(e) {
+	return M.from(e);
 }
-function createReadableStreamFromBlob(blob) {
-	return Readable.fromWeb(blob.stream());
+function js(e) {
+	return M.fromWeb(e.stream());
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/export/filterZipArchiveEntry.js
-function filterZipArchiveEntry(_ref) {
-	var path = _ref.path;
-	return path.endsWith(".xml") || path.endsWith(".xml.rels");
+function Ms(e) {
+	var t = e.path;
+	return t.endsWith(".xml") || t.endsWith(".xml.rels");
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/createFileTypeDetector.js
-var ZIP_FILE_SIGNATURE = [80, 75];
-var XLS_FILE_SIGNATURE = [
+var Ns = [80, 75], Ps = [
 	208,
 	207,
 	17,
 	224
-];
-var FILE_TYPE_SIGNATURES = [ZIP_FILE_SIGNATURE, XLS_FILE_SIGNATURE];
-FILE_TYPE_SIGNATURES.indexOf(ZIP_FILE_SIGNATURE);
-var XLS_FILE_TYPE = FILE_TYPE_SIGNATURES.indexOf(XLS_FILE_SIGNATURE);
-/**
-* Creates a function get determines a file type based on the leading bytes.
-* @return {function} A function that receives a `byte` (an element of a `Uint8Array`) and returns a `type: number?` — an index in the file types "enum", or `-1` if it doesn't match any file type, or `undefined` if it's still deciding on the file type.
-* @throws {InvalidInputError}
-*/
-function createFileTypeDetector() {
-	var type;
-	var possibleTypes = indexesOf(FILE_TYPE_SIGNATURES);
-	var i = 0;
-	return function(_byte) {
-		if (isNaN(type)) {
-			var t;
-			possibleTypes = possibleTypes.filter(function(typeIndex) {
-				if (_byte === FILE_TYPE_SIGNATURES[typeIndex][i]) {
-					if (FILE_TYPE_SIGNATURES[typeIndex].length === i + 1) t = typeIndex;
-					return true;
-				}
-			});
-			if (possibleTypes.length === 1) type = t;
-			else if (possibleTypes.length === 0) type = -1;
+], Fs = [Ns, Ps];
+Fs.indexOf(Ns);
+var Is = Fs.indexOf(Ps);
+function Ls() {
+	var e, t = Rs(Fs), n = 0;
+	return function(r) {
+		if (isNaN(e)) {
+			var i;
+			t = t.filter(function(e) {
+				if (r === Fs[e][n]) return Fs[e].length === n + 1 && (i = e), !0;
+			}), t.length === 1 ? e = i : t.length === 0 && (e = -1);
 		}
-		i++;
-		return type;
+		return n++, e;
 	};
 }
-function indexesOf(array) {
-	var indexes = [];
-	var i = 0;
-	while (i < array.length) {
-		indexes.push(i);
-		i++;
-	}
-	return indexes;
+function Rs(e) {
+	for (var t = [], n = 0; n < e.length;) t.push(n), n++;
+	return t;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/validateLeadingBytes.js
-function validateByte(_byte2, fileTypeDetector) {
-	var fileType = fileTypeDetector(_byte2);
-	if (fileType !== void 0) {
-		if (fileType === XLS_FILE_TYPE) throw new InvalidInputError("XLS_FILE_NOT_SUPPORTED");
-		if (fileType < 0) throw new InvalidInputError("FILE_NOT_SUPPORTED");
-		return true;
+function zs(e, t) {
+	var n = t(e);
+	if (n !== void 0) {
+		if (n === Is) throw new Os("XLS_FILE_NOT_SUPPORTED");
+		if (n < 0) throw new Os("FILE_NOT_SUPPORTED");
+		return !0;
 	}
 }
-function noFileTypeCouldBeDetermined(byteCount) {
-	throw new InvalidInputError(byteCount === 0 ? "NO_DATA" : "FILE_NOT_SUPPORTED");
+function Bs(e) {
+	throw new Os(e === 0 ? "NO_DATA" : "FILE_NOT_SUPPORTED");
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/InputValidationStream.js
-function _typeof$4(o) {
+function Vs(e) {
 	"@babel/helpers - typeof";
-	return _typeof$4 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$4(o);
+	return Vs = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, Vs(e);
 }
-function _createForOfIteratorHelperLoose$2(o, allowArrayLike) {
-	var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
-	if (it) return (it = it.call(o)).next.bind(it);
-	if (Array.isArray(o) || (it = _unsupportedIterableToArray$3(o)) || allowArrayLike && o && typeof o.length === "number") {
-		if (it) o = it;
-		var i = 0;
+function Hs(e, t) {
+	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
+	if (n) return (n = n.call(e)).next.bind(n);
+	if (Array.isArray(e) || (n = Us(e)) || t && e && typeof e.length == "number") {
+		n && (e = n);
+		var r = 0;
 		return function() {
-			if (i >= o.length) return { done: true };
-			return {
-				done: false,
-				value: o[i++]
+			return r >= e.length ? { done: !0 } : {
+				done: !1,
+				value: e[r++]
 			};
 		};
 	}
-	throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function _unsupportedIterableToArray$3(o, minLen) {
-	if (!o) return;
-	if (typeof o === "string") return _arrayLikeToArray$3(o, minLen);
-	var n = Object.prototype.toString.call(o).slice(8, -1);
-	if (n === "Object" && o.constructor) n = o.constructor.name;
-	if (n === "Map" || n === "Set") return Array.from(o);
-	if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray$3(o, minLen);
-}
-function _arrayLikeToArray$3(arr, len) {
-	if (len == null || len > arr.length) len = arr.length;
-	for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-	return arr2;
-}
-function _classCallCheck$1(instance, Constructor) {
-	if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
-}
-function _defineProperties$1(target, props) {
-	for (var i = 0; i < props.length; i++) {
-		var descriptor = props[i];
-		descriptor.enumerable = descriptor.enumerable || false;
-		descriptor.configurable = true;
-		if ("value" in descriptor) descriptor.writable = true;
-		Object.defineProperty(target, _toPropertyKey$3(descriptor.key), descriptor);
+function Us(e, t) {
+	if (e) {
+		if (typeof e == "string") return Ws(e, t);
+		var n = Object.prototype.toString.call(e).slice(8, -1);
+		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Ws(e, t);
 	}
 }
-function _createClass$1(Constructor, protoProps, staticProps) {
-	if (protoProps) _defineProperties$1(Constructor.prototype, protoProps);
-	if (staticProps) _defineProperties$1(Constructor, staticProps);
-	Object.defineProperty(Constructor, "prototype", { writable: false });
-	return Constructor;
+function Ws(e, t) {
+	(t == null || t > e.length) && (t = e.length);
+	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
+	return r;
 }
-function _toPropertyKey$3(arg) {
-	var key = _toPrimitive$3(arg, "string");
-	return _typeof$4(key) === "symbol" ? key : String(key);
+function Gs(e, t) {
+	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function _toPrimitive$3(input, hint) {
-	if (_typeof$4(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof$4(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
+function Ks(e, t) {
+	for (var n = 0; n < t.length; n++) {
+		var r = t[n];
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Js(r.key), r);
 	}
-	return (hint === "string" ? String : Number)(input);
 }
-function _inherits$1(subClass, superClass) {
-	if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
-	subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: {
-		value: subClass,
-		writable: true,
-		configurable: true
-	} });
-	Object.defineProperty(subClass, "prototype", { writable: false });
-	if (superClass) _setPrototypeOf$1(subClass, superClass);
+function qs(e, t, n) {
+	return t && Ks(e.prototype, t), n && Ks(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function _setPrototypeOf$1(o, p) {
-	_setPrototypeOf$1 = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
-		o.__proto__ = p;
-		return o;
+function Js(e) {
+	var t = Ys(e, "string");
+	return Vs(t) === "symbol" ? t : String(t);
+}
+function Ys(e, t) {
+	if (Vs(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (Vs(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
+	}
+	return (t === "string" ? String : Number)(e);
+}
+function Xs(e, t) {
+	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
+	e.prototype = Object.create(t && t.prototype, { constructor: {
+		value: e,
+		writable: !0,
+		configurable: !0
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Zs(e, t);
+}
+function Zs(e, t) {
+	return Zs = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+		return e.__proto__ = t, e;
+	}, Zs(e, t);
+}
+function Qs(e) {
+	var t = tc();
+	return function() {
+		var n = nc(e), r;
+		if (t) {
+			var i = nc(this).constructor;
+			r = Reflect.construct(n, arguments, i);
+		} else r = n.apply(this, arguments);
+		return $s(this, r);
 	};
-	return _setPrototypeOf$1(o, p);
 }
-function _createSuper$1(Derived) {
-	var hasNativeReflectConstruct = _isNativeReflectConstruct$1();
-	return function _createSuperInternal() {
-		var Super = _getPrototypeOf$1(Derived), result;
-		if (hasNativeReflectConstruct) {
-			var NewTarget = _getPrototypeOf$1(this).constructor;
-			result = Reflect.construct(Super, arguments, NewTarget);
-		} else result = Super.apply(this, arguments);
-		return _possibleConstructorReturn$1(this, result);
-	};
+function $s(e, t) {
+	if (t && (Vs(t) === "object" || typeof t == "function")) return t;
+	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
+	return ec(e);
 }
-function _possibleConstructorReturn$1(self, call) {
-	if (call && (_typeof$4(call) === "object" || typeof call === "function")) return call;
-	else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-	return _assertThisInitialized$1(self);
+function ec(e) {
+	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
+	return e;
 }
-function _assertThisInitialized$1(self) {
-	if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-	return self;
-}
-function _isNativeReflectConstruct$1() {
-	if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-	if (Reflect.construct.sham) return false;
-	if (typeof Proxy === "function") return true;
+function tc() {
+	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
+	if (typeof Proxy == "function") return !0;
 	try {
-		Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
-		return true;
-	} catch (e) {
-		return false;
+		return Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {})), !0;
+	} catch {
+		return !1;
 	}
 }
-function _getPrototypeOf$1(o) {
-	_getPrototypeOf$1 = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
-		return o.__proto__ || Object.getPrototypeOf(o);
-	};
-	return _getPrototypeOf$1(o);
+function nc(e) {
+	return nc = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+		return e.__proto__ || Object.getPrototypeOf(e);
+	}, nc(e);
 }
-/**
-* Verifies that an input stream represents a valid `.xlsx` file.
-*
-* Throws an `InvalidInputError` when the input isn't an `.xlsx` file.
-*/
-var InputValidationStream = /*#__PURE__*/ function(_Transform) {
-	_inherits$1(InputValidationStream, _Transform);
-	var _super = _createSuper$1(InputValidationStream);
-	function InputValidationStream() {
-		var _this;
-		_classCallCheck$1(this, InputValidationStream);
-		_this = _super.call(this);
-		_this.d = createFileTypeDetector();
-		_this.i = 0;
-		_this.chunks = [];
-		return _this;
+var rc = /*#__PURE__*/ function(e) {
+	Xs(n, e);
+	var t = Qs(n);
+	function n() {
+		var e;
+		return Gs(this, n), e = t.call(this), e.d = Ls(), e.i = 0, e.chunks = [], e;
 	}
-	_createClass$1(InputValidationStream, [{
+	return qs(n, [{
 		key: "_transform",
-		value: function _transform(chunk, encoding, callback) {
+		value: function(e, t, n) {
 			if (this.d) {
-				this.chunks.push(chunk);
-				for (var _iterator = _createForOfIteratorHelperLoose$2(chunk), _step; !(_step = _iterator()).done;) {
-					var _byte = _step.value;
+				this.chunks.push(e);
+				for (var r = Hs(e), i; !(i = r()).done;) {
+					var a = i.value;
 					try {
-						if (validateByte(_byte, this.d)) {
-							this.d = void 0;
-							chunk = Buffer.concat(this.chunks);
-							this.chunks = void 0;
+						if (zs(a, this.d)) {
+							this.d = void 0, e = Buffer.concat(this.chunks), this.chunks = void 0;
 							break;
 						}
-					} catch (error) {
-						return callback(error);
+					} catch (e) {
+						return n(e);
 					}
 					this.i++;
 				}
-				if (this.d) return callback();
+				if (this.d) return n();
 			}
-			this.push(chunk);
-			callback();
+			this.push(e), n();
 		}
 	}, {
 		key: "_flush",
-		value: function _flush(callback) {
+		value: function(e) {
 			if (this.d) try {
-				noFileTypeCouldBeDetermined(this.i);
-			} catch (error) {
-				return callback(error);
+				Bs(this.i);
+			} catch (t) {
+				return e(t);
 			}
-			callback();
+			e();
 		}
-	}]);
-	return InputValidationStream;
-}(Transform$1);
-//#endregion
-//#region node_modules/read-excel-file/modules/utility/checkpoint.js
-var latestCheckpointTimestamp;
-function checkpoint(name) {
-	var now = Date.now();
-	if (typeof global !== "undefined" ? Boolean(global.READ_EXCEL_FILE_CHECKPOINTS) : typeof window !== "undefined" ? Boolean(window.READ_EXCEL_FILE_CHECKPOINTS) : false) {
-		if (latestCheckpointTimestamp) console.log("  -", now - latestCheckpointTimestamp, "ms");
-		console.log("*", name);
-	}
-	latestCheckpointTimestamp = now;
+	}]), n;
+}(ie), ic;
+function ac(e) {
+	var t = Date.now();
+	(typeof global < "u" ? global.READ_EXCEL_FILE_CHECKPOINTS : typeof window < "u" && window.READ_EXCEL_FILE_CHECKPOINTS) && (ic && console.log("  -", t - ic, "ms"), console.log("*", e)), ic = t;
 }
-function resetCheckpoint() {
-	latestCheckpointTimestamp = void 0;
+function oc() {
+	ic = void 0;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/export/unpackXlsxFileNode.js
-/**
-* Unpacks `*.xlsx` file contents.
-* An `.xlsx` file is really just a `.zip` archive with `.xml` files inside.
-* @param  {(string|Stream|Buffer|Blob)} input
-* @return {Promise<Record<string,Uint8Array>} Resolves to an object holding `*.xlsx` file entries.
-*/
-function unpackXlsxFile(input) {
-	resetCheckpoint();
-	checkpoint("unpack files");
-	var stream = convertInputToNodeStream(input);
-	return new Promise(function(resolve, reject) {
-		unzipFromStream(stream.on("error", reject).pipe(new InputValidationStream()), { filter: filterZipArchiveEntry }).then(resolve, function(error) {
-			if (error instanceof UnzipError) reject(new InvalidInputError("INVALID_ZIP", error.cause));
-			else reject(error);
+function sc(e) {
+	oc(), ac("unpack files");
+	var t = ks(e);
+	return new Promise(function(e, n) {
+		ls(t.on("error", n).pipe(new rc()), { filter: Ms }).then(e, function(e) {
+			e instanceof ns ? n(new Os("INVALID_ZIP", e.cause)) : n(e);
 		});
 	});
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSpreadsheetInfo.js
-/**
-* Parses spreadsheet info.
-* @param {string} content
-* @param  {function} parseXml — SAX XML parser.
-* @returns {object} An object of shape `{ epoch1904: boolean, sheets: Sheet[] }`.
-*/
-function parseSpreadsheetInfo(content, parseXml) {
-	var state = createInitialState();
-	return parseXml(content, state, onOpenTag, null, null).then(function() {
-		return getResultFromState(state);
+function cc(e, t) {
+	var n = r();
+	return t(e, n, a, null, null).then(function() {
+		return i(n);
 	});
-	function createInitialState() {
+	function r() {
 		return {
 			workbookPr: void 0,
 			sheets: []
 		};
 	}
-	function getResultFromState(state) {
+	function i(e) {
 		return {
-			epoch1904: state.workbookPr ? state.workbookPr.epoch1904 : false,
-			sheets: state.sheets
+			epoch1904: e.workbookPr ? e.workbookPr.epoch1904 : !1,
+			sheets: e.sheets
 		};
 	}
-	function onOpenTag(tagName, attributes, state) {
-		if (tagName === "workbookPr") {
-			if (!state.workbookPr) state.workbookPr = { epoch1904: attributes.date1904 === "1" };
-		} else if (tagName === "sheet") {
-			if (attributes.name) state.sheets.push({
-				id: Number(attributes.sheetId),
-				name: attributes.name,
-				relationId: attributes.id
-			});
-		}
+	function a(e, t, n) {
+		e === "workbookPr" ? n.workbookPr ||= { epoch1904: t.date1904 === "1" } : e === "sheet" && t.name && n.sheets.push({
+			id: Number(t.sheetId),
+			name: t.name,
+			relationId: t.id
+		});
 	}
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseFilePaths.js
-/**
-* Returns sheet file paths.
-* Seems that the correct place to look for the `sheetId` -> `filename` mapping
-* is `xl/_rels/workbook.xml.rels` file.
-* https://github.com/tidyverse/readxl/issues/104
-* @param  {string} content — `xl/_rels/workbook.xml.rels` file contents.
-* @param  {function} parseXml — SAX XML parser.
-* @return {object} — An object of shape `{ sheets: Record<string, string>, sharedStrings: string?, styles: string? }`
-*/
-function parseFilePaths(content, parseXml) {
-	var RELATIONSHIPS_BASE_URL_TRANSITIONAL_STANDARD = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
-	var RELATIONSHIPS_BASE_URL_STRICT_STANDARD = "http://purl.oclc.org/ooxml/officeDocument/relationships/";
-	var state = createInitialState();
-	return parseXml(content, state, onOpenTag, null, null).then(function() {
-		return getResultFromState(state);
+function lc(e, t) {
+	var n = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/", r = "http://purl.oclc.org/ooxml/officeDocument/relationships/", i = a();
+	return t(e, i, s, null, null).then(function() {
+		return o(i);
 	});
-	function createInitialState() {
+	function a() {
 		return {
 			sheets: {},
 			sharedStrings: void 0,
 			styles: void 0
 		};
 	}
-	function getResultFromState(state) {
-		return state;
+	function o(e) {
+		return e;
 	}
-	function onOpenTag(tagName, attributes, state) {
-		if (tagName === "Relationship") addFilePathForRelation(state, attributes.Id, attributes.Type, attributes.Target);
+	function s(e, t, n) {
+		e === "Relationship" && c(n, t.Id, t.Type, t.Target);
 	}
-	function addFilePathForRelation(state, id, type, target) {
-		switch (type) {
-			case RELATIONSHIPS_BASE_URL_TRANSITIONAL_STANDARD + "styles":
-			case RELATIONSHIPS_BASE_URL_STRICT_STANDARD + "styles":
-				state.styles = getFilePathFromRelationTarget(target);
+	function c(e, t, i, a) {
+		switch (i) {
+			case n + "styles":
+			case r + "styles":
+				e.styles = l(a);
 				break;
-			case RELATIONSHIPS_BASE_URL_TRANSITIONAL_STANDARD + "sharedStrings":
-			case RELATIONSHIPS_BASE_URL_STRICT_STANDARD + "sharedStrings":
-				state.sharedStrings = getFilePathFromRelationTarget(target);
+			case n + "sharedStrings":
+			case r + "sharedStrings":
+				e.sharedStrings = l(a);
 				break;
-			case RELATIONSHIPS_BASE_URL_TRANSITIONAL_STANDARD + "worksheet":
-			case RELATIONSHIPS_BASE_URL_STRICT_STANDARD + "worksheet": state.sheets[id] = getFilePathFromRelationTarget(target);
+			case n + "worksheet":
+			case r + "worksheet": e.sheets[t] = l(a);
 		}
 	}
-	function getFilePathFromRelationTarget(path) {
-		if (path[0] === "/") return path.slice(1);
-		return "xl/" + path;
+	function l(e) {
+		return e[0] === "/" ? e.slice(1) : "xl/" + e;
 	}
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseStyles.js
-function _typeof$3(o) {
+function uc(e) {
 	"@babel/helpers - typeof";
-	return _typeof$3 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$3(o);
+	return uc = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, uc(e);
 }
-var _excluded = ["xfId"];
-function ownKeys$1(e, r) {
-	var t = Object.keys(e);
+var dc = ["xfId"];
+function fc(e, t) {
+	var n = Object.keys(e);
 	if (Object.getOwnPropertySymbols) {
-		var o = Object.getOwnPropertySymbols(e);
-		r && (o = o.filter(function(r) {
-			return Object.getOwnPropertyDescriptor(e, r).enumerable;
-		})), t.push.apply(t, o);
+		var r = Object.getOwnPropertySymbols(e);
+		t && (r = r.filter(function(t) {
+			return Object.getOwnPropertyDescriptor(e, t).enumerable;
+		})), n.push.apply(n, r);
 	}
-	return t;
+	return n;
 }
-function _objectSpread$1(e) {
-	for (var r = 1; r < arguments.length; r++) {
-		var t = null != arguments[r] ? arguments[r] : {};
-		r % 2 ? ownKeys$1(Object(t), !0).forEach(function(r) {
-			_defineProperty$1(e, r, t[r]);
-		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys$1(Object(t)).forEach(function(r) {
-			Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r));
+function pc(e) {
+	for (var t = 1; t < arguments.length; t++) {
+		var n = arguments[t] == null ? {} : arguments[t];
+		t % 2 ? fc(Object(n), !0).forEach(function(t) {
+			mc(e, t, n[t]);
+		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : fc(Object(n)).forEach(function(t) {
+			Object.defineProperty(e, t, Object.getOwnPropertyDescriptor(n, t));
 		});
 	}
 	return e;
 }
-function _defineProperty$1(obj, key, value) {
-	key = _toPropertyKey$2(key);
-	if (key in obj) Object.defineProperty(obj, key, {
-		value,
-		enumerable: true,
-		configurable: true,
-		writable: true
-	});
-	else obj[key] = value;
-	return obj;
+function mc(e, t, n) {
+	return t = hc(t), t in e ? Object.defineProperty(e, t, {
+		value: n,
+		enumerable: !0,
+		configurable: !0,
+		writable: !0
+	}) : e[t] = n, e;
 }
-function _toPropertyKey$2(arg) {
-	var key = _toPrimitive$2(arg, "string");
-	return _typeof$3(key) === "symbol" ? key : String(key);
+function hc(e) {
+	var t = gc(e, "string");
+	return uc(t) === "symbol" ? t : String(t);
 }
-function _toPrimitive$2(input, hint) {
-	if (_typeof$3(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof$3(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
+function gc(e, t) {
+	if (uc(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (uc(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
-	return (hint === "string" ? String : Number)(input);
+	return (t === "string" ? String : Number)(e);
 }
-function _objectWithoutProperties(source, excluded) {
-	if (source == null) return {};
-	var target = _objectWithoutPropertiesLoose(source, excluded);
-	var key, i;
+function _c(e, t) {
+	if (e == null) return {};
+	var n = vc(e, t), r, i;
 	if (Object.getOwnPropertySymbols) {
-		var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
-		for (i = 0; i < sourceSymbolKeys.length; i++) {
-			key = sourceSymbolKeys[i];
-			if (excluded.indexOf(key) >= 0) continue;
-			if (!Object.prototype.propertyIsEnumerable.call(source, key)) continue;
-			target[key] = source[key];
-		}
+		var a = Object.getOwnPropertySymbols(e);
+		for (i = 0; i < a.length; i++) r = a[i], !(t.indexOf(r) >= 0) && Object.prototype.propertyIsEnumerable.call(e, r) && (n[r] = e[r]);
 	}
-	return target;
+	return n;
 }
-function _objectWithoutPropertiesLoose(source, excluded) {
-	if (source == null) return {};
-	var target = {};
-	var sourceKeys = Object.keys(source);
-	var key, i = 0;
-	for (; i < sourceKeys.length; i++) {
-		key = sourceKeys[i];
-		if (excluded.indexOf(key) >= 0) continue;
-		target[key] = source[key];
-	}
-	return target;
+function vc(e, t) {
+	if (e == null) return {};
+	for (var n = {}, r = Object.keys(e), i, a = 0; a < r.length; a++) i = r[a], !(t.indexOf(i) >= 0) && (n[i] = e[i]);
+	return n;
 }
-/**
-* Parses `.xlsx` file styles.
-* http://officeopenxml.com/SSstyles.php
-* Returns an array of cell styles.
-* A cell style index is the cell style ID.
-* @param {string} content
-* @param  {function} parseXml — SAX XML parser.
-* @returns {object} styles
-*/
-function parseStyles(content, parseXml) {
-	var state = createInitialState();
-	return parseXml(content, state, onOpenTag, onCloseTag, null).then(function() {
-		return getResultFromState(state);
+function yc(e, t) {
+	var n = r();
+	return t(e, n, a, o, null).then(function() {
+		return i(n);
 	});
-	function createInitialState() {
+	function r() {
 		return {
 			numberFormats: [],
 			baseStyles: [],
 			styles: [],
-			cellStyleXfs: false,
-			cellXfs: false
+			cellStyleXfs: !1,
+			cellXfs: !1
 		};
 	}
-	function getResultFromState(state) {
-		return state.styles.map(function(style) {
-			if (style.xfId) {
-				var xfId = style.xfId, styleProperties = _objectWithoutProperties(style, _excluded);
-				return _objectSpread$1(_objectSpread$1({}, state.baseStyles[xfId]), styleProperties);
-			} else return style;
+	function i(e) {
+		return e.styles.map(function(t) {
+			if (t.xfId) {
+				var n = t.xfId, r = _c(t, dc);
+				return pc(pc({}, e.baseStyles[n]), r);
+			}
+			return t;
 		});
 	}
-	function onOpenTag(tagName, attributes, state) {
-		if (tagName === "numFmt") {
-			var numFmtId = Number(attributes.numFmtId);
-			var numberFormat = { id: numFmtId };
-			if (numFmtId >= 100) numberFormat.template = attributes.formatCode;
-			state.numberFormats[numFmtId] = numberFormat;
-		} else if (tagName === "cellStyleXfs") state.cellStyleXfs = true;
-		else if (tagName === "cellXfs") state.cellXfs = true;
-		else if (tagName === "xf") {
-			if (state.cellStyleXfs) state.baseStyles.push(parseCellStyle(attributes));
-			else if (state.cellXfs) {
-				var style = parseCellStyle(attributes, state.numberFormats);
-				if (attributes.xfId) style.xfId = Number(attributes.xfId);
-				state.styles.push(style);
+	function a(e, t, n) {
+		if (e === "numFmt") {
+			var r = Number(t.numFmtId), i = { id: r };
+			r >= 100 && (i.template = t.formatCode), n.numberFormats[r] = i;
+		} else if (e === "cellStyleXfs") n.cellStyleXfs = !0;
+		else if (e === "cellXfs") n.cellXfs = !0;
+		else if (e === "xf") {
+			if (n.cellStyleXfs) n.baseStyles.push(s(t));
+			else if (n.cellXfs) {
+				var a = s(t, n.numberFormats);
+				t.xfId && (a.xfId = Number(t.xfId)), n.styles.push(a);
 			}
 		}
 	}
-	function onCloseTag(tagName, state) {
-		if (tagName === "cellStyleXfs") state.cellStyleXfs = false;
-		else if (tagName === "cellXfs") state.cellXfs = false;
+	function o(e, t) {
+		e === "cellStyleXfs" ? t.cellStyleXfs = !1 : e === "cellXfs" && (t.cellXfs = !1);
 	}
-	function parseCellStyle(attributes, numberFormats) {
-		var style = {};
-		if (attributes.numFmtId) {
-			var numFmtId = Number(attributes.numFmtId);
-			if (numberFormats && numberFormats[numFmtId]) style.numberFormat = numberFormats[numFmtId];
-			else style.numberFormat = { id: numFmtId };
+	function s(e, t) {
+		var n = {};
+		if (e.numFmtId) {
+			var r = Number(e.numFmtId);
+			n.numberFormat = t && t[r] ? t[r] : { id: r };
 		}
-		return style;
+		return n;
 	}
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSharedStrings.js
-/**
-* Parses `sharedStrings.xml` file.
-* @param {string} content
-* @param {function} parseXml — SAX XML parser.
-* @returns {Promise<string[]>}
-*/
-function parseSharedStrings(content, parseXml) {
-	var state = createInitialState();
-	return parseXml(content, state, onOpenTag, onCloseTag, onText).then(function() {
-		return getResultFromState(state);
+function bc(e, t) {
+	var n = r();
+	return t(e, n, a, o, s).then(function() {
+		return i(n);
 	});
-	function createInitialState() {
+	function r() {
 		return {
 			si: void 0,
 			strings: []
 		};
 	}
-	function getResultFromState(state) {
-		return state.strings;
+	function i(e) {
+		return e.strings;
 	}
-	function onOpenTag(tagName, attributes, state) {
-		if (tagName === "si") state.si = createInitialStateInSharedString();
-		else if (state.si) onOpenTagInSharedString(tagName, attributes, state.si);
+	function a(e, t, n) {
+		e === "si" ? n.si = c() : n.si && l(e, t, n.si);
 	}
-	function onCloseTag(tagName, state) {
-		if (tagName === "si") {
-			state.strings.push(state.si.string);
-			state.si = void 0;
-		} else if (state.si) onCloseTagInSharedString(tagName, state.si);
+	function o(e, t) {
+		e === "si" ? (t.strings.push(t.si.string), t.si = void 0) : t.si && u(e, t.si);
 	}
-	function onText(text, state) {
-		if (state.si) onTextInSharedString(text, state.si);
+	function s(e, t) {
+		t.si && d(e, t.si);
 	}
-	function createInitialStateInSharedString() {
+	function c() {
 		return {
-			t: false,
-			r: false,
-			rPh: false,
+			t: !1,
+			r: !1,
+			rPh: !1,
 			string: ""
 		};
 	}
-	function onOpenTagInSharedString(tagName, attributes, state) {
-		if (tagName === "t") state.t = true;
-		else if (tagName === "r") state.r = true;
-		else if (tagName === "rPh") state.rPh = true;
+	function l(e, t, n) {
+		e === "t" ? n.t = !0 : e === "r" ? n.r = !0 : e === "rPh" && (n.rPh = !0);
 	}
-	function onCloseTagInSharedString(tagName, state) {
-		if (tagName === "t") state.t = false;
-		else if (tagName === "r") state.r = false;
-		else if (tagName === "rPh") state.rPh = false;
+	function u(e, t) {
+		e === "t" ? t.t = !1 : e === "r" ? t.r = !1 : e === "rPh" && (t.rPh = !1);
 	}
-	function onTextInSharedString(text, state) {
-		if (state.rPh) {} else if (state.t) {
-			if (state.r) state.string += text;
-			else state.string = text;
-		}
+	function d(e, t) {
+		t.rPh || t.t && (t.r ? t.string += e : t.string = e);
 	}
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseExcelTimestamp.js
-function parseExcelTimestamp(excelSerialDate, epoch1904) {
-	var NUMBER_OF_LEAP_YEARS_BETWEEN_1900_AND_1970 = 17;
-	var JANUARY_0TH_1900_DAY = 1;
-	var ERRONEOUS_FEBRUARY_29_1990_DAY = 1;
-	var DAY = 864e5;
-	var DAYS_IN_YEAR = 365;
-	if (epoch1904) excelSerialDate += 4 * DAYS_IN_YEAR + JANUARY_0TH_1900_DAY + ERRONEOUS_FEBRUARY_29_1990_DAY;
-	var daysBeforeUnixEpoch = JANUARY_0TH_1900_DAY + ERRONEOUS_FEBRUARY_29_1990_DAY + 70 * DAYS_IN_YEAR + NUMBER_OF_LEAP_YEARS_BETWEEN_1900_AND_1970;
-	return Math.floor((excelSerialDate - daysBeforeUnixEpoch) * DAY);
+function xc(e, t) {
+	var n = 17, r = 1, i = 1, a = 864e5, o = 365;
+	t && (e += 4 * o + r + i);
+	var s = r + i + 70 * o + n;
+	return Math.floor((e - s) * a);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/isDateFormat.js
-var DATE_FORMAT_POSTFIX_THAT_ALLOWS_ANY_ARBITRARY_TEXT_INPUT = /;@$/;
-var DATE_FORMAT_TOKEN_SPLITTER_REG_EXP = /[^a-z0#\?%]+/;
-/**
-* XLSX standard does have "d" type for dates, but it's not commonly used.
-* Instead, `.xlsx` files use "n" type for storing both numbers and dates (as timestamps).
-* So how does one tell if a cell value should be interpreted as a number or as a date?
-* The answer is in the "format" that is used to "format" the cell value: if it's
-* date-specific then it's a date, otherwise it's a number.
-* This function tells if a given number format template represents a date rather than a number.
-* @param {number} formatId
-* @param {string} template
-* @param {boolean?[]} dateFormatDetectionCache
-* @returns {boolean}
-*/
-function isDateFormat(formatId, template, dateFormatDetectionCache) {
-	var cachedResult = dateFormatDetectionCache[formatId];
-	if (cachedResult === void 0) return dateFormatDetectionCache[formatId] = isDateFormatTemplate(template);
-	return cachedResult;
+var Sc = /;@$/, Cc = /[^a-z0#\?%]+/;
+function wc(e, t, n) {
+	var r = n[e];
+	return r === void 0 ? n[e] = Tc(t) : r;
 }
-/**
-* XLSX standard does have "d" type for dates, but it's not commonly used.
-* Instead, `.xlsx` files use "n" type for storing both numbers and dates (as timestamps).
-* So how does one tell if a cell value should be interpreted as a number or as a date?
-* The answer is in the "format" that is used to "format" the cell value: if it's
-* date-specific then it's a date, otherwise it's a number.
-* This function tells if a given number format template represents a date rather than a number.
-* @param {string} numberFormat
-* @returns {boolean}
-*/
-function isDateFormatTemplate(template) {
-	template = template.toLowerCase();
-	template = template.replace(DATE_FORMAT_POSTFIX_THAT_ALLOWS_ANY_ARBITRARY_TEXT_INPUT, "");
-	template = template.replace(/\\./g, " ");
-	return template.split(";").some(isDateFormatSubTemplate);
-	/**
-	* Tells if a given format template formats a date.
-	* @param {string} template
-	* @returns {boolean}
-	*/
-	function isDateFormatSubTemplate(template) {
-		template = template.replace(/"[^"]*"/g, " ");
-		template = template.replace(/(\[?[smhd]{1,2}\]?)[\.\,]00?0?/g, "$1");
-		template = template.replace(/\[([smhd]{1,2})\]/g, "$1");
-		template = template.replace(/\[[^\]]*\]/g, "");
-		var tokens = template.split(DATE_FORMAT_TOKEN_SPLITTER_REG_EXP).filter(function(_) {
-			return _;
+function Tc(e) {
+	return e = e.toLowerCase(), e = e.replace(Sc, ""), e = e.replace(/\\./g, " "), e.split(";").some(t);
+	function t(e) {
+		e = e.replace(/"[^"]*"/g, " "), e = e.replace(/(\[?[smhd]{1,2}\]?)[\.\,]00?0?/g, "$1"), e = e.replace(/\[([smhd]{1,2})\]/g, "$1"), e = e.replace(/\[[^\]]*\]/g, "");
+		var t = e.split(Cc).filter(function(e) {
+			return e;
 		});
-		return tokens.length === 0 ? false : tokens.every(function(token) {
-			return DATE_FORMAT_TEMPLATE_TOKENS.indexOf(token) >= 0;
+		return t.length !== 0 && t.every(function(e) {
+			return Ec.indexOf(e) >= 0;
 		});
 	}
 }
-var DATE_FORMAT_TEMPLATE_TOKENS = [
-	"s",
-	"ss",
-	"m",
-	"mm",
-	"h",
-	"hh",
-	"am",
-	"pm",
-	"a",
-	"p",
-	"d",
-	"dd",
-	"ddd",
-	"dddd",
-	"aaa",
-	"aaaa",
-	"aaaaa",
-	"m",
-	"mm",
-	"mmm",
-	"mmmm",
-	"mmmmm",
-	"y",
-	"yy",
-	"yyyy",
-	"e",
-	"ee",
-	"eeee"
-];
+var Ec = /* @__PURE__ */ "s.ss.m.mm.h.hh.am.pm.a.p.d.dd.ddd.dddd.aaa.aaaa.aaaaa.m.mm.mmm.mmmm.mmmmm.y.yy.yyyy.e.ee.eeee".split(".");
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/isDateFormatStyle.js
-function isDateFormatStyle(style, defaultDateFormat, shouldGuessDateFormatFromNumberFormatTemplate, dateFormatDetectionCache) {
-	if (!style.numberFormat) return false;
-	if (BUILT_IN_DATE_FORMAT_IDS.indexOf(style.numberFormat.id) >= 0 || defaultDateFormat && style.numberFormat.template === defaultDateFormat || shouldGuessDateFormatFromNumberFormatTemplate && style.numberFormat.template && isDateFormat(style.numberFormat.id, style.numberFormat.template, dateFormatDetectionCache)) return true;
-	return false;
+function Dc(e, t, n, r) {
+	return e.numberFormat ? !!(jc.indexOf(e.numberFormat.id) >= 0 || t && e.numberFormat.template === t || n && e.numberFormat.template && wc(e.numberFormat.id, e.numberFormat.template, r)) : !1;
 }
-var LOCALE_INDEPENDENT_BUILT_IN_DATE_FORMAT_IDS = [
+var Oc = [
 	14,
 	15,
 	16,
@@ -6980,8 +4484,7 @@ var LOCALE_INDEPENDENT_BUILT_IN_DATE_FORMAT_IDS = [
 	45,
 	46,
 	47
-];
-var MAINLAND_CHINESE_OR_TAIWANESE_LOCALE_BUILT_IN_DATE_FORMAT_IDS = [
+], kc = [
 	27,
 	28,
 	29,
@@ -7001,8 +4504,7 @@ var MAINLAND_CHINESE_OR_TAIWANESE_LOCALE_BUILT_IN_DATE_FORMAT_IDS = [
 	56,
 	57,
 	58
-];
-var JAPANESE_OR_KOREAN_LOCALE_BUILT_IN_DATE_FORMAT_IDS = [
+], Ac = [
 	27,
 	28,
 	29,
@@ -7022,9 +4524,8 @@ var JAPANESE_OR_KOREAN_LOCALE_BUILT_IN_DATE_FORMAT_IDS = [
 	56,
 	57,
 	58
-];
-var BUILT_IN_DATE_FORMAT_IDS = LOCALE_INDEPENDENT_BUILT_IN_DATE_FORMAT_IDS.concat(MAINLAND_CHINESE_OR_TAIWANESE_LOCALE_BUILT_IN_DATE_FORMAT_IDS).concat(JAPANESE_OR_KOREAN_LOCALE_BUILT_IN_DATE_FORMAT_IDS.filter(function(numberFormatId) {
-	return MAINLAND_CHINESE_OR_TAIWANESE_LOCALE_BUILT_IN_DATE_FORMAT_IDS.indexOf(numberFormatId) < 0;
+], jc = Oc.concat(kc).concat(Ac.filter(function(e) {
+	return kc.indexOf(e) < 0;
 })).concat([
 	71,
 	72,
@@ -7037,301 +4538,227 @@ var BUILT_IN_DATE_FORMAT_IDS = LOCALE_INDEPENDENT_BUILT_IN_DATE_FORMAT_IDS.conca
 	79,
 	80,
 	81
-].filter(function(numberFormatId) {
-	return MAINLAND_CHINESE_OR_TAIWANESE_LOCALE_BUILT_IN_DATE_FORMAT_IDS.indexOf(numberFormatId) < 0;
-}).filter(function(numberFormatId) {
-	return JAPANESE_OR_KOREAN_LOCALE_BUILT_IN_DATE_FORMAT_IDS.indexOf(numberFormatId) < 0;
+].filter(function(e) {
+	return kc.indexOf(e) < 0;
+}).filter(function(e) {
+	return Ac.indexOf(e) < 0;
 }));
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseCell.js
-function _slicedToArray$1(arr, i) {
-	return _arrayWithHoles$1(arr) || _iterableToArrayLimit$1(arr, i) || _unsupportedIterableToArray$2(arr, i) || _nonIterableRest$1();
+function Mc(e, t) {
+	return Lc(e) || Ic(e, t) || Pc(e, t) || Nc();
 }
-function _nonIterableRest$1() {
-	throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+function Nc() {
+	throw TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function _unsupportedIterableToArray$2(o, minLen) {
-	if (!o) return;
-	if (typeof o === "string") return _arrayLikeToArray$2(o, minLen);
-	var n = Object.prototype.toString.call(o).slice(8, -1);
-	if (n === "Object" && o.constructor) n = o.constructor.name;
-	if (n === "Map" || n === "Set") return Array.from(o);
-	if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray$2(o, minLen);
-}
-function _arrayLikeToArray$2(arr, len) {
-	if (len == null || len > arr.length) len = arr.length;
-	for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-	return arr2;
-}
-function _iterableToArrayLimit$1(r, l) {
-	var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
-	if (null != t) {
-		var e, n, i, u, a = [], f = !0, o = !1;
-		try {
-			if (i = (t = t.call(r)).next, 0 === l) {
-				if (Object(t) !== t) return;
-				f = !1;
-			} else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
-		} catch (r) {
-			o = !0, n = r;
-		} finally {
-			try {
-				if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return;
-			} finally {
-				if (o) throw n;
-			}
-		}
-		return a;
+function Pc(e, t) {
+	if (e) {
+		if (typeof e == "string") return Fc(e, t);
+		var n = Object.prototype.toString.call(e).slice(8, -1);
+		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Fc(e, t);
 	}
 }
-function _arrayWithHoles$1(arr) {
-	if (Array.isArray(arr)) return arr;
+function Fc(e, t) {
+	(t == null || t > e.length) && (t = e.length);
+	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
+	return r;
 }
-var EMPTY_CELL = [null, null];
-/**
-* Parses a cell from the info extracted from XML.
-* @param {string} [t] — `<c t/>` attribute value (cell type). One of: b (Boolean), e (Error), n (Number), d (Date), s (String).
-* @param {string} [s] — `<c s/>` attribute value (formatting style ID). When present, should be a stringified zero-based index of the formatting style for a numberic cell.
-* @param {string} [v] — `<v/>` element text content (value). Will be `undefined` if the `<v/>` element absent. Will be an empty string `""` if the `<v/>` element is present but is empty.
-* @param {string} [inlineString] — Inline string value.
-* @param {any[]} parameters
-* @returns {[string|null,string|number|boolean|null] | string} Either `[type, value]` or `error`, where `value` is the cell value, `type` depends on the type of `value` and could be one of: 's' (string), 'b' (boolean), 'n' (number string), 'd' (date timestamp), 'e' (formula cell error), `null` (null); `error` is an error message: `VALUE_MISSING`, `VALUE_INVALID`, `FORMAT_INVALID`, `TYPE_INVALID`.
-*/
-function parseCell(t, s, v, inlineString, _ref) {
-	var _ref2 = _slicedToArray$1(_ref, 7), sharedStrings = _ref2[0], styles = _ref2[1], epoch1904 = _ref2[2], dateFormatDetectionCache = _ref2[3], defaultDateFormat = _ref2[4], dateTemplateParser = _ref2[5], parseNumberCustom = _ref2[6];
-	switch (t || "n") {
-		case "str":
-			if (v === void 0) return "VALUE_MISSING";
-			if (!v) return EMPTY_CELL;
-			return ["s", v];
-		case "inlineStr":
-			if (inlineString === void 0) return "VALUE_MISSING";
-			return ["s", inlineString];
+function Ic(e, t) {
+	var n = e == null ? null : typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
+	if (n != null) {
+		var r, i, a, o, s = [], c = !0, l = !1;
+		try {
+			if (a = (n = n.call(e)).next, t === 0) {
+				if (Object(n) !== n) return;
+				c = !1;
+			} else for (; !(c = (r = a.call(n)).done) && (s.push(r.value), s.length !== t); c = !0);
+		} catch (e) {
+			l = !0, i = e;
+		} finally {
+			try {
+				if (!c && n.return != null && (o = n.return(), Object(o) !== o)) return;
+			} finally {
+				if (l) throw i;
+			}
+		}
+		return s;
+	}
+}
+function Lc(e) {
+	if (Array.isArray(e)) return e;
+}
+var Rc = [null, null];
+function zc(e, t, n, r, i) {
+	var a = Mc(i, 7), o = a[0], s = a[1], c = a[2], l = a[3], u = a[4], d = a[5], f = a[6];
+	switch (e || "n") {
+		case "str": return n === void 0 ? "VALUE_MISSING" : n ? ["s", n] : Rc;
+		case "inlineStr": return r === void 0 ? "VALUE_MISSING" : ["s", r];
 		case "s":
-			if (!v) return "VALUE_MISSING";
-			var sharedStringIndex = Number(v);
-			if (isNaN(sharedStringIndex) || sharedStrings[sharedStringIndex] === void 0) return "VALUE_INVALID";
-			return ["s", sharedStrings[sharedStringIndex]];
-		case "b":
-			if (!v) return "VALUE_MISSING";
-			if (v === "1") return ["b", true];
-			if (v === "0") return ["b", false];
-			return "VALUE_INVALID";
-		case "e":
-			if (!v) return "VALUE_MISSING";
-			return ["e", v];
+			if (!n) return "VALUE_MISSING";
+			var p = Number(n);
+			return isNaN(p) || o[p] === void 0 ? "VALUE_INVALID" : ["s", o[p]];
+		case "b": return n ? n === "1" ? ["b", !0] : n === "0" ? ["b", !1] : "VALUE_INVALID" : "VALUE_MISSING";
+		case "e": return n ? ["e", n] : "VALUE_MISSING";
 		case "d":
-			if (!v) return EMPTY_CELL;
-			var parsedDate = new Date(v);
-			if (isNaN(parsedDate.valueOf())) return "VALUE_INVALID";
-			return ["d", parsedDate.getTime()];
+			if (!n) return Rc;
+			var m = new Date(n);
+			return isNaN(m.valueOf()) ? "VALUE_INVALID" : ["d", m.getTime()];
 		case "n":
-			if (!v) return EMPTY_CELL;
-			if (s) {
-				var styleId = Number(s);
-				if (isNaN(styleId) || styles[styleId] === void 0) return "FORMAT_INVALID";
-				if (isDateFormatStyle(styles[styleId], defaultDateFormat, dateTemplateParser, dateFormatDetectionCache)) {
-					var timestamp = Number(v);
-					if (isNaN(timestamp)) return "VALUE_INVALID";
-					return ["d", parseExcelTimestamp(timestamp, epoch1904)];
+			if (!n) return Rc;
+			if (t) {
+				var h = Number(t);
+				if (isNaN(h) || s[h] === void 0) return "FORMAT_INVALID";
+				if (Dc(s[h], u, d, l)) {
+					var g = Number(n);
+					return isNaN(g) ? "VALUE_INVALID" : ["d", xc(g, c)];
 				}
 			}
-			if (parseNumberCustom) return ["n", v];
-			var number = Number(v);
-			if (isNaN(number)) return "VALUE_INVALID";
-			return ["n", number];
+			if (f) return ["n", n];
+			var _ = Number(n);
+			return isNaN(_) ? "VALUE_INVALID" : ["n", _];
 		default: return "TYPE_INVALID";
 	}
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseCellAddress.js
-/**
-* Parses cell address into a row number and a column number.
-* Examples: "A1" → [1,1], "B2" → [2,2], "AA2091" → [2091, 27], "R988" → [988, 18].
-* @param {string} cellAddress
-* @returns {number[]} Returns `[rowNumber, columnNumber]`
-*/
-function parseCellAddress(cellAddress) {
-	var columnNumber = 0;
-	var i = 0;
-	while (i < cellAddress.length) {
-		var charCode = cellAddress.charCodeAt(i);
-		if (charCode >= 48 && charCode <= 57) {
-			var rowNumber = Number(cellAddress.slice(i));
-			if (isNaN(rowNumber)) invalidCellAddress(cellAddress);
-			return [rowNumber, columnNumber];
+function Bc(e) {
+	for (var t = 0, n = 0; n < e.length;) {
+		var r = e.charCodeAt(n);
+		if (r >= 48 && r <= 57) {
+			var i = Number(e.slice(n));
+			return isNaN(i) && Vc(e), [i, t];
 		}
-		columnNumber *= 26;
-		columnNumber += cellAddress.charCodeAt(i) - 64;
-		i++;
+		t *= 26, t += e.charCodeAt(n) - 64, n++;
 	}
-	invalidCellAddress(cellAddress);
+	Vc(e);
 }
-function invalidCellAddress(cellAddress) {
-	throw new Error("<c r=\"".concat(cellAddress, "\">"));
+function Vc(e) {
+	throw Error(`<c r="${e}">`);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSheet.js
-function _slicedToArray(arr, i) {
-	return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _unsupportedIterableToArray$1(arr, i) || _nonIterableRest();
+function Hc(e, t) {
+	return Gc(e) || Wc(e, t) || qc(e, t) || Uc();
 }
-function _nonIterableRest() {
-	throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+function Uc() {
+	throw TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function _iterableToArrayLimit(r, l) {
-	var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"];
-	if (null != t) {
-		var e, n, i, u, a = [], f = !0, o = !1;
+function Wc(e, t) {
+	var n = e == null ? null : typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
+	if (n != null) {
+		var r, i, a, o, s = [], c = !0, l = !1;
 		try {
-			if (i = (t = t.call(r)).next, 0 === l) {
-				if (Object(t) !== t) return;
-				f = !1;
-			} else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0);
-		} catch (r) {
-			o = !0, n = r;
+			if (a = (n = n.call(e)).next, t === 0) {
+				if (Object(n) !== n) return;
+				c = !1;
+			} else for (; !(c = (r = a.call(n)).done) && (s.push(r.value), s.length !== t); c = !0);
+		} catch (e) {
+			l = !0, i = e;
 		} finally {
 			try {
-				if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return;
+				if (!c && n.return != null && (o = n.return(), Object(o) !== o)) return;
 			} finally {
-				if (o) throw n;
+				if (l) throw i;
 			}
 		}
-		return a;
+		return s;
 	}
 }
-function _arrayWithHoles(arr) {
-	if (Array.isArray(arr)) return arr;
+function Gc(e) {
+	if (Array.isArray(e)) return e;
 }
-function _createForOfIteratorHelperLoose$1(o, allowArrayLike) {
-	var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
-	if (it) return (it = it.call(o)).next.bind(it);
-	if (Array.isArray(o) || (it = _unsupportedIterableToArray$1(o)) || allowArrayLike && o && typeof o.length === "number") {
-		if (it) o = it;
-		var i = 0;
+function Kc(e, t) {
+	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
+	if (n) return (n = n.call(e)).next.bind(n);
+	if (Array.isArray(e) || (n = qc(e)) || t && e && typeof e.length == "number") {
+		n && (e = n);
+		var r = 0;
 		return function() {
-			if (i >= o.length) return { done: true };
-			return {
-				done: false,
-				value: o[i++]
+			return r >= e.length ? { done: !0 } : {
+				done: !1,
+				value: e[r++]
 			};
 		};
 	}
-	throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function _unsupportedIterableToArray$1(o, minLen) {
-	if (!o) return;
-	if (typeof o === "string") return _arrayLikeToArray$1(o, minLen);
-	var n = Object.prototype.toString.call(o).slice(8, -1);
-	if (n === "Object" && o.constructor) n = o.constructor.name;
-	if (n === "Map" || n === "Set") return Array.from(o);
-	if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray$1(o, minLen);
+function qc(e, t) {
+	if (e) {
+		if (typeof e == "string") return Jc(e, t);
+		var n = Object.prototype.toString.call(e).slice(8, -1);
+		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Jc(e, t);
+	}
 }
-function _arrayLikeToArray$1(arr, len) {
-	if (len == null || len > arr.length) len = arr.length;
-	for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-	return arr2;
+function Jc(e, t) {
+	(t == null || t > e.length) && (t = e.length);
+	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
+	return r;
 }
-var EMPTY_CELL_VALUE = null;
-/**
-* Parses a `sheet.xml` file.
-* @param {string} content
-* @param {function} parseXml — SAX XML parser.
-* @param {object} options
-* @returns {Promise<SheetData>}
-*/
-function parseSheet(content, parseXml, _ref) {
-	var sharedStrings = _ref.sharedStrings, styles = _ref.styles, epoch1904 = _ref.epoch1904, dateFormatDetectionCache = _ref.dateFormatDetectionCache, options = _ref.options;
-	var parseCellParameters = [
-		sharedStrings,
-		styles,
-		epoch1904,
-		dateFormatDetectionCache,
-		options.dateFormat,
-		options.smartDateParser !== false,
-		options.parseNumber
-	];
-	var rows = [];
-	var errors = [];
-	var state = createInitialState();
-	return parseXml(content, state, onOpenTag, onCloseTag, onText, onProgress).then(function() {
-		var _state$sheetData = state.sheetData, rowCount = _state$sheetData.rowCount, columnCount = _state$sheetData.columnCount, dataRowCount = _state$sheetData.dataRowCount, dataColumnCount = _state$sheetData.dataColumnCount;
-		if (dataRowCount < rowCount) rows = rows.slice(0, dataRowCount);
-		if (dataColumnCount < columnCount) {
-			var i = 0;
-			while (i < rows.length) {
-				if (rows[i].length > dataColumnCount) rows[i] = rows[i].slice(0, dataColumnCount);
-				i++;
-			}
-		}
-		for (var _iterator = _createForOfIteratorHelperLoose$1(rows), _step; !(_step = _iterator()).done;) {
-			var row = _step.value;
-			while (row.length < dataColumnCount) row.push(EMPTY_CELL_VALUE);
-		}
-		return rows;
+var Yc = null;
+function Xc(e, t, n) {
+	var r = n.sharedStrings, i = n.styles, a = n.epoch1904, o = n.dateFormatDetectionCache, s = n.options, c = [
+		r,
+		i,
+		a,
+		o,
+		s.dateFormat,
+		s.smartDateParser !== !1,
+		s.parseNumber
+	], l = [], u = [], d = f();
+	return t(e, d, y, b, x, v).then(function() {
+		var e = d.sheetData, t = e.rowCount, n = e.columnCount, r = e.dataRowCount, i = e.dataColumnCount;
+		if (r < t && (l = l.slice(0, r)), i < n) for (var a = 0; a < l.length;) l[a].length > i && (l[a] = l[a].slice(0, i)), a++;
+		for (var o = Kc(l), s; !(s = o()).done;) for (var c = s.value; c.length < i;) c.push(Yc);
+		return l;
 	});
-	function createInitialState() {
+	function f() {
 		return {
 			dimension: void 0,
 			sheetData: void 0
 		};
 	}
-	function getRowsFromState(state) {
-		return state.sheetData.rows;
+	function p(e) {
+		return e.sheetData.rows;
 	}
-	function setRowsInState(state, rows) {
-		state.sheetData.rowIndexShift += state.sheetData.rows.length - rows.length;
-		state.sheetData.rows = rows;
+	function m(e, t) {
+		e.sheetData.rowIndexShift += e.sheetData.rows.length - t.length, e.sheetData.rows = t;
 	}
-	function getErrorsFromState(state) {
-		return state.sheetData.errors;
+	function h(e) {
+		return e.sheetData.errors;
 	}
-	function setErrorsInState(state, errors) {
-		state.sheetData.errors = errors;
+	function g(e, t) {
+		e.sheetData.errors = t;
 	}
-	function throwInvalidCellError(_ref2) {
-		var row = _ref2.row, column = _ref2.column, error = _ref2.error;
-		throw new InvalidSpreadsheetError("<c/> at row ".concat(row, ", col ").concat(column, ": ").concat(error));
+	function _(e) {
+		var t = e.row, n = e.column, r = e.error;
+		throw new co(`<c/> at row ${t}, col ${n}: ${r}`);
 	}
-	function onProgress(end) {
-		if (!state.sheetData) return;
-		var rowsRead = getRowsFromState(state);
-		var errorsEncountered = getErrorsFromState(state);
-		if (end) {
-			rows = rows.concat(rowsRead);
-			errors = errors.concat(errorsEncountered);
-			if (errors.length > 0) throwInvalidCellError(errors[0]);
-		} else if (rowsRead.length > 1) {
-			var finalizedRows = rowsRead.slice(0, -1);
-			rows = rows.concat(finalizedRows);
-			errors = errors.concat(errorsEncountered);
-			setRowsInState(state, rowsRead.slice(-1));
-			setErrorsInState(state, []);
+	function v(e) {
+		if (d.sheetData) {
+			var t = p(d), n = h(d);
+			if (e) l = l.concat(t), u = u.concat(n), u.length > 0 && _(u[0]);
+			else if (t.length > 1) {
+				var r = t.slice(0, -1);
+				l = l.concat(r), u = u.concat(n), m(d, t.slice(-1)), g(d, []);
+			}
 		}
 	}
-	function onOpenTag(tagName, attributes, state) {
-		if (tagName === "dimension") state.dimension = parseSheetDimensionRef(attributes.ref);
-		else if (tagName === "sheetData") state.sheetData = createInitialStateInSheetData();
-		else if (state.sheetData) onOpenTagInSheetData(tagName, attributes, state.sheetData);
+	function y(e, t, n) {
+		e === "dimension" ? n.dimension = S(t.ref) : e === "sheetData" ? n.sheetData = C() : n.sheetData && w(e, t, n.sheetData);
 	}
-	function onCloseTag(tagName, state) {
-		if (state.sheetData) onCloseTagInSheetData(tagName, state.sheetData);
+	function b(e, t) {
+		t.sheetData && ee(e, t.sheetData);
 	}
-	function onText(text, state) {
-		if (state.sheetData) onTextInSheetData(text, state.sheetData);
+	function x(e, t) {
+		t.sheetData && T(e, t.sheetData);
 	}
-	/**
-	* Sheet "dimension" defines the spreadsheet area containing all non-empty cells.
-	* Any cells outside the "dimension" are considered empty and should be ignored.
-	* https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.spreadsheet.sheetdimension?view=openxml-2.8.1
-	* @param {string} `ref` — The value of `<dimension ref/>` attribute.
-	* @returns {[[number,number],[number,number]]} `undefined` or `[{ row, column }, { row, column }]` — "From row number and column number to row number and column number".
-	*/
-	function parseSheetDimensionRef(ref) {
-		var dimensions = ref.split(":").map(parseCellAddress);
-		if (dimensions.length === 1) dimensions = [dimensions[0], dimensions[0]];
-		return dimensions;
+	function S(e) {
+		var t = e.split(":").map(Bc);
+		return t.length === 1 && (t = [t[0], t[0]]), t;
 	}
-	function createInitialStateInSheetData() {
+	function C() {
 		return {
 			c: void 0,
 			rows: [],
@@ -7346,176 +4773,90 @@ function parseSheet(content, parseXml, _ref) {
 			errors: []
 		};
 	}
-	function onOpenTagInSheetData(tagName, attributes, state) {
-		if (tagName === "row") {
-			if (attributes.r) state.rowNumber = Number(attributes.r);
-			state.row = [];
-		} else if (tagName === "c") {
-			state.c = createInitialStateInCell();
-			state.c.attributes = attributes;
-		} else if (state.c) onOpenTagInCell(tagName, attributes, state.c);
+	function w(e, t, n) {
+		e === "row" ? (t.r && (n.rowNumber = Number(t.r)), n.row = []) : e === "c" ? (n.c = te(), n.c.attributes = t) : n.c && A(e, t, n.c);
 	}
-	function onCloseTagInSheetData(tagName, state) {
-		if (tagName === "row") {
-			if (state.rowNumber) {
-				var previousRowNumber = state.rowIndexShift + state.rows.length;
-				if (state.rowNumber <= previousRowNumber) throw new InvalidSpreadsheetError("Out-of-place <row/> number ".concat(state.rowNumber, " follows <row/> number ").concat(previousRowNumber));
-				while (state.rowNumber > state.rowIndexShift + state.rows.length + 1) state.rows.push([]);
+	function ee(e, t) {
+		if (e === "row") {
+			if (t.rowNumber) {
+				var n = t.rowIndexShift + t.rows.length;
+				if (t.rowNumber <= n) throw new co(`Out-of-place <row/> number ${t.rowNumber} follows <row/> number ${n}`);
+				for (; t.rowNumber > t.rowIndexShift + t.rows.length + 1;) t.rows.push([]);
 			}
-			state.rows.push(state.row);
-			if (state.row.length > 0) state.dataRowCount = state.rowNumber;
-			if (state.rowNumber > state.rowCount) state.rowCount = state.rowNumber;
-			state.row = void 0;
-			state.rowNumber = void 0;
-		} else if (tagName === "c") {
-			var cell = parseCellFromXmlData(state.c);
-			if (cell.row < state.cursor[0] || cell.row === state.cursor[0] && cell.column <= state.cursor[1]) throw new InvalidSpreadsheetError("Out-of-place <c/> at row ".concat(cell.row, " col ").concat(cell.column, " follows <c/> at row ").concat(state.cursor[0], " col ").concat(state.cursor[1]));
-			state.cursor[0] = cell.row;
-			state.cursor[1] = cell.column;
-			if (!state.rowNumber) state.rowNumber = cell.row;
-			if (cell.error) {
-				if (THROW_ON_FIRST_CELL_ERROR) throwInvalidCellError(cell);
-				state.errors.push(cell);
-			} else if (cell.value !== EMPTY_CELL_VALUE) {
-				while (cell.column > state.row.length + 1) state.row.push(EMPTY_CELL_VALUE);
-				state.row.push(cell.value);
-				if (cell.column > state.dataColumnCount) state.dataColumnCount = cell.column;
+			t.rows.push(t.row), t.row.length > 0 && (t.dataRowCount = t.rowNumber), t.rowNumber > t.rowCount && (t.rowCount = t.rowNumber), t.row = void 0, t.rowNumber = void 0;
+		} else if (e === "c") {
+			var r = E(t.c);
+			if (r.row < t.cursor[0] || r.row === t.cursor[0] && r.column <= t.cursor[1]) throw new co(`Out-of-place <c/> at row ${r.row} col ${r.column} follows <c/> at row ${t.cursor[0]} col ${t.cursor[1]}`);
+			if (t.cursor[0] = r.row, t.cursor[1] = r.column, t.rowNumber ||= r.row, r.error) j && _(r), t.errors.push(r);
+			else if (r.value !== Yc) {
+				for (; r.column > t.row.length + 1;) t.row.push(Yc);
+				t.row.push(r.value), r.column > t.dataColumnCount && (t.dataColumnCount = r.column);
 			}
-			if (cell.column > state.columnCount) state.columnCount = cell.column;
-			state.c = void 0;
-		} else if (state.c) onCloseTagInCell(tagName, state.c);
+			r.column > t.columnCount && (t.columnCount = r.column), t.c = void 0;
+		} else t.c && ne(e, t.c);
 	}
-	function onTextInSheetData(text, state) {
-		if (state.c) onTextInCell(text, state.c);
+	function T(e, t) {
+		t.c && re(e, t.c);
 	}
-	/**
-	* Parses the XML values of a `<c/>` element into an object representing a cell value.
-	* @param {object} — `{ attributes: Record<string,string>, inlineString?: string, vText?: string }`. If `<v/>` element is present but is empty, `vText` will be an empty string. If `<v/>` element is absent, `vText` will be `undefined`.
-	* @returns {object} Either `{ row: number, column: number, error: string }` or `{ row: number, column: number, value: string|number|boolean|null }`
-	*/
-	function parseCellFromXmlData(_ref3) {
-		var attributes = _ref3.attributes, inlineString = _ref3.inlineString, vText = _ref3.vText;
-		var _parseCellAddress2 = _slicedToArray(parseCellAddress(attributes.r), 2), row = _parseCellAddress2[0], column = _parseCellAddress2[1];
-		var errorOrTypeAndValue = parseCellAndTrimValue(attributes.t, attributes.s, vText, inlineString, parseCellParameters, options.trim !== false);
-		if (typeof errorOrTypeAndValue === "string") return {
-			row,
-			column,
-			error: errorOrTypeAndValue
-		};
-		return {
-			row,
-			column,
-			value: parseCellValue(errorOrTypeAndValue[1], errorOrTypeAndValue[0])
+	function E(e) {
+		var t = e.attributes, n = e.inlineString, r = e.vText, i = Hc(Bc(t.r), 2), a = i[0], o = i[1], l = D(t.t, t.s, r, n, c, s.trim !== !1);
+		return typeof l == "string" ? {
+			row: a,
+			column: o,
+			error: l
+		} : {
+			row: a,
+			column: o,
+			value: k(l[1], l[0])
 		};
 	}
-	/**
-	* Parses a cell from the info extracted from the cell XML.
-	* If the cell is of type string, it trims the value (by default).
-	*
-	* Receives same arguments as `parseCell()` function, with an additional argument
-	* `trimStrings: boolean` which tells if it should trim any string values.
-	*
-	* Produces same result as `parseCell()` function, except for cells of type "e".
-	*/
-	function parseCellAndTrimValue(t, s, v, inlineString, parameters, trimStrings) {
-		var errorOrTypeAndValue = parseCellWithRepairAbility(t, s, v, inlineString, parameters);
-		if (Array.isArray(errorOrTypeAndValue) && errorOrTypeAndValue[0] === "s") {
-			if (trimStrings) errorOrTypeAndValue[1] = errorOrTypeAndValue[1].trim();
-			if (errorOrTypeAndValue[1] === "") return EMPTY_CELL;
-		}
-		return errorOrTypeAndValue;
+	function D(e, t, n, r, i, a) {
+		var o = O(e, t, n, r, i);
+		return Array.isArray(o) && o[0] === "s" && (a && (o[1] = o[1].trim()), o[1] === "") ? Rc : o;
 	}
-	/**
-	* Parses cell value and optionally repairs any repairable errors.
-	* Receives same arguments as `parseCell()` function.
-	* Produces same result as `parseCell()` function, except for cells of type "e".
-	*/
-	function parseCellWithRepairAbility(t, s, v, inlineString, parameters) {
-		var errorOrTypeAndValue = parseCell(t, s, v, inlineString, parameters);
-		if (errorOrTypeAndValue === "VALUE_MISSING") switch (t || "n") {
+	function O(e, t, n, r, i) {
+		var a = zc(e, t, n, r, i);
+		if (a === "VALUE_MISSING") switch (e || "n") {
 			case "str":
 			case "inlineStr":
 			case "s":
-			case "b": return EMPTY_CELL;
+			case "b": return Rc;
 		}
-		if (t === "e") return EMPTY_CELL;
-		return errorOrTypeAndValue;
+		return e === "e" ? Rc : a;
 	}
-	/**
-	* For certain types of cell, it transforms the value.
-	* Specifically, for cells of type "n" or "d", it transforms the value to `Number` or `Date` respectively.
-	*
-	* The reason it is done separately is because before this function is called,
-	* the cells are easily "serializable". And after this function is called,
-	* some of the cells' `value` properties become instances of `Date` class or any other class,
-	* such as `BigInt`, serializing which would require additional manual steps to be performed.
-	* Serializing cells could be utilized in case of "transferring" data between workers
-	* with a `transferList`, argument which could hypothetically result in better performance
-	* and less time being blocked by the "synchronous" JSON serialization.
-	*
-	* @param {string|number|boolean|null} value
-	* @param {string} type — One of: "s", "n", "d", "b", "-"
-	* @return {string|ParsedNumber|Date|boolean|null}
-	*/
-	function parseCellValue(value, type) {
-		if (type === "n") {
-			if (options.parseNumber) return options.parseNumber(value);
-			return value;
-		} else if (type === "d") return new Date(value);
-		else return value;
+	function k(e, t) {
+		return t === "n" ? s.parseNumber ? s.parseNumber(e) : e : t === "d" ? new Date(e) : e;
 	}
-	function createInitialStateInCell() {
+	function te() {
 		return {
-			v: false,
-			is: false,
-			t: false,
-			r: false,
-			rPh: false,
+			v: !1,
+			is: !1,
+			t: !1,
+			r: !1,
+			rPh: !1,
 			vText: void 0,
 			inlineString: void 0,
 			attributes: void 0
 		};
 	}
-	function onOpenTagInCell(tagName, attributes, state) {
-		if (tagName === "v") state.v = true;
-		else if (tagName === "is") {
-			state.is = true;
-			state.inlineString = "";
-		} else if (tagName === "t") state.t = true;
-		else if (tagName === "r") state.r = true;
-		else if (tagName === "rPh") state.rPh = true;
+	function A(e, t, n) {
+		e === "v" ? n.v = !0 : e === "is" ? (n.is = !0, n.inlineString = "") : e === "t" ? n.t = !0 : e === "r" ? n.r = !0 : e === "rPh" && (n.rPh = !0);
 	}
-	function onCloseTagInCell(tagName, state) {
-		if (tagName === "v") {
-			state.v = false;
-			state.vText || (state.vText = "");
-		} else if (tagName === "is") state.is = false;
-		else if (tagName === "t") state.t = false;
-		else if (tagName === "r") state.r = false;
-		else if (tagName === "rPh") state.rPh = false;
+	function ne(e, t) {
+		e === "v" ? (t.v = !1, t.vText ||= "") : e === "is" ? t.is = !1 : e === "t" ? t.t = !1 : e === "r" ? t.r = !1 : e === "rPh" && (t.rPh = !1);
 	}
-	function onTextInCell(text, state) {
-		if (state.v) state.vText = text;
-		else if (state.is) {
-			if (state.rPh) {} else if (state.t) {
-				if (state.r) state.inlineString += text;
-				else state.inlineString = text;
-			}
-		}
+	function re(e, t) {
+		t.v ? t.vText = e : t.is && (t.rPh || t.t && (t.r ? t.inlineString += e : t.inlineString = e));
 	}
-	var THROW_ON_FIRST_CELL_ERROR;
+	var j;
 }
 //#endregion
 //#region node_modules/fflate/esm/index.mjs
-var require$1 = createRequire$1("/");
-var _a;
+var Zc = N("/"), Qc;
 try {
-	_a = require$1("worker_threads"), _a.Worker, _a.isMarkedAsUntransferable;
-} catch (e) {}
-var u8 = Uint8Array;
-var u16 = Uint16Array;
-var i32 = Int32Array;
-var fleb = new u8([
+	Qc = Zc("worker_threads"), Qc.Worker, Qc.isMarkedAsUntransferable;
+} catch {}
+var $c = Uint8Array, el = Uint16Array, tl = Int32Array, nl = new $c([
 	0,
 	0,
 	0,
@@ -7548,8 +4889,7 @@ var fleb = new u8([
 	0,
 	0,
 	0
-]);
-var fdeb = new u8([
+]), rl = new $c([
 	0,
 	0,
 	0,
@@ -7583,7 +4923,7 @@ var fdeb = new u8([
 	0,
 	0
 ]);
-new u8([
+new $c([
 	16,
 	17,
 	18,
@@ -7604,43 +4944,29 @@ new u8([
 	1,
 	15
 ]);
-var freb = function(eb, start) {
-	var b = new u16(31);
-	for (var i = 0; i < 31; ++i) b[i] = start += 1 << eb[i - 1];
-	var r = new i32(b[30]);
-	for (var i = 1; i < 30; ++i) for (var j = b[i]; j < b[i + 1]; ++j) r[j] = j - b[i] << 5 | i;
+var il = function(e, t) {
+	for (var n = new el(31), r = 0; r < 31; ++r) n[r] = t += 1 << e[r - 1];
+	for (var i = new tl(n[30]), r = 1; r < 30; ++r) for (var a = n[r]; a < n[r + 1]; ++a) i[a] = a - n[r] << 5 | r;
 	return {
-		b,
-		r
+		b: n,
+		r: i
 	};
-};
-var _a = freb(fleb, 2);
-var fl = _a.b;
-var revfl = _a.r;
-fl[28] = 258, revfl[258] = 28;
-var _b = freb(fdeb, 0);
-_b.b;
-_b.r;
-var rev = new u16(32768);
-for (var i = 0; i < 32768; ++i) {
-	var x = (i & 43690) >> 1 | (i & 21845) << 1;
-	x = (x & 52428) >> 2 | (x & 13107) << 2;
-	x = (x & 61680) >> 4 | (x & 3855) << 4;
-	rev[i] = ((x & 65280) >> 8 | (x & 255) << 8) >> 1;
+}, Qc = il(nl, 2), al = Qc.b, ol = Qc.r;
+al[28] = 258, ol[258] = 28;
+var sl = il(rl, 0);
+sl.b, sl.r;
+for (var cl = new el(32768), Y = 0; Y < 32768; ++Y) {
+	var ll = (Y & 43690) >> 1 | (Y & 21845) << 1;
+	ll = (ll & 52428) >> 2 | (ll & 13107) << 2, ll = (ll & 61680) >> 4 | (ll & 3855) << 4, cl[Y] = ((ll & 65280) >> 8 | (ll & 255) << 8) >> 1;
 }
-var flt = new u8(288);
-for (var i = 0; i < 144; ++i) flt[i] = 8;
-for (var i = 144; i < 256; ++i) flt[i] = 9;
-for (var i = 256; i < 280; ++i) flt[i] = 7;
-for (var i = 280; i < 288; ++i) flt[i] = 8;
-var fdt = new u8(32);
-for (var i = 0; i < 32; ++i) fdt[i] = 5;
-var slc = function(v, s, e) {
-	if (s == null || s < 0) s = 0;
-	if (e == null || e > v.length) e = v.length;
-	return new u8(v.subarray(s, e));
-};
-var ec = [
+for (var ul = new $c(288), Y = 0; Y < 144; ++Y) ul[Y] = 8;
+for (var Y = 144; Y < 256; ++Y) ul[Y] = 9;
+for (var Y = 256; Y < 280; ++Y) ul[Y] = 7;
+for (var Y = 280; Y < 288; ++Y) ul[Y] = 8;
+for (var dl = new $c(32), Y = 0; Y < 32; ++Y) dl[Y] = 5;
+var fl = function(e, t, n) {
+	return (t == null || t < 0) && (t = 0), (n == null || n > e.length) && (n = e.length), new $c(e.subarray(t, n));
+}, pl = [
 	"unexpected EOF",
 	"invalid block type",
 	"invalid length/literal",
@@ -7655,466 +4981,373 @@ var ec = [
 	"filename too long",
 	"stream finishing",
 	"invalid zip data"
-];
-var err = function(ind, msg, nt) {
-	var e = new Error(msg || ec[ind]);
-	e.code = ind;
-	if (Error.captureStackTrace) Error.captureStackTrace(e, err);
-	if (!nt) throw e;
-	return e;
-};
-var et = /*#__PURE__*/ new u8(0);
-var td = typeof TextDecoder != "undefined" && /*#__PURE__*/ new TextDecoder();
+], ml = function(e, t, n) {
+	var r = Error(t || pl[e]);
+	if (r.code = e, Error.captureStackTrace && Error.captureStackTrace(r, ml), !n) throw r;
+	return r;
+}, hl = /*#__PURE__*/ new $c(0), gl = typeof TextDecoder < "u" && /*#__PURE__*/ new TextDecoder();
 try {
-	td.decode(et, { stream: true });
-} catch (e) {}
-var dutf8 = function(d) {
-	for (var r = "", i = 0;;) {
-		var c = d[i++];
-		var eb = (c > 127) + (c > 223) + (c > 239);
-		if (i + eb > d.length) return {
-			s: r,
-			r: slc(d, i - 1)
+	gl.decode(hl, { stream: !0 });
+} catch {}
+var _l = function(e) {
+	for (var t = "", n = 0;;) {
+		var r = e[n++], i = (r > 127) + (r > 223) + (r > 239);
+		if (n + i > e.length) return {
+			s: t,
+			r: fl(e, n - 1)
 		};
-		if (!eb) r += String.fromCharCode(c);
-		else if (eb == 3) c = ((c & 15) << 18 | (d[i++] & 63) << 12 | (d[i++] & 63) << 6 | d[i++] & 63) - 65536, r += String.fromCharCode(55296 | c >> 10, 56320 | c & 1023);
-		else if (eb & 1) r += String.fromCharCode((c & 31) << 6 | d[i++] & 63);
-		else r += String.fromCharCode((c & 15) << 12 | (d[i++] & 63) << 6 | d[i++] & 63);
+		i ? i == 3 ? (r = ((r & 15) << 18 | (e[n++] & 63) << 12 | (e[n++] & 63) << 6 | e[n++] & 63) - 65536, t += String.fromCharCode(55296 | r >> 10, 56320 | r & 1023)) : i & 1 ? t += String.fromCharCode((r & 31) << 6 | e[n++] & 63) : t += String.fromCharCode((r & 15) << 12 | (e[n++] & 63) << 6 | e[n++] & 63) : t += String.fromCharCode(r);
 	}
 };
-/**
-* Converts a Uint8Array to a string
-* @param dat The data to decode to string
-* @param latin1 Whether or not to interpret the data as Latin-1. This should
-*               not need to be true unless encoding to binary string.
-* @returns The original UTF-8/Latin-1 string
-*/
-function strFromU8$1(dat, latin1) {
-	if (latin1) {
-		var r = "";
-		for (var i = 0; i < dat.length; i += 16384) r += String.fromCharCode.apply(null, dat.subarray(i, i + 16384));
-		return r;
-	} else if (td) return td.decode(dat);
-	else {
-		var _a = dutf8(dat), s = _a.s, r = _a.r;
-		if (r.length) err(8);
-		return s;
+function vl(e, t) {
+	if (t) {
+		for (var n = "", r = 0; r < e.length; r += 16384) n += String.fromCharCode.apply(null, e.subarray(r, r + 16384));
+		return n;
 	}
+	if (gl) return gl.decode(e);
+	var i = _l(e), a = i.s, n = i.r;
+	return n.length && ml(8), a;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/utility/convertValuesFromUint8ArraysToStrings.js
-/**
-* @param {Record<string,Uint8Array} entries
-* @returns {Record<string,string>}
-*/
-function convertValuesFromUint8ArraysToStrings(entries) {
-	checkpoint("convert files to strings");
-	var convertedEntries = {};
-	for (var _i = 0, _Object$keys = Object.keys(entries); _i < _Object$keys.length; _i++) {
-		var key = _Object$keys[_i];
-		convertedEntries[key] = strFromU8(entries[key]);
-	}
-	return convertedEntries;
-}
-/**
-* Converts a Uint8Array to a string
-* @param data The data to decode to string
-* @param latin1 Whether or not to interpret the data as Latin-1. This should
-*               not need to be true unless encoding to binary string.
-* @returns The original UTF-8/Latin-1 string
-*/
-function strFromU8(data) {
-	if (typeof TextDecoder !== "undefined") return new TextDecoder().decode(data);
-	else return strFromU8$1(data);
-}
-//#endregion
-//#region node_modules/read-excel-file/modules/utility/isPromise.js
-function _typeof$2(o) {
-	"@babel/helpers - typeof";
-	return _typeof$2 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$2(o);
-}
-function isPromise(anything) {
-	return _typeof$2(anything) === "object" && typeof anything.then === "function";
-}
-//#endregion
-//#region node_modules/read-excel-file/modules/xlsx/SheetNotFoundError.js
-function _typeof$1(o) {
-	"@babel/helpers - typeof";
-	return _typeof$1 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof$1(o);
-}
-function _defineProperties(target, props) {
-	for (var i = 0; i < props.length; i++) {
-		var descriptor = props[i];
-		descriptor.enumerable = descriptor.enumerable || false;
-		descriptor.configurable = true;
-		if ("value" in descriptor) descriptor.writable = true;
-		Object.defineProperty(target, _toPropertyKey$1(descriptor.key), descriptor);
-	}
-}
-function _createClass(Constructor, protoProps, staticProps) {
-	if (protoProps) _defineProperties(Constructor.prototype, protoProps);
-	if (staticProps) _defineProperties(Constructor, staticProps);
-	Object.defineProperty(Constructor, "prototype", { writable: false });
-	return Constructor;
-}
-function _toPropertyKey$1(arg) {
-	var key = _toPrimitive$1(arg, "string");
-	return _typeof$1(key) === "symbol" ? key : String(key);
-}
-function _toPrimitive$1(input, hint) {
-	if (_typeof$1(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof$1(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
-	}
-	return (hint === "string" ? String : Number)(input);
-}
-function _classCallCheck(instance, Constructor) {
-	if (!(instance instanceof Constructor)) throw new TypeError("Cannot call a class as a function");
-}
-function _inherits(subClass, superClass) {
-	if (typeof superClass !== "function" && superClass !== null) throw new TypeError("Super expression must either be null or a function");
-	subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: {
-		value: subClass,
-		writable: true,
-		configurable: true
-	} });
-	Object.defineProperty(subClass, "prototype", { writable: false });
-	if (superClass) _setPrototypeOf(subClass, superClass);
-}
-function _createSuper(Derived) {
-	var hasNativeReflectConstruct = _isNativeReflectConstruct();
-	return function _createSuperInternal() {
-		var Super = _getPrototypeOf(Derived), result;
-		if (hasNativeReflectConstruct) {
-			var NewTarget = _getPrototypeOf(this).constructor;
-			result = Reflect.construct(Super, arguments, NewTarget);
-		} else result = Super.apply(this, arguments);
-		return _possibleConstructorReturn(this, result);
-	};
-}
-function _possibleConstructorReturn(self, call) {
-	if (call && (_typeof$1(call) === "object" || typeof call === "function")) return call;
-	else if (call !== void 0) throw new TypeError("Derived constructors may only return object or undefined");
-	return _assertThisInitialized(self);
-}
-function _assertThisInitialized(self) {
-	if (self === void 0) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
-	return self;
-}
-function _wrapNativeSuper(Class) {
-	var _cache = typeof Map === "function" ? /* @__PURE__ */ new Map() : void 0;
-	_wrapNativeSuper = function _wrapNativeSuper(Class) {
-		if (Class === null || !_isNativeFunction(Class)) return Class;
-		if (typeof Class !== "function") throw new TypeError("Super expression must either be null or a function");
-		if (typeof _cache !== "undefined") {
-			if (_cache.has(Class)) return _cache.get(Class);
-			_cache.set(Class, Wrapper);
-		}
-		function Wrapper() {
-			return _construct(Class, arguments, _getPrototypeOf(this).constructor);
-		}
-		Wrapper.prototype = Object.create(Class.prototype, { constructor: {
-			value: Wrapper,
-			enumerable: false,
-			writable: true,
-			configurable: true
-		} });
-		return _setPrototypeOf(Wrapper, Class);
-	};
-	return _wrapNativeSuper(Class);
-}
-function _construct(Parent, args, Class) {
-	if (_isNativeReflectConstruct()) _construct = Reflect.construct.bind();
-	else _construct = function _construct(Parent, args, Class) {
-		var a = [null];
-		a.push.apply(a, args);
-		var instance = new (Function.bind.apply(Parent, a))();
-		if (Class) _setPrototypeOf(instance, Class.prototype);
-		return instance;
-	};
-	return _construct.apply(null, arguments);
-}
-function _isNativeReflectConstruct() {
-	if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-	if (Reflect.construct.sham) return false;
-	if (typeof Proxy === "function") return true;
-	try {
-		Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {}));
-		return true;
-	} catch (e) {
-		return false;
-	}
-}
-function _isNativeFunction(fn) {
-	return Function.toString.call(fn).indexOf("[native code]") !== -1;
-}
-function _setPrototypeOf(o, p) {
-	_setPrototypeOf = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function _setPrototypeOf(o, p) {
-		o.__proto__ = p;
-		return o;
-	};
-	return _setPrototypeOf(o, p);
-}
-function _getPrototypeOf(o) {
-	_getPrototypeOf = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function _getPrototypeOf(o) {
-		return o.__proto__ || Object.getPrototypeOf(o);
-	};
-	return _getPrototypeOf(o);
-}
-var SheetNotFoundError = /*#__PURE__*/ function(_Error) {
-	_inherits(SheetNotFoundError, _Error);
-	var _super = _createSuper(SheetNotFoundError);
-	function SheetNotFoundError(sheet, sheets) {
-		var _this;
-		_classCallCheck(this, SheetNotFoundError);
-		_this = _super.call(this, "Sheet not found: ".concat(typeof sheet === "number" ? sheet + ". Sheet count: " + sheets.length : sheet + ". Available sheets: " + sheets.join(", ")));
-		_this.name = "SheetNotFoundError";
-		_this.sheet = sheet;
-		_this.sheets = sheets;
-		return _this;
-	}
-	return _createClass(SheetNotFoundError);
-}(/*#__PURE__*/ _wrapNativeSuper(Error));
-//#endregion
-//#region node_modules/read-excel-file/modules/xlsx/parseSpreadsheetContents.js
-function _typeof(o) {
-	"@babel/helpers - typeof";
-	return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o) {
-		return typeof o;
-	} : function(o) {
-		return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o;
-	}, _typeof(o);
-}
-function _createForOfIteratorHelperLoose(o, allowArrayLike) {
-	var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"];
-	if (it) return (it = it.call(o)).next.bind(it);
-	if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
-		if (it) o = it;
-		var i = 0;
-		return function() {
-			if (i >= o.length) return { done: true };
-			return {
-				done: false,
-				value: o[i++]
-			};
-		};
-	}
-	throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
-}
-function _unsupportedIterableToArray(o, minLen) {
-	if (!o) return;
-	if (typeof o === "string") return _arrayLikeToArray(o, minLen);
-	var n = Object.prototype.toString.call(o).slice(8, -1);
-	if (n === "Object" && o.constructor) n = o.constructor.name;
-	if (n === "Map" || n === "Set") return Array.from(o);
-	if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
-}
-function _arrayLikeToArray(arr, len) {
-	if (len == null || len > arr.length) len = arr.length;
-	for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
-	return arr2;
-}
-function ownKeys(e, r) {
-	var t = Object.keys(e);
-	if (Object.getOwnPropertySymbols) {
-		var o = Object.getOwnPropertySymbols(e);
-		r && (o = o.filter(function(r) {
-			return Object.getOwnPropertyDescriptor(e, r).enumerable;
-		})), t.push.apply(t, o);
+function yl(e) {
+	ac("convert files to strings");
+	for (var t = {}, n = 0, r = Object.keys(e); n < r.length; n++) {
+		var i = r[n];
+		t[i] = bl(e[i]);
 	}
 	return t;
 }
-function _objectSpread(e) {
-	for (var r = 1; r < arguments.length; r++) {
-		var t = null != arguments[r] ? arguments[r] : {};
-		r % 2 ? ownKeys(Object(t), !0).forEach(function(r) {
-			_defineProperty(e, r, t[r]);
-		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function(r) {
-			Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r));
+function bl(e) {
+	return typeof TextDecoder < "u" ? new TextDecoder().decode(e) : vl(e);
+}
+//#endregion
+//#region node_modules/read-excel-file/modules/utility/isPromise.js
+function xl(e) {
+	"@babel/helpers - typeof";
+	return xl = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, xl(e);
+}
+function Sl(e) {
+	return xl(e) === "object" && typeof e.then == "function";
+}
+//#endregion
+//#region node_modules/read-excel-file/modules/xlsx/SheetNotFoundError.js
+function Cl(e) {
+	"@babel/helpers - typeof";
+	return Cl = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, Cl(e);
+}
+function wl(e, t) {
+	for (var n = 0; n < t.length; n++) {
+		var r = t[n];
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, El(r.key), r);
+	}
+}
+function Tl(e, t, n) {
+	return t && wl(e.prototype, t), n && wl(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+}
+function El(e) {
+	var t = Dl(e, "string");
+	return Cl(t) === "symbol" ? t : String(t);
+}
+function Dl(e, t) {
+	if (Cl(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (Cl(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
+	}
+	return (t === "string" ? String : Number)(e);
+}
+function Ol(e, t) {
+	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
+}
+function kl(e, t) {
+	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
+	e.prototype = Object.create(t && t.prototype, { constructor: {
+		value: e,
+		writable: !0,
+		configurable: !0
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Ll(e, t);
+}
+function Al(e) {
+	var t = Fl();
+	return function() {
+		var n = Rl(e), r;
+		if (t) {
+			var i = Rl(this).constructor;
+			r = Reflect.construct(n, arguments, i);
+		} else r = n.apply(this, arguments);
+		return jl(this, r);
+	};
+}
+function jl(e, t) {
+	if (t && (Cl(t) === "object" || typeof t == "function")) return t;
+	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
+	return Ml(e);
+}
+function Ml(e) {
+	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
+	return e;
+}
+function Nl(e) {
+	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
+	return Nl = function(e) {
+		if (e === null || !Il(e)) return e;
+		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
+		if (t !== void 0) {
+			if (t.has(e)) return t.get(e);
+			t.set(e, n);
+		}
+		function n() {
+			return Pl(e, arguments, Rl(this).constructor);
+		}
+		return n.prototype = Object.create(e.prototype, { constructor: {
+			value: n,
+			enumerable: !1,
+			writable: !0,
+			configurable: !0
+		} }), Ll(n, e);
+	}, Nl(e);
+}
+function Pl(e, t, n) {
+	return Pl = Fl() ? Reflect.construct.bind() : function(e, t, n) {
+		var r = [null];
+		r.push.apply(r, t);
+		var i = new (Function.bind.apply(e, r))();
+		return n && Ll(i, n.prototype), i;
+	}, Pl.apply(null, arguments);
+}
+function Fl() {
+	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
+	if (typeof Proxy == "function") return !0;
+	try {
+		return Boolean.prototype.valueOf.call(Reflect.construct(Boolean, [], function() {})), !0;
+	} catch {
+		return !1;
+	}
+}
+function Il(e) {
+	return Function.toString.call(e).indexOf("[native code]") !== -1;
+}
+function Ll(e, t) {
+	return Ll = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+		return e.__proto__ = t, e;
+	}, Ll(e, t);
+}
+function Rl(e) {
+	return Rl = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+		return e.__proto__ || Object.getPrototypeOf(e);
+	}, Rl(e);
+}
+var zl = /*#__PURE__*/ function(e) {
+	kl(n, e);
+	var t = Al(n);
+	function n(e, r) {
+		var i;
+		return Ol(this, n), i = t.call(this, `Sheet not found: ${typeof e == "number" ? e + ". Sheet count: " + r.length : e + ". Available sheets: " + r.join(", ")}`), i.name = "SheetNotFoundError", i.sheet = e, i.sheets = r, i;
+	}
+	return Tl(n);
+}(/*#__PURE__*/ Nl(Error));
+//#endregion
+//#region node_modules/read-excel-file/modules/xlsx/parseSpreadsheetContents.js
+function Bl(e) {
+	"@babel/helpers - typeof";
+	return Bl = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+		return typeof e;
+	} : function(e) {
+		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
+	}, Bl(e);
+}
+function Vl(e, t) {
+	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
+	if (n) return (n = n.call(e)).next.bind(n);
+	if (Array.isArray(e) || (n = Hl(e)) || t && e && typeof e.length == "number") {
+		n && (e = n);
+		var r = 0;
+		return function() {
+			return r >= e.length ? { done: !0 } : {
+				done: !1,
+				value: e[r++]
+			};
+		};
+	}
+	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
+}
+function Hl(e, t) {
+	if (e) {
+		if (typeof e == "string") return Ul(e, t);
+		var n = Object.prototype.toString.call(e).slice(8, -1);
+		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Ul(e, t);
+	}
+}
+function Ul(e, t) {
+	(t == null || t > e.length) && (t = e.length);
+	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
+	return r;
+}
+function Wl(e, t) {
+	var n = Object.keys(e);
+	if (Object.getOwnPropertySymbols) {
+		var r = Object.getOwnPropertySymbols(e);
+		t && (r = r.filter(function(t) {
+			return Object.getOwnPropertyDescriptor(e, t).enumerable;
+		})), n.push.apply(n, r);
+	}
+	return n;
+}
+function Gl(e) {
+	for (var t = 1; t < arguments.length; t++) {
+		var n = arguments[t] == null ? {} : arguments[t];
+		t % 2 ? Wl(Object(n), !0).forEach(function(t) {
+			Kl(e, t, n[t]);
+		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : Wl(Object(n)).forEach(function(t) {
+			Object.defineProperty(e, t, Object.getOwnPropertyDescriptor(n, t));
 		});
 	}
 	return e;
 }
-function _defineProperty(obj, key, value) {
-	key = _toPropertyKey(key);
-	if (key in obj) Object.defineProperty(obj, key, {
-		value,
-		enumerable: true,
-		configurable: true,
-		writable: true
-	});
-	else obj[key] = value;
-	return obj;
+function Kl(e, t, n) {
+	return t = ql(t), t in e ? Object.defineProperty(e, t, {
+		value: n,
+		enumerable: !0,
+		configurable: !0,
+		writable: !0
+	}) : e[t] = n, e;
 }
-function _toPropertyKey(arg) {
-	var key = _toPrimitive(arg, "string");
-	return _typeof(key) === "symbol" ? key : String(key);
+function ql(e) {
+	var t = Jl(e, "string");
+	return Bl(t) === "symbol" ? t : String(t);
 }
-function _toPrimitive(input, hint) {
-	if (_typeof(input) !== "object" || input === null) return input;
-	var prim = input[Symbol.toPrimitive];
-	if (prim !== void 0) {
-		var res = prim.call(input, hint || "default");
-		if (_typeof(res) !== "object") return res;
-		throw new TypeError("@@toPrimitive must return a primitive value.");
+function Jl(e, t) {
+	if (Bl(e) !== "object" || e === null) return e;
+	var n = e[Symbol.toPrimitive];
+	if (n !== void 0) {
+		var r = n.call(e, t || "default");
+		if (Bl(r) !== "object") return r;
+		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
-	return (hint === "string" ? String : Number)(input);
+	return (t === "string" ? String : Number)(e);
 }
-/**
-* Reads data from an `.xlsx` file.
-* @param  {function} parseXml — SAX XML parser.
-* @param  {Record<string,Uint8Array>} contents - A map of `.xml` files inside the `.xlsx` file (which itself is just a zipped directory).
-* @param  {object} [options]
-* @return {Promise<Sheet[]>}
-*/
-function parseSpreadsheetContents(parseXml, contents_) {
-	var options = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {};
-	var contents = convertValuesFromUint8ArraysToStrings(contents_);
-	checkpoint("parse spreadsheet info and file paths");
-	return readFiles(getXmlFilesAtFixedPaths(), contents, parseXml).then(function(_ref) {
-		var spreadsheetInfo = _ref.spreadsheetInfo, filePaths = _ref.filePaths;
-		checkpoint("parse \"shared strings\" and \"styles\"");
-		return readFiles(getXmlFilesAtNonFixedPaths(filePaths), contents, parseXml).then(function(_ref2) {
-			var sharedStrings = _ref2.sharedStrings, styles = _ref2.styles;
-			var sheetRelationIdsToRead = options.sheets ? options.sheets.map(function(sheet) {
-				return getSheetRelationId(sheet, spreadsheetInfo.sheets);
-			}) : spreadsheetInfo.sheets.map(function(_) {
-				return _.relationId;
+function Yl(e, t) {
+	var n = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, r = yl(t);
+	return ac("parse spreadsheet info and file paths"), nu($l(), r, e).then(function(t) {
+		var i = t.spreadsheetInfo, a = t.filePaths;
+		return ac("parse \"shared strings\" and \"styles\""), nu(eu(a), r, e).then(function(t) {
+			var o = t.sharedStrings, s = t.styles, c = n.sheets ? n.sheets.map(function(e) {
+				return Zl(e, i.sheets);
+			}) : i.sheets.map(function(e) {
+				return e.relationId;
 			});
-			checkpoint("parse sheet".concat(sheetRelationIdsToRead.length === 1 ? "" : "s", " data"));
-			return readFiles(getSheetDataXmlFiles(filePaths, sheetRelationIdsToRead, {
-				sharedStrings,
-				styles,
-				epoch1904: spreadsheetInfo.epoch1904,
+			return ac(`parse sheet${c.length === 1 ? "" : "s"} data`), nu(tu(a, c, {
+				sharedStrings: o,
+				styles: s,
+				epoch1904: i.epoch1904,
 				dateFormatDetectionCache: [],
-				options
-			}), contents, parseXml).then(function(sheetsData) {
-				checkpoint("end");
-				return sheetRelationIdsToRead.map(function(sheetRelationId) {
+				options: n
+			}), r, e).then(function(e) {
+				return ac("end"), c.map(function(t) {
 					return {
-						sheet: getSheetNameByRelationId(sheetRelationId, spreadsheetInfo.sheets),
-						data: sheetsData[sheetRelationId]
+						sheet: Ql(t, i.sheets),
+						data: e[t]
 					};
 				});
 			});
 		});
 	});
 }
-/**
-* Reads data from an `.xlsx` file in a worker.
-* @param  {function} [createWorkerFunction] — Creates a worker function. Not used.
-* @param  {function} parseXml — SAX XML parser.
-* @param  {Record<string,Uint8Array>} contents - A map of `.xml` files inside the `.xlsx` file (which itself is just a zipped directory).
-* @param  {object} [options]
-* @return {Promise<Sheet[]>}
-*/
-function parseSpreadsheetContentsInWorker(createWorkerFunction, parseXml, contents, options) {
-	if (!(options && options.parseNumber)) options = _objectSpread(_objectSpread({}, options), {}, { parseNumber: null });
-	return parseSpreadsheetContents(parseXml, contents, options);
+function Xl(e, t, n, r) {
+	return r && r.parseNumber || (r = Gl(Gl({}, r), {}, { parseNumber: null })), Yl(t, n, r);
 }
-function getSheetRelationId(sheet, sheets) {
-	if (typeof sheet === "string") for (var _iterator = _createForOfIteratorHelperLoose(sheets), _step; !(_step = _iterator()).done;) {
-		var _sheet = _step.value;
-		if (_sheet.name === sheet) return _sheet.relationId;
+function Zl(e, t) {
+	if (typeof e == "string") for (var n = Vl(t), r; !(r = n()).done;) {
+		var i = r.value;
+		if (i.name === e) return i.relationId;
 	}
-	else if (sheet <= sheets.length) return sheets[sheet - 1].relationId;
-	throw new SheetNotFoundError(sheet, sheets.map(function(_) {
-		return _.name;
+	else if (e <= t.length) return t[e - 1].relationId;
+	throw new zl(e, t.map(function(e) {
+		return e.name;
 	}));
 }
-function getSheetNameByRelationId(sheetRelationId, sheets) {
-	for (var _iterator2 = _createForOfIteratorHelperLoose(sheets), _step2; !(_step2 = _iterator2()).done;) {
-		var sheet = _step2.value;
-		if (sheet.relationId === sheetRelationId) return sheet.name;
+function Ql(e, t) {
+	for (var n = Vl(t), r; !(r = n()).done;) {
+		var i = r.value;
+		if (i.relationId === e) return i.name;
 	}
-	throw new Error("Sheet relation ID not found: ".concat(sheetRelationId));
+	throw Error(`Sheet relation ID not found: ${e}`);
 }
-function getXmlFilesAtFixedPaths() {
+function $l() {
 	return {
 		"xl/_rels/workbook.xml.rels": {
 			name: "filePaths",
-			parse: parseFilePaths
+			parse: lc
 		},
 		"xl/workbook.xml": {
 			name: "spreadsheetInfo",
-			parse: parseSpreadsheetInfo
+			parse: cc
 		}
 	};
 }
-function getXmlFilesAtNonFixedPaths(filePaths) {
-	var _ref3 = {};
-	return _defineProperty(_ref3, filePaths.sharedStrings || "xl/sharedStrings.xml", {
+function eu(e) {
+	var t = {};
+	return Kl(t, e.sharedStrings || "xl/sharedStrings.xml", {
 		name: "sharedStrings",
-		parse: parseSharedStrings,
+		parse: bc,
 		fallback: Promise.resolve([])
-	}), _defineProperty(_ref3, filePaths.styles || "xl/styles.xml", {
+	}), Kl(t, e.styles || "xl/styles.xml", {
 		name: "styles",
-		parse: parseStyles,
+		parse: yc,
 		fallback: {}
-	}), _ref3;
+	}), t;
 }
-function getSheetDataXmlFiles(filePaths, sheetRelationIdsToRead, sheetDataParserParameters) {
-	return Object.keys(filePaths.sheets).filter(function(sheetRelationId) {
-		return sheetRelationIdsToRead.includes(sheetRelationId);
-	}).reduce(function(filesInfo, sheetRelationId) {
-		return _objectSpread(_objectSpread({}, filesInfo), {}, _defineProperty({}, filePaths.sheets[sheetRelationId], {
-			name: sheetRelationId,
-			parse: function parse(content, parseXml) {
-				return parseSheet(content, parseXml, sheetDataParserParameters);
+function tu(e, t, n) {
+	return Object.keys(e.sheets).filter(function(e) {
+		return t.includes(e);
+	}).reduce(function(t, r) {
+		return Gl(Gl({}, t), {}, Kl({}, e.sheets[r], {
+			name: r,
+			parse: function(e, t) {
+				return Xc(e, t, n);
 			}
 		}));
 	}, {});
 }
-function readFiles(filesInfo, contents, parseXml) {
-	var results = {};
-	var _loop = function _loop() {
-		var filePath = _Object$keys[_i];
-		var fileInfo = filesInfo[filePath];
-		results[fileInfo.name] = contents[filePath] === void 0 ? fileInfo.fallback === void 0 ? function() {
-			throw new InvalidSpreadsheetError("\"".concat(filePath, "\" file not found inside the `.xlsx` file"));
-		}() : fileInfo.fallback : fileInfo.parse(contents[filePath], parseXml);
-	};
-	for (var _i = 0, _Object$keys = Object.keys(filesInfo); _i < _Object$keys.length; _i++) _loop();
-	var promises = [];
-	var _loop2 = function _loop2() {
-		var name = _Object$keys2[_i2];
-		if (isPromise(results[name])) promises.push(results[name].then(function(result) {
-			results[name] = result;
+function nu(e, t, n) {
+	for (var r = {}, i = function() {
+		var i = o[a], s = e[i];
+		r[s.name] = t[i] === void 0 ? s.fallback === void 0 ? function() {
+			throw new co(`"${i}" file not found inside the \`.xlsx\` file`);
+		}() : s.fallback : s.parse(t[i], n);
+	}, a = 0, o = Object.keys(e); a < o.length; a++) i();
+	for (var s = [], c = function() {
+		var e = u[l];
+		Sl(r[e]) && s.push(r[e].then(function(t) {
+			r[e] = t;
 		}));
-	};
-	for (var _i2 = 0, _Object$keys2 = Object.keys(results); _i2 < _Object$keys2.length; _i2++) _loop2();
-	if (promises.length > 0) return Promise.all(promises).then(function() {
-		return results;
-	});
-	return results;
+	}, l = 0, u = Object.keys(r); l < u.length; l++) c();
+	return s.length > 0 ? Promise.all(s).then(function() {
+		return r;
+	}) : r;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/export/readXlsxFileNode.js
-/**
-* Reads an `.xlsx` file.
-* @param  {(string|Stream|Buffer|Blob)} input
-* @param  {object} [options]
-* @return {Promise<Sheet[]>}
-*/
-function readXlsxFile(input, options) {
-	return unpackXlsxFile(input).then(function(contents) {
-		return parseSpreadsheetContentsInWorker(createWorkerFunctionInNode, parseXml, contents, options);
+function ru(e, t) {
+	return sc(e).then(function(e) {
+		return Xl(Va, lo, e, t);
 	});
 }
 //#endregion
 //#region electron/main/import/legacy_excel.ts
-var COLUMNS = {
+var X = {
 	codigo_parroquia: 0,
 	tipo_libro: 1,
 	num_libro: 2,
@@ -8154,10 +5387,7 @@ var COLUMNS = {
 	testigo_3: 39,
 	testigo_4: 40,
 	fecha_ingreso: 42
-};
-var RECORDS_SHEET = "feligres";
-var BOOKS_SHEET = "parroquialibros";
-var RECORDS_HEADER = [
+}, iu = "feligres", au = "parroquialibros", ou = [
 	"COD PARROQUIA",
 	"TIPO LIBRO",
 	"NUM LIBRO",
@@ -8203,60 +5433,53 @@ var RECORDS_HEADER = [
 	"FECHA INGRESO DATOS",
 	"ULTIMA MODIFICACION",
 	"ULTIMA IMPRESION"
-];
-var BOOKS_HEADER = [
+], su = [
 	"COD PARROQUIA",
 	"TIPO DE LIBRO",
 	"NUM LIBRO",
 	"NOMBRE DE LIBRO",
 	"RANGO DE AÑOS DEL LIBRO"
-];
-var BOOK_COLUMNS = {
+], cu = {
 	codigo_parroquia: 0,
 	tipo_libro: 1,
 	num_libro: 2,
 	nombre_libro: 3
-};
-var FormatError = class extends Error {};
-var TYPES = {
+}, Z = class extends Error {}, lu = {
 	B: "bautismo",
 	C: "confirmacion",
 	M: "matrimonio"
 };
-function book_key(type_letter, number) {
-	return `${type_letter.trim().toUpperCase()}|${number.trim()}`;
+function uu(e, t) {
+	return `${e.trim().toUpperCase()}|${t.trim()}`;
 }
-function clean_cell(value) {
-	if (value === null || value === void 0) return null;
-	const text = String(value).trim();
-	if (text === "" || /^-+$/.test(text)) return null;
-	return text;
+function Q(e) {
+	if (e == null) return null;
+	let t = String(e).trim();
+	return t === "" || /^-+$/.test(t) ? null : t;
 }
-function pad(number) {
-	return String(number).padStart(2, "0");
+function du(e) {
+	return String(e).padStart(2, "0");
 }
-function date_cell(value) {
-	if (value instanceof Date && !Number.isNaN(value.getTime())) return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}`;
-	const text = clean_cell(value);
-	if (!text) return null;
-	const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
-	if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-	const local = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
-	if (local) return `${local[3]}-${pad(Number(local[2]))}-${pad(Number(local[1]))}`;
-	return null;
+function fu(e) {
+	if (e instanceof Date && !Number.isNaN(e.getTime())) return `${e.getUTCFullYear()}-${du(e.getUTCMonth() + 1)}-${du(e.getUTCDate())}`;
+	let t = Q(e);
+	if (!t) return null;
+	let n = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+	if (n) return `${n[1]}-${n[2]}-${n[3]}`;
+	let r = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+	return r ? `${r[3]}-${du(Number(r[2]))}-${du(Number(r[1]))}` : null;
 }
-function date_or_text(value) {
-	const date = date_cell(value);
-	if (date) return {
-		date,
+function pu(e) {
+	let t = fu(e);
+	return t ? {
+		date: t,
 		text: null
-	};
-	return {
+	} : {
 		date: null,
-		text: clean_cell(value)
+		text: Q(e)
 	};
 }
-var TITLES_WITHOUT_DOT = [
+var mu = [
 	"PBRO",
 	"P",
 	"RP",
@@ -8269,770 +5492,598 @@ var TITLES_WITHOUT_DOT = [
 	"DIAC",
 	"OBISPO"
 ];
-function is_title(word) {
-	if (/\.$/.test(word)) return true;
-	return TITLES_WITHOUT_DOT.includes(word.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase());
+function hu(e) {
+	return /\.$/.test(e) ? !0 : mu.includes(e.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase());
 }
-function split_minister(value) {
-	const text = clean_cell(value);
-	if (!text) return null;
-	const words = text.split(/\s+/);
-	let title = null;
-	if (words.length > 1 && is_title(words[0])) title = words.shift();
-	if (words.length === 1) return {
-		titulo: title,
-		nombre: words[0],
+function gu(e) {
+	let t = Q(e);
+	if (!t) return null;
+	let n = t.split(/\s+/), r = null;
+	return n.length > 1 && hu(n[0]) && (r = n.shift()), n.length === 1 ? {
+		titulo: r,
+		nombre: n[0],
 		apellido_paterno: "",
 		apellido_materno: ""
-	};
-	if (words.length === 2) return {
-		titulo: title,
-		nombre: words[0],
-		apellido_paterno: words[1],
+	} : n.length === 2 ? {
+		titulo: r,
+		nombre: n[0],
+		apellido_paterno: n[1],
 		apellido_materno: ""
+	} : {
+		titulo: r,
+		nombre: n.slice(0, -2).join(" "),
+		apellido_paterno: n[n.length - 2],
+		apellido_materno: n[n.length - 1]
 	};
-	return {
-		titulo: title,
-		nombre: words.slice(0, -2).join(" "),
-		apellido_paterno: words[words.length - 2],
-		apellido_materno: words[words.length - 1]
-	};
 }
-function is_header(row) {
-	const code = row[COLUMNS.codigo_parroquia];
-	return typeof code === "string" && !/^\d+$/.test(code.trim());
+function _u(e) {
+	let t = e[X.codigo_parroquia];
+	return typeof t == "string" && !/^\d+$/.test(t.trim());
 }
-function header_text(value) {
-	return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+function vu(e) {
+	return String(e ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 }
-function data_rows(rows, sheet, header) {
-	if (rows.length === 0) throw new FormatError(`La hoja "${sheet}" está vacía.`);
-	const result = [];
-	rows.forEach((row, index) => {
-		if (row.length !== header.length) throw new FormatError(`La hoja "${sheet}" debe tener ${header.length} columnas y tiene ${row.length}. El archivo no es el exportado por el sistema anterior.`);
-		if (index === 0 && is_header(row)) {
-			header.forEach((name, column) => {
-				if (header_text(row[column]) !== header_text(name)) throw new FormatError(`El encabezado de la hoja "${sheet}" no es el del sistema anterior: la columna ${column + 1} dice "${row[column] ?? ""}" y debería decir "${name ?? ""}".`);
+function yu(e, t, n) {
+	if (e.length === 0) throw new Z(`La hoja "${t}" está vacía.`);
+	let r = [];
+	return e.forEach((e, i) => {
+		if (e.length !== n.length) throw new Z(`La hoja "${t}" debe tener ${n.length} columnas y tiene ${e.length}. El archivo no es el exportado por el sistema anterior.`);
+		if (i === 0 && _u(e)) {
+			n.forEach((n, r) => {
+				if (vu(e[r]) !== vu(n)) throw new Z(`El encabezado de la hoja "${t}" no es el del sistema anterior: la columna ${r + 1} dice "${e[r] ?? ""}" y debería decir "${n ?? ""}".`);
 			});
 			return;
 		}
-		if (row.every((cell) => clean_cell(cell) === null)) return;
-		result.push({
-			row,
-			fila: index + 1
+		e.every((e) => Q(e) === null) || r.push({
+			row: e,
+			fila: i + 1
 		});
-	});
-	return result;
+	}), r;
 }
-function check_parish_code(row, column, sheet, file_row, expected) {
-	const code = clean_cell(row[column]);
-	if (!code || !/^\d+$/.test(code)) throw new FormatError(`La fila ${file_row} de la hoja "${sheet}" no tiene un código de parroquia válido.`);
-	if (expected !== null && code !== expected) throw new FormatError(`El archivo trae partidas de más de una parroquia (códigos ${expected} y ${code}). Debe ser el de una sola parroquia.`);
-	return code;
+function bu(e, t, n, r, i) {
+	let a = Q(e[t]);
+	if (!a || !/^\d+$/.test(a)) throw new Z(`La fila ${r} de la hoja "${n}" no tiene un código de parroquia válido.`);
+	if (i !== null && a !== i) throw new Z(`El archivo trae partidas de más de una parroquia (códigos ${i} y ${a}). Debe ser el de una sola parroquia.`);
+	return a;
 }
-function check_type_letter(row, column, sheet, file_row) {
-	const letter = String(row[column] ?? "").trim().toUpperCase();
-	if (!TYPES[letter]) throw new FormatError(`En la fila ${file_row} de la hoja "${sheet}" el tipo de libro no es B, C ni M: las columnas no son las del sistema anterior.`);
-	return letter;
+function xu(e, t, n, r) {
+	let i = String(e[t] ?? "").trim().toUpperCase();
+	if (!lu[i]) throw new Z(`En la fila ${r} de la hoja "${n}" el tipo de libro no es B, C ni M: las columnas no son las del sistema anterior.`);
+	return i;
 }
-function read_books(rows) {
-	const books = /* @__PURE__ */ new Map();
-	let code = null;
-	for (const { row, fila } of data_rows(rows, BOOKS_SHEET, BOOKS_HEADER)) {
-		code = check_parish_code(row, BOOK_COLUMNS.codigo_parroquia, BOOKS_SHEET, fila, code);
-		const letter = check_type_letter(row, BOOK_COLUMNS.tipo_libro, BOOKS_SHEET, fila);
-		const number = clean_cell(row[BOOK_COLUMNS.num_libro]);
-		if (!number) throw new FormatError(`La fila ${fila} de la hoja "${BOOKS_SHEET}" no tiene el número del libro.`);
-		books.set(book_key(letter, number), clean_cell(row[BOOK_COLUMNS.nombre_libro]) ?? number);
+function Su(e) {
+	let t = /* @__PURE__ */ new Map(), n = null;
+	for (let { row: r, fila: i } of yu(e, au, su)) {
+		n = bu(r, cu.codigo_parroquia, au, i, n);
+		let e = xu(r, cu.tipo_libro, au, i), a = Q(r[cu.num_libro]);
+		if (!a) throw new Z(`La fila ${i} de la hoja "${au}" no tiene el número del libro.`);
+		t.set(uu(e, a), Q(r[cu.nombre_libro]) ?? a);
 	}
 	return {
-		codigo_parroquia: code,
-		libros: books
+		codigo_parroquia: n,
+		libros: t
 	};
 }
-function read_person(row, columns) {
-	const birth = date_or_text(row[columns.fecha_nacimiento]);
-	const approximate = clean_cell(row[columns.fecha_aproximada]);
+function Cu(e, t) {
+	let n = pu(e[t.fecha_nacimiento]), r = Q(e[t.fecha_aproximada]);
 	return {
-		dni: clean_cell(row[columns.dni]),
-		nombres: clean_cell(row[columns.nombres]) ?? "",
-		apellido_paterno: clean_cell(row[columns.apellido_paterno]) ?? "",
-		apellido_materno: clean_cell(row[columns.apellido_materno]) ?? "",
-		fecha_nacimiento: birth.date,
-		fecha_aproximada: approximate ?? birth.text,
-		lugar_nacimiento: clean_cell(row[columns.lugar_nacimiento]),
-		padre: clean_cell(row[columns.padre]),
-		madre: clean_cell(row[columns.madre])
+		dni: Q(e[t.dni]),
+		nombres: Q(e[t.nombres]) ?? "",
+		apellido_paterno: Q(e[t.apellido_paterno]) ?? "",
+		apellido_materno: Q(e[t.apellido_materno]) ?? "",
+		fecha_nacimiento: n.date,
+		fecha_aproximada: r ?? n.text,
+		lugar_nacimiento: Q(e[t.lugar_nacimiento]),
+		padre: Q(e[t.padre]),
+		madre: Q(e[t.madre])
 	};
 }
-var GROOM = {
-	dni: COLUMNS.dni,
-	nombres: COLUMNS.nombres,
-	apellido_paterno: COLUMNS.apellido_paterno,
-	apellido_materno: COLUMNS.apellido_materno,
-	fecha_nacimiento: COLUMNS.fecha_nacimiento,
-	fecha_aproximada: COLUMNS.fecha_nacimiento_aprox,
-	lugar_nacimiento: COLUMNS.lugar_nacimiento,
-	padre: COLUMNS.padre,
-	madre: COLUMNS.madre
+var wu = {
+	dni: X.dni,
+	nombres: X.nombres,
+	apellido_paterno: X.apellido_paterno,
+	apellido_materno: X.apellido_materno,
+	fecha_nacimiento: X.fecha_nacimiento,
+	fecha_aproximada: X.fecha_nacimiento_aprox,
+	lugar_nacimiento: X.lugar_nacimiento,
+	padre: X.padre,
+	madre: X.madre
+}, Tu = {
+	dni: X.novia_dni,
+	nombres: X.novia_nombres,
+	apellido_paterno: X.novia_apellido_paterno,
+	apellido_materno: X.novia_apellido_materno,
+	fecha_nacimiento: X.novia_fecha_nacimiento,
+	fecha_aproximada: X.novia_fecha_nacimiento_aprox,
+	lugar_nacimiento: X.novia_lugar_nacimiento,
+	padre: X.novia_padre,
+	madre: X.novia_madre
 };
-var BRIDE = {
-	dni: COLUMNS.novia_dni,
-	nombres: COLUMNS.novia_nombres,
-	apellido_paterno: COLUMNS.novia_apellido_paterno,
-	apellido_materno: COLUMNS.novia_apellido_materno,
-	fecha_nacimiento: COLUMNS.novia_fecha_nacimiento,
-	fecha_aproximada: COLUMNS.novia_fecha_nacimiento_aprox,
-	lugar_nacimiento: COLUMNS.novia_lugar_nacimiento,
-	padre: COLUMNS.novia_padre,
-	madre: COLUMNS.novia_madre
-};
-function notes_of(row, extra) {
-	const notes = [];
-	const marginal = clean_cell(row[COLUMNS.anotacion_marginal]);
-	if (marginal && marginal.toUpperCase() !== "NINGUNA") notes.push(marginal);
-	notes.push(...extra);
-	if (notes.length === 0) return null;
-	return notes.join("\n");
+function Eu(e, t) {
+	let n = [], r = Q(e[X.anotacion_marginal]);
+	return r && r.toUpperCase() !== "NINGUNA" && n.push(r), n.push(...t), n.length === 0 ? null : n.join("\n");
 }
-function read_row(row, file_row, books, today) {
-	const type_letter = String(row[COLUMNS.tipo_libro] ?? "").trim().toUpperCase();
-	const type = TYPES[type_letter];
-	if (!type) return {
-		fila: file_row,
+function Du(e, t, n, r) {
+	let i = String(e[X.tipo_libro] ?? "").trim().toUpperCase(), a = lu[i];
+	if (!a) return {
+		fila: t,
 		motivo: "El tipo de libro no es B, C ni M."
 	};
-	const book = clean_cell(row[COLUMNS.num_libro]);
-	const page = clean_cell(row[COLUMNS.folio]);
-	const number = clean_cell(row[COLUMNS.numero_registro]);
-	if (!book || !page || !number) return {
-		fila: file_row,
+	let o = Q(e[X.num_libro]), s = Q(e[X.folio]), c = Q(e[X.numero_registro]);
+	if (!o || !s || !c) return {
+		fila: t,
 		motivo: "Falta el libro, el folio o el número de registro."
 	};
-	const book_name = books.get(book_key(type_letter, book));
-	if (!book_name) return {
-		fila: file_row,
-		motivo: `El libro ${type_letter} ${book} no está en la hoja "${BOOKS_SHEET}".`
+	let l = n.get(uu(i, o));
+	if (!l) return {
+		fila: t,
+		motivo: `El libro ${i} ${o} no está en la hoja "${au}".`
 	};
-	const groom = read_person(row, GROOM);
-	if (!groom.nombres) return {
-		fila: file_row,
+	let u = Cu(e, wu);
+	if (!u.nombres) return {
+		fila: t,
 		motivo: "Falta el nombre."
 	};
-	const extra = [];
-	const event = date_or_text(row[COLUMNS.fecha_sacramento]);
-	const event_approximate = clean_cell(row[COLUMNS.fecha_sacramento_aprox]) ?? event.text;
-	if (!event.date && event_approximate) extra.push(`Fecha aproximada del sacramento: ${event_approximate}`);
-	const people = [groom];
-	let detail = {
-		padrino_1: clean_cell(row[COLUMNS.padrino]),
-		padrino_2: clean_cell(row[COLUMNS.madrina])
+	let d = [], f = pu(e[X.fecha_sacramento]), p = Q(e[X.fecha_sacramento_aprox]) ?? f.text;
+	!f.date && p && d.push(`Fecha aproximada del sacramento: ${p}`);
+	let m = [u], h = {
+		padrino_1: Q(e[X.padrino]),
+		padrino_2: Q(e[X.madrina])
 	};
-	if (type === "matrimonio") {
-		const bride = read_person(row, BRIDE);
-		if (!bride.nombres) return {
-			fila: file_row,
+	if (a === "matrimonio") {
+		let n = Cu(e, Tu);
+		if (!n.nombres) return {
+			fila: t,
 			motivo: "Falta el nombre de la novia."
 		};
-		people.push(bride);
-		const groom_baptism = date_or_text(row[COLUMNS.fecha_bautizo_novio]);
-		const bride_baptism = date_or_text(row[COLUMNS.fecha_bautizo_novia]);
-		const groom_approximate = clean_cell(row[COLUMNS.fecha_bautizo_novio_aprox]) ?? groom_baptism.text;
-		const bride_approximate = clean_cell(row[COLUMNS.fecha_bautizo_novia_aprox]) ?? bride_baptism.text;
-		if (!groom_baptism.date && groom_approximate) extra.push(`Fecha aproximada del bautizo del esposo: ${groom_approximate}`);
-		if (!bride_baptism.date && bride_approximate) extra.push(`Fecha aproximada del bautizo de la esposa: ${bride_approximate}`);
-		detail = {
-			lugar: clean_cell(row[COLUMNS.lugar_matrimonio]),
-			testigo_1: clean_cell(row[COLUMNS.padrino]),
-			testigo_2: clean_cell(row[COLUMNS.madrina]),
-			testigo_3: clean_cell(row[COLUMNS.testigo_3]),
-			testigo_4: clean_cell(row[COLUMNS.testigo_4]),
-			conyuge_1_bautismo_parroquia: clean_cell(row[COLUMNS.parroquia_bautizo_novio]),
-			conyuge_1_bautismo_fecha: groom_baptism.date,
-			conyuge_2_bautismo_parroquia: clean_cell(row[COLUMNS.parroquia_bautizo_novia]),
-			conyuge_2_bautismo_fecha: bride_baptism.date
+		m.push(n);
+		let r = pu(e[X.fecha_bautizo_novio]), i = pu(e[X.fecha_bautizo_novia]), a = Q(e[X.fecha_bautizo_novio_aprox]) ?? r.text, o = Q(e[X.fecha_bautizo_novia_aprox]) ?? i.text;
+		!r.date && a && d.push(`Fecha aproximada del bautizo del esposo: ${a}`), !i.date && o && d.push(`Fecha aproximada del bautizo de la esposa: ${o}`), h = {
+			lugar: Q(e[X.lugar_matrimonio]),
+			testigo_1: Q(e[X.padrino]),
+			testigo_2: Q(e[X.madrina]),
+			testigo_3: Q(e[X.testigo_3]),
+			testigo_4: Q(e[X.testigo_4]),
+			conyuge_1_bautismo_parroquia: Q(e[X.parroquia_bautizo_novio]),
+			conyuge_1_bautismo_fecha: r.date,
+			conyuge_2_bautismo_parroquia: Q(e[X.parroquia_bautizo_novia]),
+			conyuge_2_bautismo_fecha: i.date
 		};
 	}
 	return {
-		fila: file_row,
-		codigo_parroquia: clean_cell(row[COLUMNS.codigo_parroquia]),
-		tipo: type,
-		libro: book_name,
-		folio: page,
-		numero: number,
-		fecha_emision: date_cell(row[COLUMNS.fecha_ingreso]) ?? event.date ?? today,
-		fecha_evento: event.date,
-		anotaciones: notes_of(row, extra),
-		celebrante: split_minister(row[COLUMNS.celebrante]),
-		personas: people,
-		detalle: detail
+		fila: t,
+		codigo_parroquia: Q(e[X.codigo_parroquia]),
+		tipo: a,
+		libro: l,
+		folio: s,
+		numero: c,
+		fecha_emision: fu(e[X.fecha_ingreso]) ?? f.date ?? r,
+		fecha_evento: f.date,
+		anotaciones: Eu(e, d),
+		celebrante: gu(e[X.celebrante]),
+		personas: m,
+		detalle: h
 	};
 }
-function register_key(record) {
+function Ou(e) {
 	return [
-		record.tipo,
-		record.libro,
-		record.folio,
-		record.numero
-	].map((part) => part.trim().toUpperCase()).join("|");
+		e.tipo,
+		e.libro,
+		e.folio,
+		e.numero
+	].map((e) => e.trim().toUpperCase()).join("|");
 }
-function read_rows(rows, books, today) {
-	const records = [];
-	const errors = [];
-	const seen = /* @__PURE__ */ new Map();
-	const rows_with_data = data_rows(rows, RECORDS_SHEET, RECORDS_HEADER);
-	let code = books.codigo_parroquia;
-	for (const { row, fila } of rows_with_data) {
-		code = check_parish_code(row, COLUMNS.codigo_parroquia, RECORDS_SHEET, fila, code);
-		check_type_letter(row, COLUMNS.tipo_libro, RECORDS_SHEET, fila);
-	}
-	for (const { row, fila } of rows_with_data) {
-		const result = read_row(row, fila, books.libros, today);
-		if ("motivo" in result) {
-			errors.push(result);
+function ku(e, t, n) {
+	let r = [], i = [], a = /* @__PURE__ */ new Map(), o = yu(e, iu, ou), s = t.codigo_parroquia;
+	for (let { row: e, fila: t } of o) s = bu(e, X.codigo_parroquia, iu, t, s), xu(e, X.tipo_libro, iu, t);
+	for (let { row: e, fila: s } of o) {
+		let o = Du(e, s, t.libros, n);
+		if ("motivo" in o) {
+			i.push(o);
 			continue;
 		}
-		const key = register_key(result);
-		const first = seen.get(key);
-		if (first !== void 0) {
-			errors.push({
-				fila,
-				motivo: `Repite la partida de la fila ${first}.`
+		let c = Ou(o), l = a.get(c);
+		if (l !== void 0) {
+			i.push({
+				fila: s,
+				motivo: `Repite la partida de la fila ${l}.`
 			});
 			continue;
 		}
-		seen.set(key, fila);
-		records.push(result);
+		a.set(c, s), r.push(o);
 	}
 	return {
-		partidas: records,
-		errores: errors
+		partidas: r,
+		errores: i
 	};
 }
-function find_sheet(sheets, name) {
-	const found = sheets.find((item) => item.sheet.trim().toLowerCase() === name);
-	if (!found) throw new FormatError(`El archivo no tiene la hoja "${name}". Debe ser el Excel exportado por el sistema anterior, sin cambios.`);
-	return found.data;
+function Au(e, t) {
+	let n = e.find((e) => e.sheet.trim().toLowerCase() === t);
+	if (!n) throw new Z(`El archivo no tiene la hoja "${t}". Debe ser el Excel exportado por el sistema anterior, sin cambios.`);
+	return n.data;
 }
-function read_workbook(sheets, today) {
-	const books = read_books(find_sheet(sheets, BOOKS_SHEET));
-	return read_rows(find_sheet(sheets, RECORDS_SHEET), books, today);
+function ju(e, t) {
+	let n = Su(Au(e, au));
+	return ku(Au(e, iu), n, t);
 }
 //#endregion
 //#region electron/main/controllers/legacy_import.ts
-var ONLY_ADMIN = "Solo el administrador de la parroquia puede importar partidas.";
-function import_parish(session) {
-	if (session.role !== "admin_parroquia" || !session.parish_id) throw new ServiceError(ONLY_ADMIN, 403);
-	return session.parish_id;
+var Mu = "Solo el administrador de la parroquia puede importar partidas.";
+function Nu(e) {
+	if (e.role !== "admin_parroquia" || !e.parish_id) throw new B(Mu, 403);
+	return e.parish_id;
 }
-function full_name(person) {
+function Pu(e) {
 	return [
-		person.nombres,
-		person.apellido_paterno,
-		person.apellido_materno
-	].filter((part) => part).join(" ");
+		e.nombres,
+		e.apellido_paterno,
+		e.apellido_materno
+	].filter((e) => e).join(" ");
 }
-function plan_import(db, parish_id, parsed) {
-	const saved = db.prepare("SELECT tipo, libro, folio, numero FROM sacramentos WHERE parroquia_id = ?").all(parish_id);
-	const saved_keys = new Set(saved.map(register_key));
-	const plan = {
+function Fu(e, t, n) {
+	let r = e.prepare("SELECT tipo, libro, folio, numero FROM sacramentos WHERE parroquia_id = ?").all(t), i = new Set(r.map(Ou)), a = {
 		nuevas: [],
 		existentes: [],
-		errores: parsed.errores
+		errores: n.errores
 	};
-	for (const record of parsed.partidas) {
-		if (!saved_keys.has(register_key(record))) {
-			plan.nuevas.push(record);
+	for (let e of n.partidas) {
+		if (!i.has(Ou(e))) {
+			a.nuevas.push(e);
 			continue;
 		}
-		plan.existentes.push({
-			fila: record.fila,
-			tipo: record.tipo,
-			libro: record.libro,
-			folio: record.folio,
-			numero: record.numero,
-			nombre: record.personas.map(full_name).join(" y ")
+		a.existentes.push({
+			fila: e.fila,
+			tipo: e.tipo,
+			libro: e.libro,
+			folio: e.folio,
+			numero: e.numero,
+			nombre: e.personas.map(Pu).join(" y ")
 		});
 	}
-	return plan;
+	return a;
 }
-function normalize(text) {
-	return text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+function Iu(e) {
+	return e.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 }
-function minister_key(minister) {
-	return normalize([
-		minister.nombre,
-		minister.apellido_paterno,
-		minister.apellido_materno
-	].filter((part) => part).join(" "));
+function Lu(e) {
+	return Iu([
+		e.nombre,
+		e.apellido_paterno,
+		e.apellido_materno
+	].filter((e) => e).join(" "));
 }
-function minister_finder(db, parish_id) {
-	const known = /* @__PURE__ */ new Map();
-	const rows = db.prepare("SELECT id, nombre, apellido_paterno, apellido_materno FROM ministros WHERE parroquia_id = ?").all(parish_id);
-	for (const row of rows) known.set(minister_key(row), row.id);
-	const insert = db.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)");
-	return (minister) => {
-		if (!minister) return null;
-		const key = minister_key(minister);
-		const found = known.get(key);
-		if (found !== void 0) return found;
-		const client_id = crypto.randomUUID();
-		add_to_queue(db, "ministro", client_id, null);
-		const id = Number(insert.run(client_id, parish_id, minister.titulo, minister.nombre, minister.apellido_paterno, minister.apellido_materno).lastInsertRowid);
-		known.set(key, id);
-		return id;
+function Ru(e, t) {
+	let n = /* @__PURE__ */ new Map(), r = e.prepare("SELECT id, nombre, apellido_paterno, apellido_materno FROM ministros WHERE parroquia_id = ?").all(t);
+	for (let e of r) n.set(Lu(e), e.id);
+	let i = e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)");
+	return (r) => {
+		if (!r) return null;
+		let a = Lu(r), o = n.get(a);
+		if (o !== void 0) return o;
+		let s = crypto.randomUUID();
+		W(e, "ministro", s, null);
+		let c = Number(i.run(s, t, r.titulo, r.nombre, r.apellido_paterno, r.apellido_materno).lastInsertRowid);
+		return n.set(a, c), c;
 	};
 }
-function as_person(person) {
+function zu(e) {
 	return {
-		...person,
+		...e,
 		cambios: []
 	};
 }
-function save_record(db, session, parish_id, record, minister_id) {
-	const people_ids = record.personas.map((person) => insert_person(db, parish_id, as_person(person)));
-	const sacrament = {
-		tipo: record.tipo,
-		ministro_id: minister_id,
-		libro: record.libro,
-		folio: record.folio,
-		numero: record.numero,
-		fecha_emision: record.fecha_emision,
-		fecha_evento: record.fecha_evento,
-		anotaciones: record.anotaciones
-	};
-	const client_id = crypto.randomUUID();
-	add_to_queue(db, record.tipo, client_id, null);
-	const sacrament_id = insert_sacrament(db, client_id, record.tipo, parish_id, sacrament);
-	add_history(db, sacrament_id, session.user_id, "importada", [], `Fila ${record.fila} del Excel del sistema anterior`);
-	const detail = record.detalle;
-	if (record.tipo === "matrimonio") {
-		db.prepare(`INSERT INTO matrimonios
-				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,
-				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(sacrament_id, people_ids[0], people_ids[1], detail.lugar, detail.testigo_1, detail.testigo_2, detail.testigo_3, detail.testigo_4, detail.conyuge_1_bautismo_parroquia, detail.conyuge_1_bautismo_fecha, detail.conyuge_2_bautismo_parroquia, detail.conyuge_2_bautismo_fecha);
+function Bu(e, t, n, r, i) {
+	let a = r.personas.map((t) => Ze(e, n, zu(t))), o = {
+		tipo: r.tipo,
+		ministro_id: i,
+		libro: r.libro,
+		folio: r.folio,
+		numero: r.numero,
+		fecha_emision: r.fecha_emision,
+		fecha_evento: r.fecha_evento,
+		anotaciones: r.anotaciones
+	}, s = crypto.randomUUID();
+	W(e, r.tipo, s, null);
+	let c = vt(e, s, r.tipo, n, o);
+	U(e, c, t.user_id, "importada", [], `Fila ${r.fila} del Excel del sistema anterior`);
+	let l = r.detalle;
+	if (r.tipo === "matrimonio") {
+		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(c, a[0], a[1], l.lugar, l.testigo_1, l.testigo_2, l.testigo_3, l.testigo_4, l.conyuge_1_bautismo_parroquia, l.conyuge_1_bautismo_fecha, l.conyuge_2_bautismo_parroquia, l.conyuge_2_bautismo_fecha);
 		return;
 	}
-	db.prepare(`INSERT INTO ${detail_table(record.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(sacrament_id, people_ids[0], detail.padrino_1, detail.padrino_2);
+	e.prepare(`INSERT INTO ${ct(r.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(c, a[0], l.padrino_1, l.padrino_2);
 }
-function save_import(db, session, records) {
-	const parish_id = import_parish(session);
-	return db.transaction(() => {
-		const plan = plan_import(db, parish_id, {
-			partidas: records,
+function Vu(e, t, n) {
+	let r = Nu(t);
+	return e.transaction(() => {
+		let i = Fu(e, r, {
+			partidas: n,
 			errores: []
-		});
-		const find_minister = minister_finder(db, parish_id);
-		for (const record of plan.nuevas) save_record(db, session, parish_id, record, find_minister(record.celebrante));
+		}), a = Ru(e, r);
+		for (let n of i.nuevas) Bu(e, t, r, n, a(n.celebrante));
 		return {
-			importadas: plan.nuevas.length,
-			omitidas: plan.existentes.length
+			importadas: i.nuevas.length,
+			omitidas: i.existentes.length
 		};
 	})();
 }
-var pending = null;
-function today() {
+var Hu = null;
+function Uu() {
 	return (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
 }
-async function read_legacy_file(file_path) {
-	let sheets;
+async function Wu(e) {
+	let t;
 	try {
-		sheets = await readXlsxFile(file_path);
+		t = await ru(e);
 	} catch {
-		throw new ServiceError("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx) exportado del sistema anterior.", 400);
+		throw new B("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx) exportado del sistema anterior.", 400);
 	}
 	try {
-		return read_workbook(sheets, today());
-	} catch (error) {
-		if (error instanceof FormatError) throw new ServiceError(error.message, 400);
-		throw error;
+		return ju(t, Uu());
+	} catch (e) {
+		throw e instanceof Z ? new B(e.message, 400) : e;
 	}
 }
-function preview_of(file_name, plan) {
-	const by_type = {
+function Gu(e, t) {
+	let n = {
 		bautismo: 0,
 		confirmacion: 0,
 		matrimonio: 0
 	};
-	for (const record of plan.nuevas) by_type[record.tipo] += 1;
-	const codes = /* @__PURE__ */ new Set();
-	for (const record of [...plan.nuevas]) if (record.codigo_parroquia) codes.add(record.codigo_parroquia);
+	for (let e of t.nuevas) n[e.tipo] += 1;
+	let r = /* @__PURE__ */ new Set();
+	for (let e of [...t.nuevas]) e.codigo_parroquia && r.add(e.codigo_parroquia);
 	return {
-		archivo: file_name,
-		codigos_parroquia: [...codes],
-		total: plan.nuevas.length + plan.existentes.length,
-		nuevas: plan.nuevas.length,
-		por_tipo: by_type,
-		existentes: plan.existentes,
-		errores: plan.errores
+		archivo: e,
+		codigos_parroquia: [...r],
+		total: t.nuevas.length + t.existentes.length,
+		nuevas: t.nuevas.length,
+		por_tipo: n,
+		existentes: t.existentes,
+		errores: t.errores
 	};
 }
-var legacy_import_routes = {
-	"legacyImport.preview": async (_payload, { db, session }) => {
-		const parish_id = import_parish(session);
-		const window = BrowserWindow.getFocusedWindow();
-		const options = {
+var Ku = {
+	"legacyImport.preview": async (e, { db: n, session: i }) => {
+		let a = Nu(i), o = t.getFocusedWindow(), s = {
 			title: "Elegir el Excel del sistema anterior",
 			properties: ["openFile"],
 			filters: [{
 				name: "Excel",
 				extensions: ["xlsx"]
 			}]
-		};
-		const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
-		if (choice.canceled || choice.filePaths.length === 0) return { cancelado: true };
-		const file_path = choice.filePaths[0];
-		const plan = plan_import(db, parish_id, await read_legacy_file(file_path));
-		pending = {
+		}, c = o ? await r.showOpenDialog(o, s) : await r.showOpenDialog(s);
+		if (c.canceled || c.filePaths.length === 0) return { cancelado: !0 };
+		let l = c.filePaths[0], u = Fu(n, a, await Wu(l));
+		return Hu = {
 			token: crypto.randomUUID(),
-			parish_id,
-			records: plan.nuevas
-		};
-		return {
-			cancelado: false,
-			token: pending.token,
-			...preview_of(file_path.split(/[\\/]/).pop() ?? file_path, plan)
+			parish_id: a,
+			records: u.nuevas
+		}, {
+			cancelado: !1,
+			token: Hu.token,
+			...Gu(l.split(/[\\/]/).pop() ?? l, u)
 		};
 	},
-	"legacyImport.confirm": (payload, { db, session }) => {
-		if (!pending || payload?.token !== pending.token || pending.parish_id !== session.parish_id) throw new ServiceError("Vuelva a elegir el archivo: la vista previa ya no es válida.", 409);
-		const records = pending.records;
-		pending = null;
-		return save_import(db, session, records);
+	"legacyImport.confirm": (e, { db: t, session: n }) => {
+		if (!Hu || e?.token !== Hu.token || Hu.parish_id !== n.parish_id) throw new B("Vuelva a elegir el archivo: la vista previa ya no es válida.", 409);
+		let r = Hu.records;
+		return Hu = null, Vu(t, n, r);
 	}
-};
-//#endregion
-//#region electron/main/controllers/ministers.ts
-var NOT_FOUND$1 = "Ministro no encontrado.";
-var SORT_COLUMNS$1 = {
+}, qu = "Ministro no encontrado.", Ju = {
 	nombres: "nombre",
 	apellido_paterno: "apellido_paterno",
 	apellido_materno: "apellido_materno"
 };
-function clean_minister(minister) {
-	const first_name = clean_text(minister?.nombre);
-	const father_last_name = clean_text(minister?.apellido_paterno);
-	const mother_last_name = clean_text(minister?.apellido_materno);
-	if (!first_name || !father_last_name || !mother_last_name) throw new ServiceError("Nombre y apellidos son requeridos.", 400);
+function Yu(e) {
+	let t = V(e?.nombre), n = V(e?.apellido_paterno), r = V(e?.apellido_materno);
+	if (!t || !n || !r) throw new B("Nombre y apellidos son requeridos.", 400);
 	return {
-		titulo: clean_text(minister.titulo),
-		nombre: first_name,
-		apellido_paterno: father_last_name,
-		apellido_materno: mother_last_name
+		titulo: V(e.titulo),
+		nombre: t,
+		apellido_paterno: n,
+		apellido_materno: r
 	};
 }
-function check_can_manage_minister(db, session, id) {
-	const minister = db.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(id);
-	if (!minister) throw new ServiceError(NOT_FOUND$1, 404);
-	check_parish_admin(session, minister.parroquia_id, "No tiene permiso para modificar ministros de otra parroquia.", "Solo el administrador de la parroquia puede modificar ministros.");
+function Xu(e, t, n) {
+	let r = e.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(n);
+	if (!r) throw new B(qu, 404);
+	qe(t, r.parroquia_id, "No tiene permiso para modificar ministros de otra parroquia.", "Solo el administrador de la parroquia puede modificar ministros.");
 }
-function queue_minister(db, id) {
-	const current = db.prepare("SELECT client_id, version FROM ministros WHERE id = ?").get(id);
-	add_to_queue(db, "ministro", current.client_id, current.version);
+function Zu(e, t) {
+	let n = e.prepare("SELECT client_id, version FROM ministros WHERE id = ?").get(t);
+	W(e, "ministro", n.client_id, n.version);
 }
-function search_ministers(db, filters) {
-	const conditions = [];
-	const values = [];
-	if (filters.nombres) {
-		conditions.push("nombre LIKE ?");
-		values.push(`%${filters.nombres}%`);
-	}
-	if (filters.apellido_paterno) {
-		conditions.push("apellido_paterno LIKE ?");
-		values.push(`%${filters.apellido_paterno}%`);
-	}
-	if (filters.apellido_materno) {
-		conditions.push("apellido_materno LIKE ?");
-		values.push(`%${filters.apellido_materno}%`);
-	}
-	if (Number.isInteger(filters.parroquia_id)) {
-		conditions.push("parroquia_id = ?");
-		values.push(filters.parroquia_id);
-	}
-	let where = "";
-	if (conditions.length > 0) where = "WHERE " + conditions.join(" AND ");
-	const page = page_of(filters, db.prepare(`SELECT COUNT(*) AS total FROM ministros ${where}`).get(...values).total);
-	const sort_column = SORT_COLUMNS$1[filters.orden ?? "nombres"] ?? SORT_COLUMNS$1.nombres;
+function Qu(e, t) {
+	let n = [], r = [];
+	t.nombres && (n.push("nombre LIKE ?"), r.push(`%${t.nombres}%`)), t.apellido_paterno && (n.push("apellido_paterno LIKE ?"), r.push(`%${t.apellido_paterno}%`)), t.apellido_materno && (n.push("apellido_materno LIKE ?"), r.push(`%${t.apellido_materno}%`)), Number.isInteger(t.parroquia_id) && (n.push("parroquia_id = ?"), r.push(t.parroquia_id));
+	let i = "";
+	n.length > 0 && (i = "WHERE " + n.join(" AND "));
+	let a = Se(t, e.prepare(`SELECT COUNT(*) AS total FROM ministros ${i}`).get(...r).total), o = Ju[t.orden ?? "nombres"] ?? Ju.nombres;
 	return {
-		resultados: db.prepare(`SELECT id FROM ministros ${where}
-			 ORDER BY ${sort_column} ${sort_direction(filters)}, id
-			 LIMIT ? OFFSET ?`).pluck().all(...values, 20, page.offset).map((id) => read_minister(db, id)),
-		total_paginas: page.total_pages
+		resultados: e.prepare(`SELECT id FROM ministros ${i}
+			 ORDER BY ${o} ${Ce(t)}, id
+			 LIMIT ? OFFSET ?`).pluck().all(...r, 20, a.offset).map((t) => ot(e, t)),
+		total_paginas: a.total_pages
 	};
 }
-function create_minister(db, session, minister) {
-	const parish_id = parish_for_new(session);
-	const values = clean_minister(minister);
-	const client_id = crypto.randomUUID();
-	return db.transaction(() => {
-		add_to_queue(db, "ministro", client_id, null);
-		const result = db.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)").run(client_id, parish_id, values.titulo, values.nombre, values.apellido_paterno, values.apellido_materno);
-		return Number(result.lastInsertRowid);
+function $u(e, t, n) {
+	let r = We(t), i = Yu(n), a = crypto.randomUUID();
+	return e.transaction(() => {
+		W(e, "ministro", a, null);
+		let t = e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)").run(a, r, i.titulo, i.nombre, i.apellido_paterno, i.apellido_materno);
+		return Number(t.lastInsertRowid);
 	})();
 }
-function update_minister(db, session, minister) {
-	const id = positive_id(minister?.id, NOT_FOUND$1);
-	check_can_manage_minister(db, session, id);
-	const values = clean_minister(minister);
-	db.transaction(() => {
-		queue_minister(db, id);
-		db.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(values.titulo, values.nombre, values.apellido_paterno, values.apellido_materno, id);
+function ed(e, t, n) {
+	let r = H(n?.id, qu);
+	Xu(e, t, r);
+	let i = Yu(n);
+	e.transaction(() => {
+		Zu(e, r), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.titulo, i.nombre, i.apellido_paterno, i.apellido_materno, r);
 	})();
 }
-function toggle_minister_active(db, session, id) {
-	check_can_manage_minister(db, session, id);
-	db.transaction(() => {
-		queue_minister(db, id);
-		db.prepare("UPDATE ministros SET activo = NOT activo WHERE id = ?").run(id);
+function td(e, t, n) {
+	Xu(e, t, n), e.transaction(() => {
+		Zu(e, n), e.prepare("UPDATE ministros SET activo = NOT activo WHERE id = ?").run(n);
 	})();
 }
-var minister_routes = {
-	"ministers.search": (filters, { db }) => {
-		return search_ministers(db, filters);
-	},
-	"ministers.create": (minister, { db, session }) => {
-		return { id: create_minister(db, session, minister) };
-	},
-	"ministers.update": (minister, { db, session }) => {
-		update_minister(db, session, minister);
-		return { success: true };
-	},
-	"ministers.toggleActive": (payload, { db, session }) => {
-		toggle_minister_active(db, session, positive_id(payload.id, NOT_FOUND$1));
-		return { success: true };
-	}
-};
-//#endregion
-//#region electron/main/controllers/parishes.ts
-var LOGO_FORMAT = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
-function list_parishes(db) {
-	return db.prepare("SELECT id, nombre FROM parroquias WHERE activa = 1 ORDER BY nombre ASC").all();
+var nd = {
+	"ministers.search": (e, { db: t }) => Qu(t, e),
+	"ministers.create": (e, { db: t, session: n }) => ({ id: $u(t, n, e) }),
+	"ministers.update": (e, { db: t, session: n }) => (ed(t, n, e), { success: !0 }),
+	"ministers.toggleActive": (e, { db: t, session: n }) => (td(t, n, H(e.id, qu)), { success: !0 })
+}, rd = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+function id(e) {
+	return e.prepare("SELECT id, nombre FROM parroquias WHERE activa = 1 ORDER BY nombre ASC").all();
 }
-function logo_path(user_data_folder, parish_id) {
-	return path.join(user_data_folder, FILE_NAMES.logos_folder, `parroquia-${parish_id}.txt`);
+function ad(e, t) {
+	return s.join(e, be.logos_folder, `parroquia-${t}.txt`);
 }
-function read_parish_logo(user_data_folder, parish_id) {
+function od(e, t) {
 	try {
-		return readFileSync(logo_path(user_data_folder, parish_id), "utf8");
+		return f(ad(e, t), "utf8");
 	} catch {
 		return null;
 	}
 }
-function save_parish_logo(user_data_folder, session, parish_id, logo) {
-	check_parish_admin(session, parish_id, "Solo puede cambiar el logo de su propia parroquia.", "Solo el administrador de la parroquia puede cambiar el logo.");
-	const file = logo_path(user_data_folder, parish_id);
-	if (logo === null) {
-		rmSync(file, { force: true });
+function sd(e, t, n, r) {
+	qe(t, n, "Solo puede cambiar el logo de su propia parroquia.", "Solo el administrador de la parroquia puede cambiar el logo.");
+	let i = ad(e, n);
+	if (r === null) {
+		h(i, { force: !0 });
 		return;
 	}
-	if (typeof logo !== "string" || logo.length > 4e5 || !LOGO_FORMAT.test(logo)) throw new ServiceError("El logo debe ser una imagen PNG, JPG o WEBP de hasta 300 KB.", 400);
-	mkdirSync(path.dirname(file), { recursive: true });
-	const temporary_file = `${file}.tmp`;
-	writeFileSync(temporary_file, logo, "utf8");
-	renameSync(temporary_file, file);
+	if (typeof r != "string" || r.length > 4e5 || !rd.test(r)) throw new B("El logo debe ser una imagen PNG, JPG o WEBP de hasta 300 KB.", 400);
+	d(s.dirname(i), { recursive: !0 });
+	let a = `${i}.tmp`;
+	_(a, r, "utf8"), m(a, i);
 }
-var parish_routes = {
-	"parishes.list": (_payload, { db }) => {
-		return { parroquias: list_parishes(db) };
-	},
-	"parishes.logo": (payload, { user_data_folder }) => {
-		return { logo: read_parish_logo(user_data_folder, positive_id(payload.parroquia_id)) };
-	},
-	"parishes.saveLogo": (payload, { session, user_data_folder }) => {
-		save_parish_logo(user_data_folder, session, positive_id(payload.parroquia_id), payload.logo);
-		return { success: true };
-	}
-};
-//#endregion
-//#region electron/main/controllers/server.ts
-var server_routes = { "app.server": () => {
-	return { servidor: server_url() };
-} };
-//#endregion
-//#region electron/main/controllers/sacrament_index.ts
-var compare_text = new Intl.Collator("es", {
+var cd = {
+	"parishes.list": (e, { db: t }) => ({ parroquias: id(t) }),
+	"parishes.logo": (e, { user_data_folder: t }) => ({ logo: od(t, H(e.parroquia_id)) }),
+	"parishes.saveLogo": (e, { session: t, user_data_folder: n }) => (sd(n, t, H(e.parroquia_id), e.logo), { success: !0 })
+}, ld = { "app.server": () => ({ servidor: _r() }) }, ud = new Intl.Collator("es", {
 	sensitivity: "base",
-	numeric: true
+	numeric: !0
 }).compare;
-function check_request(session, type, parish_id) {
-	if (!is_sacrament_type(type)) throw new ServiceError("Tipo de sacramento no válido.", 404);
-	if (!Number.isInteger(parish_id) || parish_id <= 0) throw new ServiceError("Debe especificar la parroquia.", 400);
-	check_parish_read(session, parish_id, "No tiene permiso para imprimir el índice de otra parroquia.");
+function dd(e, t, n) {
+	if (!st(t)) throw new B("Tipo de sacramento no válido.", 404);
+	if (!Number.isInteger(n) || n <= 0) throw new B("Debe especificar la parroquia.", 400);
+	Ke(e, n, "No tiene permiso para imprimir el índice de otra parroquia.");
 }
-function list_index_books(db, session, type, parish_id) {
-	check_request(session, type, parish_id);
-	return db.prepare(`SELECT DISTINCT libro FROM sacramentos WHERE tipo = ? AND parroquia_id = ? AND estado = 'vigente'`).pluck().all(type, parish_id).sort(compare_text);
+function fd(e, t, n, r) {
+	return dd(t, n, r), e.prepare("SELECT DISTINCT libro FROM sacramentos WHERE tipo = ? AND parroquia_id = ? AND estado = 'vigente'").pluck().all(n, r).sort(ud);
 }
-function get_index_entries(db, session, type, parish_id, book) {
-	check_request(session, type, parish_id);
-	return db.prepare(`SELECT pe.nombres, pe.apellido_paterno, pe.apellido_materno, s.libro, s.folio, s.numero
-			 FROM (${people_of(type)}) sub
+function pd(e, t, n, r, i) {
+	return dd(t, n, r), e.prepare(`SELECT pe.nombres, pe.apellido_paterno, pe.apellido_materno, s.libro, s.folio, s.numero
+			 FROM (${ut(n)}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND (? IS NULL OR s.libro = ?)`).all(parish_id, book, book).sort((a, b) => compare_text(a.apellido_paterno, b.apellido_paterno) || compare_text(a.apellido_materno, b.apellido_materno) || compare_text(a.nombres, b.nombres) || compare_text(a.libro, b.libro) || compare_text(a.folio, b.folio) || compare_text(a.numero, b.numero));
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND (? IS NULL OR s.libro = ?)`).all(r, i, i).sort((e, t) => ud(e.apellido_paterno, t.apellido_paterno) || ud(e.apellido_materno, t.apellido_materno) || ud(e.nombres, t.nombres) || ud(e.libro, t.libro) || ud(e.folio, t.folio) || ud(e.numero, t.numero));
 }
-var sacrament_index_routes = {
-	"sacramentIndex.books": (payload, { db, session }) => {
-		return { libros: list_index_books(db, session, payload.tipo, payload.parroquia_id) };
-	},
-	"sacramentIndex.entries": (payload, { db, session }) => {
-		return { entradas: get_index_entries(db, session, payload.tipo, payload.parroquia_id, payload.libro) };
-	}
-};
-//#endregion
-//#region electron/main/controllers/sacraments.ts
-var NAME_COLUMNS = [
+var md = {
+	"sacramentIndex.books": (e, { db: t, session: n }) => ({ libros: fd(t, n, e.tipo, e.parroquia_id) }),
+	"sacramentIndex.entries": (e, { db: t, session: n }) => ({ entradas: pd(t, n, e.tipo, e.parroquia_id, e.libro) })
+}, hd = [
 	"nombres",
 	"apellido_paterno",
 	"apellido_materno"
 ];
-function check_type(value) {
-	if (!is_sacrament_type(value)) throw new ServiceError("Tipo de sacramento inválido.", 400);
-	return value;
+function gd(e) {
+	if (!st(e)) throw new B("Tipo de sacramento inválido.", 400);
+	return e;
 }
-function name_filters(filters, aliases) {
-	const conditions = [];
-	const values = [];
-	if (Number.isInteger(filters.parroquia_id)) {
-		conditions.push("s.parroquia_id = ?");
-		values.push(filters.parroquia_id);
+function _d(e, t) {
+	let n = [], r = [];
+	Number.isInteger(e.parroquia_id) && (n.push("s.parroquia_id = ?"), r.push(e.parroquia_id));
+	for (let i of hd) {
+		let a = e[i];
+		if (a) {
+			n.push(`(${t.map((e) => tt(e, i)).join(" OR ")})`);
+			for (let e = 0; e < t.length; e++) r.push(`%${a}%`, `%${a}%`);
+		}
 	}
-	for (const column of NAME_COLUMNS) {
-		const text = filters[column];
-		if (!text) continue;
-		conditions.push(`(${aliases.map((alias) => name_condition(alias, column)).join(" OR ")})`);
-		for (let i = 0; i < aliases.length; i++) values.push(`%${text}%`, `%${text}%`);
-	}
-	let where = "";
-	if (conditions.length > 0) where = "WHERE " + conditions.join(" AND ");
-	return {
-		where,
-		values
+	let i = "";
+	return n.length > 0 && (i = "WHERE " + n.join(" AND ")), {
+		where: i,
+		values: r
 	};
 }
-function search_sacraments(db, type, filters) {
-	let from = `FROM ${detail_table(type)} sub
+function vd(e, t, n) {
+	let r = `FROM ${ct(t)} sub
 		JOIN sacramentos s ON s.id = sub.sacramento_id
-		JOIN personas pe ON pe.id = sub.persona_id`;
-	let aliases = ["pe"];
-	if (type === "matrimonio") {
-		from = `FROM matrimonios m
-			JOIN sacramentos s ON s.id = m.sacramento_id
-			JOIN personas c1 ON c1.id = m.conyuge_1_id
-			JOIN personas c2 ON c2.id = m.conyuge_2_id`;
-		aliases = ["c1", "c2"];
-	}
-	const { where, values } = name_filters(filters, aliases);
-	const page = page_of(filters, db.prepare(`SELECT COUNT(*) AS total ${from} ${where}`).get(...values).total);
-	let sort_column = "nombres";
-	if (filters.orden && NAME_COLUMNS.includes(filters.orden)) sort_column = filters.orden;
-	return {
-		resultados: db.prepare(`SELECT s.id ${from} ${where}
-			 ORDER BY ${aliases[0]}.${sort_column} ${sort_direction(filters)}, s.id
-			 LIMIT ? OFFSET ?`).pluck().all(...values, 20, page.offset).map((id) => read_record(db, id)),
-		total_paginas: page.total_pages
+		JOIN personas pe ON pe.id = sub.persona_id`, i = ["pe"];
+	t === "matrimonio" && (r = "FROM matrimonios m\n			JOIN sacramentos s ON s.id = m.sacramento_id\n			JOIN personas c1 ON c1.id = m.conyuge_1_id\n			JOIN personas c2 ON c2.id = m.conyuge_2_id", i = ["c1", "c2"]);
+	let { where: a, values: o } = _d(n, i), s = Se(n, e.prepare(`SELECT COUNT(*) AS total ${r} ${a}`).get(...o).total), c = "nombres";
+	return n.orden && hd.includes(n.orden) && (c = n.orden), {
+		resultados: e.prepare(`SELECT s.id ${r} ${a}
+			 ORDER BY ${i[0]}.${c} ${Ce(n)}, s.id
+			 LIMIT ? OFFSET ?`).pluck().all(...o, 20, s.offset).map((t) => wt(e, t)),
+		total_paginas: s.total_pages
 	};
 }
-function create_record(db, session, record) {
-	const type = check_type(record?.sacramento?.tipo);
-	const parish_id = parish_for_new(session);
-	check_required(record, null);
-	const is_helper = session.role === "usuario";
-	return db.transaction(() => {
-		const people = insert_people(db, parish_id, record, !is_helper);
-		const client_id = crypto.randomUUID();
-		add_to_queue(db, type, client_id, null);
-		const sacrament_id = insert_sacrament(db, client_id, type, parish_id, record.sacramento);
-		insert_detail(db, sacrament_id, record, people.map((person) => person.id));
-		add_history(db, sacrament_id, session.user_id, "registrada");
-		const corrections = corrections_of(people);
-		if (corrections.length === 0) return sacrament_id;
-		if (is_helper) {
-			const requests = corrections.map((correction) => ({
-				...correction,
+function yd(e, t, n) {
+	let r = gd(n?.sacramento?.tipo), i = We(t);
+	At(n, null);
+	let a = t.role === "usuario";
+	return e.transaction(() => {
+		let o = Pt(e, i, n, !a), s = crypto.randomUUID();
+		W(e, r, s, null);
+		let c = vt(e, s, r, i, n.sacramento);
+		It(e, c, n, o.map((e) => e.id)), U(e, c, t.user_id, "registrada");
+		let l = Ft(o);
+		if (l.length === 0) return c;
+		if (a) {
+			let n = l.map((e) => ({
+				...e,
 				tipo: "nota_marginal"
 			}));
-			insert_requests(db, sacrament_id, session.user_id, requests);
-			add_history(db, sacrament_id, session.user_id, "cambio_pedido", requests);
-			return sacrament_id;
+			return je(e, c, t.user_id, n), U(e, c, t.user_id, "cambio_pedido", n), c;
 		}
-		for (const person of people) save_corrections(db, session, person.id, sacrament_id, person.corrections);
-		add_history(db, sacrament_id, session.user_id, "correccion", corrections);
-		return sacrament_id;
+		for (let n of o) et(e, t, n.id, c, n.corrections);
+		return U(e, c, t.user_id, "correccion", l), c;
 	})();
 }
-function update_as_admin(db, session, record) {
-	const sacrament_id = positive_id(record.sacramento?.id);
-	check_can_manage$1(db, session, sacrament_id, record.sacramento.tipo);
-	const saved = read_record(db, sacrament_id);
-	db.transaction(() => {
-		queue_sacrament(db, sacrament_id);
-		const result = save_edit(db, session, saved, record);
-		if (result.fields.length > 0) add_history(db, sacrament_id, session.user_id, "editada", result.fields);
-		if (result.corrections.length > 0) add_history(db, sacrament_id, session.user_id, "correccion", result.corrections);
-		resolve_on_edit(db, session, sacrament_id, record);
+function bd(e, t, n) {
+	let r = H(n.sacramento?.id);
+	gt(e, t, r, n.sacramento.tipo);
+	let i = wt(e, r);
+	e.transaction(() => {
+		jt(e, r);
+		let a = Rt(e, t, i, n);
+		a.fields.length > 0 && U(e, r, t.user_id, "editada", a.fields), a.corrections.length > 0 && U(e, r, t.user_id, "correccion", a.corrections), Xt(e, t, r, n);
 	})();
 }
-function update_record(db, session, record) {
-	check_type(record?.sacramento?.tipo);
-	if (session.role === "usuario") request_changes(db, session, record);
-	else update_as_admin(db, session, record);
+function xd(e, t, n) {
+	gd(n?.sacramento?.tipo), t.role === "usuario" ? Gt(e, t, n) : bd(e, t, n);
 }
-function annul_sacrament(db, session, sacrament_id, reason) {
-	const row = db.prepare("SELECT tipo FROM sacramentos WHERE id = ?").get(sacrament_id);
-	if (!row) throw new ServiceError(NOT_FOUND$2, 404);
-	check_can_manage$1(db, session, sacrament_id, row.tipo);
-	const clean_reason = clean_text(reason);
-	if (!clean_reason) throw new ServiceError("El motivo de anulación es requerido.", 400);
-	db.transaction(() => {
-		queue_sacrament(db, sacrament_id);
-		db.prepare(`UPDATE sacramentos
-			 SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?
-			 WHERE id = ?`).run(session.user_id, (/* @__PURE__ */ new Date()).toISOString(), clean_reason, sacrament_id);
-		add_history(db, sacrament_id, session.user_id, "anulada", [], clean_reason);
+function Sd(e, t, n, r) {
+	let i = e.prepare("SELECT tipo FROM sacramentos WHERE id = ?").get(n);
+	if (!i) throw new B(bt, 404);
+	gt(e, t, n, i.tipo);
+	let a = V(r);
+	if (!a) throw new B("El motivo de anulación es requerido.", 400);
+	e.transaction(() => {
+		jt(e, n), e.prepare("UPDATE sacramentos\n			 SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?\n			 WHERE id = ?").run(t.user_id, (/* @__PURE__ */ new Date()).toISOString(), a, n), U(e, n, t.user_id, "anulada", [], a);
 	})();
 }
-function sacrament_history(db, session, sacrament_id) {
-	if (session.role === "usuario") throw new ServiceError("Solo un administrador puede ver el historial de una partida.", 403);
-	check_parish_read(session, read_record(db, sacrament_id).sacramento.parroquia_id, "Solo puede ver el historial de las partidas de su parroquia.");
-	return read_history(db, sacrament_id);
+function Cd(e, t, n) {
+	if (t.role === "usuario") throw new B("Solo un administrador puede ver el historial de una partida.", 403);
+	return Ke(t, wt(e, n).sacramento.parroquia_id, "Solo puede ver el historial de las partidas de su parroquia."), Re(e, n);
 }
-var sacrament_routes = {
-	"sacraments.search": (payload, { db }) => {
-		return search_sacraments(db, check_type(payload.tipo), payload);
-	},
-	"sacraments.get": (payload, { db }) => {
-		return read_record(db, positive_id(payload.id));
-	},
-	"sacraments.create": (record, { db, session }) => {
-		return { id: create_record(db, session, record) };
-	},
-	"sacraments.update": (record, { db, session }) => {
-		update_record(db, session, record);
-		return { success: true };
-	},
-	"sacraments.annul": (payload, { db, session }) => {
-		annul_sacrament(db, session, positive_id(payload.id), payload.motivo_anulacion);
-		return { success: true };
-	},
-	"sacraments.history": (payload, { db, session }) => {
-		return { historial: sacrament_history(db, session, positive_id(payload.id)) };
-	}
-};
-//#endregion
-//#region electron/main/controllers/statistics.ts
-var SACRAMENTS = [
+var wd = {
+	"sacraments.search": (e, { db: t }) => vd(t, gd(e.tipo), e),
+	"sacraments.get": (e, { db: t }) => wt(t, H(e.id)),
+	"sacraments.create": (e, { db: t, session: n }) => ({ id: yd(t, n, e) }),
+	"sacraments.update": (e, { db: t, session: n }) => (xd(t, n, e), { success: !0 }),
+	"sacraments.annul": (e, { db: t, session: n }) => (Sd(t, n, H(e.id), e.motivo_anulacion), { success: !0 }),
+	"sacraments.history": (e, { db: t, session: n }) => ({ historial: Cd(t, n, H(e.id)) })
+}, Td = [
 	"bautismo",
 	"confirmacion",
 	"matrimonio"
-];
-var TREND_YEARS = 10;
-var TOP_MINISTERS = 8;
-var EVENT_DATE = "COALESCE(s.fecha_evento, s.fecha_emision)";
-var HAS_YEAR = `${EVENT_DATE} GLOB '[0-9][0-9][0-9][0-9]*'`;
-var HAS_MONTH = `${EVENT_DATE} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'`;
-var HAS_FULL_DATE = `${EVENT_DATE} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'`;
-var AGE_BANDS = [
+], Ed = 10, Dd = 8, $ = "COALESCE(s.fecha_evento, s.fecha_emision)", Od = `${$} GLOB '[0-9][0-9][0-9][0-9]*'`, kd = `${$} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'`, Ad = `${$} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'`, jd = [
 	{
 		label: "Menos de 1 año",
 		to: 0
@@ -9062,488 +6113,367 @@ var AGE_BANDS = [
 		to: Infinity
 	}
 ];
-function zero_counts() {
+function Md() {
 	return {
 		bautismo: 0,
 		confirmacion: 0,
 		matrimonio: 0
 	};
 }
-function two_digits(value) {
-	return String(value).padStart(2, "0");
+function Nd(e) {
+	return String(e).padStart(2, "0");
 }
-var PARTIAL_DATE = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/;
-function had_birthday_by(birth, event) {
-	const [, , birth_month, birth_day] = birth;
-	const [, , event_month, event_day] = event;
-	if (!birth_month || !event_month) return null;
-	if (event_month !== birth_month) return event_month > birth_month;
-	if (!birth_day || !event_day) return null;
-	return event_day >= birth_day;
+var Pd = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/;
+function Fd(e, t) {
+	let [, , n, r] = e, [, , i, a] = t;
+	return !n || !i ? null : i === n ? !r || !a ? null : a >= r : i > n;
 }
-function age_at(birth_date, event_date) {
-	const birth = PARTIAL_DATE.exec(birth_date ?? "");
-	const event = PARTIAL_DATE.exec(event_date);
-	if (!birth || !event || birth[0] !== birth_date) return null;
-	const had_birthday = had_birthday_by(birth, event);
-	if (had_birthday === null) return null;
-	let age = Number(event[1]) - Number(birth[1]);
-	if (!had_birthday) age -= 1;
-	if (age < 0 || age > 130) return null;
-	return age;
+function Id(e, t) {
+	let n = Pd.exec(e ?? ""), r = Pd.exec(t);
+	if (!n || !r || n[0] !== e) return null;
+	let i = Fd(n, r);
+	if (i === null) return null;
+	let a = Number(r[1]) - Number(n[1]);
+	return i || --a, a < 0 || a > 130 ? null : a;
 }
-function get_statistics(db, parish_id, requested_year, now = /* @__PURE__ */ new Date()) {
-	const current_year = now.getFullYear();
-	const current_month = two_digits(now.getMonth() + 1);
-	const today = `${current_month}-${two_digits(now.getDate())}`;
-	const years_with_records = db.prepare(`SELECT DISTINCT CAST(substr(${EVENT_DATE}, 1, 4) AS INTEGER) AS year
+function Ld(e, t, n, r = /* @__PURE__ */ new Date()) {
+	let i = r.getFullYear(), a = Nd(r.getMonth() + 1), o = `${a}-${Nd(r.getDate())}`, s = e.prepare(`SELECT DISTINCT CAST(substr(${$}, 1, 4) AS INTEGER) AS year
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${HAS_YEAR}`).pluck().all(parish_id);
-	const years = [.../* @__PURE__ */ new Set([...years_with_records, current_year])].sort((a, b) => b - a);
-	let year = current_year;
-	if (years.includes(requested_year)) year = requested_year;
-	const is_current_year = year === current_year;
-	const count_where = (condition, ...values) => {
-		const counts = zero_counts();
-		const rows = db.prepare(`SELECT s.tipo, COUNT(*) AS total
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Od}`).pluck().all(t), c = [.../* @__PURE__ */ new Set([...s, i])].sort((e, t) => t - e), l = i;
+	c.includes(n) && (l = n);
+	let u = l === i, d = (n, ...r) => {
+		let i = Md(), a = e.prepare(`SELECT s.tipo, COUNT(*) AS total
 				 FROM sacramentos s
-				 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${condition}
-				 GROUP BY s.tipo`).all(parish_id, ...values);
-		for (const row of rows) counts[row.tipo] = row.total;
-		return counts;
+				 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${n}
+				 GROUP BY s.tipo`).all(t, ...r);
+		for (let e of a) i[e.tipo] = e.total;
+		return i;
+	}, f = `${Od} AND substr(${$}, 1, 4) = ?`, p = u ? d(`${Ad} AND substr(${$}, 1, 10) BETWEEN ? AND ?`, `${l - 1}-01-01`, `${l - 1}-${o}`) : d(f, String(l - 1)), m = d(f, String(l)), h = d(`substr(${$}, 1, 7) = ?`, `${i}-${a}`), g = d(Od), _ = {};
+	for (let e of Td) _[e] = {
+		anio: m[e],
+		anterior: p[e],
+		mes: h[e],
+		historico: g[e]
 	};
-	const in_year = `${HAS_YEAR} AND substr(${EVENT_DATE}, 1, 4) = ?`;
-	const previous_year = is_current_year ? count_where(`${HAS_FULL_DATE} AND substr(${EVENT_DATE}, 1, 10) BETWEEN ? AND ?`, `${year - 1}-01-01`, `${year - 1}-${today}`) : count_where(in_year, String(year - 1));
-	const selected_year = count_where(in_year, String(year));
-	const this_month = count_where(`substr(${EVENT_DATE}, 1, 7) = ?`, `${current_year}-${current_month}`);
-	const all_time = count_where(HAS_YEAR);
-	const totals = {};
-	for (const type of SACRAMENTS) totals[type] = {
-		anio: selected_year[type],
-		anterior: previous_year[type],
-		mes: this_month[type],
-		historico: all_time[type]
-	};
-	const monthly = [];
-	for (let month = 1; month <= 12; month++) monthly.push({
-		mes: month,
-		...zero_counts()
+	let v = [];
+	for (let e = 1; e <= 12; e++) v.push({
+		mes: e,
+		...Md()
 	});
-	const month_rows = db.prepare(`SELECT s.tipo, CAST(substr(${EVENT_DATE}, 6, 2) AS INTEGER) AS mes, COUNT(*) AS total
+	let y = e.prepare(`SELECT s.tipo, CAST(substr(${$}, 6, 2) AS INTEGER) AS mes, COUNT(*) AS total
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${HAS_MONTH} AND substr(${EVENT_DATE}, 1, 4) = ?
-			 GROUP BY s.tipo, mes`).all(parish_id, String(year));
-	for (const row of month_rows) if (monthly[row.mes - 1]) monthly[row.mes - 1][row.tipo] = row.total;
-	const first_year = Math.max(Math.min(...years), year - TREND_YEARS + 1);
-	const trend = [];
-	for (let trend_year = first_year; trend_year <= year; trend_year++) trend.push({
-		anio: trend_year,
-		...zero_counts()
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${kd} AND substr(${$}, 1, 4) = ?
+			 GROUP BY s.tipo, mes`).all(t, String(l));
+	for (let e of y) v[e.mes - 1] && (v[e.mes - 1][e.tipo] = e.total);
+	let b = Math.max(Math.min(...c), l - Ed + 1), x = [];
+	for (let e = b; e <= l; e++) x.push({
+		anio: e,
+		...Md()
 	});
-	const trend_rows = db.prepare(`SELECT s.tipo, CAST(substr(${EVENT_DATE}, 1, 4) AS INTEGER) AS anio, COUNT(*) AS total
+	let S = e.prepare(`SELECT s.tipo, CAST(substr(${$}, 1, 4) AS INTEGER) AS anio, COUNT(*) AS total
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${HAS_YEAR}
-			 GROUP BY s.tipo, anio`).all(parish_id);
-	for (const row of trend_rows) {
-		const point = trend.find((item) => item.anio === row.anio);
-		if (point) point[row.tipo] = row.total;
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Od}
+			 GROUP BY s.tipo, anio`).all(t);
+	for (let e of S) {
+		let t = x.find((t) => t.anio === e.anio);
+		t && (t[e.tipo] = e.total);
 	}
-	const people = db.prepare(`SELECT s.tipo, ${EVENT_DATE} AS fecha, pe.fecha_nacimiento
-			 FROM (${PEOPLE_OF_ALL_SACRAMENTS}) sub
+	let C = e.prepare(`SELECT s.tipo, ${$} AS fecha, pe.fecha_nacimiento
+			 FROM (${dt}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${HAS_YEAR} AND substr(${EVENT_DATE}, 1, 4) = ?`).all(parish_id, String(year));
-	const ages = {};
-	for (const type of SACRAMENTS) {
-		const bands = AGE_BANDS.map(() => 0);
-		let age_sum = 0;
-		let with_age = 0;
-		let without_age = 0;
-		for (const person of people) {
-			if (person.tipo !== type) continue;
-			const age = age_at(person.fecha_nacimiento, person.fecha);
-			if (age === null) {
-				without_age += 1;
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Od} AND substr(${$}, 1, 4) = ?`).all(t, String(l)), w = {};
+	for (let e of Td) {
+		let t = jd.map(() => 0), n = 0, r = 0, i = 0;
+		for (let a of C) {
+			if (a.tipo !== e) continue;
+			let o = Id(a.fecha_nacimiento, a.fecha);
+			if (o === null) {
+				i += 1;
 				continue;
 			}
-			const band = AGE_BANDS.findIndex((item) => age <= item.to);
-			bands[band] += 1;
-			age_sum += age;
-			with_age += 1;
+			let s = jd.findIndex((e) => o <= e.to);
+			t[s] += 1, n += o, r += 1;
 		}
-		let average = null;
-		if (with_age > 0) average = Math.round(age_sum / with_age * 10) / 10;
-		ages[type] = {
-			bandas: bands,
-			sinDato: without_age,
-			promedio: average
+		let a = null;
+		r > 0 && (a = Math.round(n / r * 10) / 10), w[e] = {
+			bandas: t,
+			sinDato: i,
+			promedio: a
 		};
 	}
-	const ministers = db.prepare(`SELECT min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS nombre, COUNT(*) AS total
+	let ee = e.prepare(`SELECT min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS nombre, COUNT(*) AS total
 			 FROM sacramentos s
 			 JOIN ministros min ON min.id = s.ministro_id
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${HAS_YEAR} AND substr(${EVENT_DATE}, 1, 4) = ?
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Od} AND substr(${$}, 1, 4) = ?
 			 GROUP BY min.id
 			 ORDER BY total DESC, nombre
-			 LIMIT ?`).all(parish_id, String(year), TOP_MINISTERS);
-	const register = db.prepare(`SELECT
+			 LIMIT ?`).all(t, String(l), Dd), T = e.prepare(`SELECT
 				COALESCE(SUM(s.estado = 'anulado'), 0) AS anuladas,
 				COALESCE(SUM(s.estado = 'vigente' AND EXISTS (SELECT 1 FROM cambios_persona c WHERE c.sacramento_id = s.id AND c.estado = 'aprobado')), 0) AS conCorrecciones
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND ${HAS_YEAR} AND substr(${EVENT_DATE}, 1, 4) = ?`).get(parish_id, String(year));
+			 WHERE s.parroquia_id = ? AND ${Od} AND substr(${$}, 1, 4) = ?`).get(t, String(l));
 	return {
-		anios: years,
-		anio: year,
-		esAnioActual: is_current_year,
-		totales: totals,
-		mensual: monthly,
-		tendencia: trend,
-		bandasEdad: AGE_BANDS.map((band) => band.label),
-		edades: ages,
-		ministros: ministers,
-		registro: register
+		anios: c,
+		anio: l,
+		esAnioActual: u,
+		totales: _,
+		mensual: v,
+		tendencia: x,
+		bandasEdad: jd.map((e) => e.label),
+		edades: w,
+		ministros: ee,
+		registro: T
 	};
 }
-var statistics_routes = { "statistics.get": (payload, { db }) => {
-	return get_statistics(db, positive_id(payload.parroquia_id), payload.anio);
-} };
-//#endregion
-//#region electron/main/controllers/sync.ts
-var sync_routes = {
-	"sync.status": () => {
-		return get_sync_status();
-	},
-	"sync.run": async () => {
-		await sync_now();
-		return get_sync_status();
-	},
-	"sync.resolve": async (payload) => {
-		await resolve_sync_conflict(payload.entidad, payload.client_id, payload.eleccion);
-		return get_sync_status();
-	},
-	"sync.dismissNotice": () => {
-		dismiss_sync_notice();
-		return { success: true };
-	}
-};
-var NOT_FOUND = "Usuario no encontrado.";
-var SORT_COLUMNS = {
+var Rd = { "statistics.get": (e, { db: t }) => Ld(t, H(e.parroquia_id), e.anio) }, zd = {
+	"sync.status": () => Si(),
+	"sync.run": async () => (await q(), Si()),
+	"sync.resolve": async (e) => (await Ci(e.entidad, e.client_id, e.eleccion), Si()),
+	"sync.dismissNotice": () => (wi(), { success: !0 })
+}, Bd = "Usuario no encontrado.", Vd = {
 	nombres: "nombre",
 	apellido_paterno: "apellido_paterno",
 	apellido_materno: "apellido_materno"
 };
-function check_can_manage(session) {
-	if (!can_manage_users(session.role)) throw new ServiceError("Solo un administrador puede gestionar usuarios.", 403);
+function Hd(e) {
+	if (!cn(e.role)) throw new B("Solo un administrador puede gestionar usuarios.", 403);
 }
-function is_principal(db, session) {
-	return db.prepare("SELECT principal FROM usuarios WHERE id = ?").get(session.user_id)?.principal === 1;
+function Ud(e, t) {
+	return e.prepare("SELECT principal FROM usuarios WHERE id = ?").get(t.user_id)?.principal === 1;
 }
-function actor_of(db, session) {
+function Wd(e, t) {
 	return {
-		id: session.user_id,
-		rol: session.role,
-		parroquia_id: session.parish_id,
-		principal: is_principal(db, session)
+		id: t.user_id,
+		rol: t.role,
+		parroquia_id: t.parish_id,
+		principal: Ud(e, t)
 	};
 }
-function read_target(db, user_id) {
-	const row = db.prepare("SELECT id, client_id, rol, parroquia_id, version, activo, principal FROM usuarios WHERE id = ?").get(user_id);
-	if (!row) throw new ServiceError(NOT_FOUND, 404);
+function Gd(e, t) {
+	let n = e.prepare("SELECT id, client_id, rol, parroquia_id, version, activo, principal FROM usuarios WHERE id = ?").get(t);
+	if (!n) throw new B(Bd, 404);
 	return {
-		...row,
-		principal: row.principal === 1
+		...n,
+		principal: n.principal === 1
 	};
 }
-function becomes_principal(db, role, parish_id) {
-	if (role !== "admin_parroquia") return 0;
-	return db.prepare("SELECT 1 FROM usuarios WHERE principal = 1 AND parroquia_id = ?").get(parish_id) !== void 0 ? 0 : 1;
+function Kd(e, t, n) {
+	return t === "admin_parroquia" ? +(e.prepare("SELECT 1 FROM usuarios WHERE principal = 1 AND parroquia_id = ?").get(n) === void 0) : 0;
 }
-function check_password(password, required) {
-	if (!password && !required) return;
-	if (password.length < 8) throw new ServiceError(`La contraseña debe tener al menos 8 caracteres.`, 400);
+function qd(e, t) {
+	if ((e || t) && e.length < 8) throw new B("La contraseña debe tener al menos 8 caracteres.", 400);
 }
-function clean_names(user) {
-	const nombre = clean_text(user?.nombre);
-	const apellido_paterno = clean_text(user?.apellido_paterno);
-	if (!nombre || !apellido_paterno) throw new ServiceError("Nombre y apellido paterno son requeridos.", 400);
+function Jd(e) {
+	let t = V(e?.nombre), n = V(e?.apellido_paterno);
+	if (!t || !n) throw new B("Nombre y apellido paterno son requeridos.", 400);
 	return {
-		nombre,
-		apellido_paterno,
-		apellido_materno: clean_text(user.apellido_materno) ?? ""
+		nombre: t,
+		apellido_paterno: n,
+		apellido_materno: V(e.apellido_materno) ?? ""
 	};
 }
-function save_password(db, user_id, hash) {
-	db.prepare("UPDATE usuarios SET password_hash_pendiente = ? WHERE id = ?").run(hash, user_id);
-	db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
-		 ON CONFLICT (usuario_id) DO UPDATE SET
-			verificador = excluded.verificador,
-			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user_id, hash);
+function Yd(e, t, n) {
+	e.prepare("UPDATE usuarios SET password_hash_pendiente = ? WHERE id = ?").run(n, t), e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n		 ON CONFLICT (usuario_id) DO UPDATE SET\n			verificador = excluded.verificador,\n			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t, n);
 }
-function search_users(db, session, filters) {
-	check_can_manage(session);
-	const conditions = [];
-	const values = [];
-	let parish_filter = filters.parroquia_id;
-	if (session.role === "admin_parroquia") parish_filter = session.parish_id ?? -1;
-	if (Number.isInteger(parish_filter)) {
-		conditions.push("u.parroquia_id = ?");
-		values.push(parish_filter);
-	}
-	for (const column of [
+function Xd(e, t, n) {
+	Hd(t);
+	let r = [], i = [], a = n.parroquia_id;
+	t.role === "admin_parroquia" && (a = t.parish_id ?? -1), Number.isInteger(a) && (r.push("u.parroquia_id = ?"), i.push(a));
+	for (let e of [
 		"nombres",
 		"apellido_paterno",
 		"apellido_materno"
 	]) {
-		const text = filters[column];
-		if (!text) continue;
-		conditions.push(`u.${SORT_COLUMNS[column]} LIKE ?`);
-		values.push(`%${text}%`);
+		let t = n[e];
+		t && (r.push(`u.${Vd[e]} LIKE ?`), i.push(`%${t}%`));
 	}
-	let where = "";
-	if (conditions.length > 0) where = "WHERE " + conditions.join(" AND ");
-	const page = page_of(filters, db.prepare(`SELECT COUNT(*) AS total FROM usuarios u ${where}`).get(...values).total);
-	const sort_column = SORT_COLUMNS[filters.orden ?? "nombres"] ?? SORT_COLUMNS.nombres;
+	let o = "";
+	r.length > 0 && (o = "WHERE " + r.join(" AND "));
+	let s = Se(n, e.prepare(`SELECT COUNT(*) AS total FROM usuarios u ${o}`).get(...i).total), c = Vd[n.orden ?? "nombres"] ?? Vd.nombres;
 	return {
-		resultados: db.prepare(`SELECT u.id, u.username, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, u.principal,
+		resultados: e.prepare(`SELECT u.id, u.username, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, u.principal,
 				p.nombre AS parroquia_nombre
 			 FROM usuarios u
 			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
-			 ${where}
-			 ORDER BY u.${sort_column} ${sort_direction(filters)}, u.id
-			 LIMIT ? OFFSET ?`).all(...values, 20, page.offset),
-		total_paginas: page.total_pages
+			 ${o}
+			 ORDER BY u.${c} ${Ce(n)}, u.id
+			 LIMIT ? OFFSET ?`).all(...i, 20, s.offset),
+		total_paginas: s.total_pages
 	};
 }
-async function create_user(db, session, user) {
-	check_can_manage(session);
-	const names = clean_names(user);
-	const username = clean_text(user?.username) ?? "";
-	const password = typeof user?.password === "string" ? user.password : "";
-	const role = user?.rol ?? "usuario";
-	if (!USERNAME_PATTERN.test(username)) throw new ServiceError("El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.", 400);
-	check_password(password, true);
-	if (!is_role(role)) throw new ServiceError("El rol no es válido.", 400);
-	let parish_id = null;
-	if (role !== "admin_general") parish_id = session.role === "admin_parroquia" ? session.parish_id : Number.isInteger(user.parroquia_id) ? user.parroquia_id : null;
-	const target = {
-		rol: role,
-		parroquia_id: parish_id
-	};
-	const parish_error = role_parish_error(target);
-	if (parish_error) throw new ServiceError(parish_error, 400);
-	const reason = cannot_create(actor_of(db, session), target);
-	if (reason) throw new ServiceError(reason, 403);
-	if (parish_id !== null && !db.prepare("SELECT 1 FROM parroquias WHERE id = ? AND activa = 1").get(parish_id)) throw new ServiceError("La parroquia seleccionada no existe.", 400);
-	if (db.prepare("SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE").get(username)) throw new ServiceError("Ese nombre de usuario ya existe.", 409);
-	const hash = await create_server_hash(password);
-	const client_id = crypto.randomUUID();
-	return db.transaction(() => {
-		const lowest = db.prepare("SELECT MIN(id) FROM usuarios").pluck().get();
-		const provisional_id = Math.min(lowest ?? 0, 0) - 1;
-		add_to_queue(db, "usuario", client_id, null);
-		db.prepare(`INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`).run(provisional_id, client_id, parish_id, username, role, names.nombre, names.apellido_paterno, names.apellido_materno, becomes_principal(db, role, parish_id));
-		save_password(db, provisional_id, hash);
-		return provisional_id;
+async function Zd(e, t, n) {
+	Hd(t);
+	let r = Jd(n), i = V(n?.username) ?? "", a = typeof n?.password == "string" ? n.password : "", o = n?.rol ?? "usuario";
+	if (!en.test(i)) throw new B("El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.", 400);
+	if (qd(a, !0), !tn(o)) throw new B("El rol no es válido.", 400);
+	let s = null;
+	o !== "admin_general" && (s = t.role === "admin_parroquia" ? t.parish_id : Number.isInteger(n.parroquia_id) ? n.parroquia_id : null);
+	let c = {
+		rol: o,
+		parroquia_id: s
+	}, l = nn(c);
+	if (l) throw new B(l, 400);
+	let u = an(Wd(e, t), c);
+	if (u) throw new B(u, 403);
+	if (s !== null && !e.prepare("SELECT 1 FROM parroquias WHERE id = ? AND activa = 1").get(s)) throw new B("La parroquia seleccionada no existe.", 400);
+	if (e.prepare("SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE").get(i)) throw new B("Ese nombre de usuario ya existe.", 409);
+	let d = await yn(a), f = crypto.randomUUID();
+	return e.transaction(() => {
+		let t = e.prepare("SELECT MIN(id) FROM usuarios").pluck().get(), n = Math.min(t ?? 0, 0) - 1;
+		return W(e, "usuario", f, null), e.prepare("INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)").run(n, f, s, i, o, r.nombre, r.apellido_paterno, r.apellido_materno, Kd(e, o, s)), Yd(e, n, d), n;
 	})();
 }
-async function update_user(db, session, user) {
-	const id = positive_or_provisional_id(user?.id);
-	if (id !== session.user_id) check_can_manage(session);
-	const names = clean_names(user);
-	const password = typeof user.password === "string" ? user.password : "";
-	check_password(password, false);
-	const target = read_target(db, id);
-	const reason = cannot_modify(actor_of(db, session), target);
-	if (reason) throw new ServiceError(reason, 403);
-	const hash = password ? await create_server_hash(password) : null;
-	db.transaction(() => {
-		add_to_queue(db, "usuario", target.client_id, target.version);
-		db.prepare("UPDATE usuarios SET nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(names.nombre, names.apellido_paterno, names.apellido_materno, id);
-		if (hash) save_password(db, id, hash);
+async function Qd(e, t, n) {
+	let r = tf(n?.id);
+	r !== t.user_id && Hd(t);
+	let i = Jd(n), a = typeof n.password == "string" ? n.password : "";
+	qd(a, !1);
+	let o = Gd(e, r), s = on(Wd(e, t), o);
+	if (s) throw new B(s, 403);
+	let c = a ? await yn(a) : null;
+	e.transaction(() => {
+		W(e, "usuario", o.client_id, o.version), e.prepare("UPDATE usuarios SET nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.nombre, i.apellido_paterno, i.apellido_materno, r), c && Yd(e, r, c);
 	})();
 }
-function toggle_user_active(db, session, user_id) {
-	check_can_manage(session);
-	if (user_id === session.user_id) throw new ServiceError("No puede deshabilitar su propia cuenta.", 400);
-	const target = read_target(db, user_id);
-	const reason = cannot_modify(actor_of(db, session), target);
-	if (reason) throw new ServiceError(reason, 403);
-	const disable_reason = target.activo === 1 ? cannot_disable(target) : null;
-	if (disable_reason) throw new ServiceError(disable_reason, 400);
-	db.transaction(() => {
-		add_to_queue(db, "usuario", target.client_id, target.version);
-		db.prepare("UPDATE usuarios SET activo = NOT activo WHERE id = ?").run(user_id);
-		if (target.activo === 1) db.prepare("DELETE FROM credenciales_locales WHERE usuario_id = ?").run(user_id);
+function $d(e, t, n) {
+	if (Hd(t), n === t.user_id) throw new B("No puede deshabilitar su propia cuenta.", 400);
+	let r = Gd(e, n), i = on(Wd(e, t), r);
+	if (i) throw new B(i, 403);
+	let a = r.activo === 1 ? sn(r) : null;
+	if (a) throw new B(a, 400);
+	e.transaction(() => {
+		W(e, "usuario", r.client_id, r.version), e.prepare("UPDATE usuarios SET activo = NOT activo WHERE id = ?").run(n), r.activo === 1 && e.prepare("DELETE FROM credenciales_locales WHERE usuario_id = ?").run(n);
 	})();
 }
-async function make_principal(db, session, username) {
-	check_can_manage(session);
-	if (typeof username !== "string" || !db.prepare("SELECT 1 FROM usuarios WHERE username = ?").get(username)) throw new ServiceError(NOT_FOUND, 404);
-	await sync_now();
-	const server_id = db.prepare("SELECT id FROM usuarios WHERE username = ?").pluck().get(username);
-	const token = current_session()?.token;
-	if (!token || server_id < 0) throw new ServiceError("Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.", 503);
-	await remote_request(`/api/users/${server_id}/make-principal`, {
+async function ef(e, t, n) {
+	if (Hd(t), typeof n != "string" || !e.prepare("SELECT 1 FROM usuarios WHERE username = ?").get(n)) throw new B(Bd, 404);
+	await q();
+	let r = e.prepare("SELECT id FROM usuarios WHERE username = ?").pluck().get(n), i = sr()?.token;
+	if (!i || r < 0) throw new B("Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.", 503);
+	await yr(`/api/users/${r}/make-principal`, {
 		method: "PATCH",
-		token
-	});
-	await sync_now();
+		token: i
+	}), await q();
 }
-function positive_or_provisional_id(value) {
-	if (!Number.isInteger(value) || value === 0) throw new ServiceError(NOT_FOUND, 404);
-	return value;
+function tf(e) {
+	if (!Number.isInteger(e) || e === 0) throw new B(Bd, 404);
+	return e;
 }
-var user_routes = {
-	"users.search": (filters, { db, session }) => {
-		return search_users(db, session, filters ?? {});
+var nf = {
+	"users.search": (e, { db: t, session: n }) => Xd(t, n, e ?? {}),
+	"users.create": async (e, { db: t, session: n }) => {
+		let r = await Zd(t, n, e);
+		return q(), { id: r };
 	},
-	"users.create": async (user, { db, session }) => {
-		const id = await create_user(db, session, user);
-		sync_now();
-		return { id };
-	},
-	"users.update": async (user, { db, session }) => {
-		await update_user(db, session, user);
-		sync_now();
-		return { success: true };
-	},
-	"users.toggleActive": (payload, { db, session }) => {
-		toggle_user_active(db, session, positive_or_provisional_id(payload?.id));
-		sync_now();
-		return { success: true };
-	},
-	"users.makePrincipal": async (payload, { db, session }) => {
-		await make_principal(db, session, payload?.username);
-		return { success: true };
-	},
-	"users.me": (_payload, { db, session }) => {
-		return { principal: can_manage_users(session.role) && is_principal(db, session) };
-	}
+	"users.update": async (e, { db: t, session: n }) => (await Qd(t, n, e), q(), { success: !0 }),
+	"users.toggleActive": (e, { db: t, session: n }) => ($d(t, n, tf(e?.id)), q(), { success: !0 }),
+	"users.makePrincipal": async (e, { db: t, session: n }) => (await ef(t, n, e?.username), { success: !0 }),
+	"users.me": (e, { db: t, session: n }) => ({ principal: cn(n.role) && Ud(t, n) })
 };
 //#endregion
 //#region electron/main/utils/middleware.ts
-async function run(routes, public_routes, method, payload) {
-	if (Object.hasOwn(public_routes, method)) return public_routes[method](payload);
-	if (!Object.hasOwn(routes, method)) throw new ServiceError("Operación no reconocida.", 404);
-	const context = {
-		session: require_session(),
-		db: get_database(),
-		user_data_folder: app.getPath("userData")
+async function rf(e, t, r, i) {
+	if (Object.hasOwn(t, r)) return t[r](i);
+	if (!Object.hasOwn(e, r)) throw new B("Operación no reconocida.", 404);
+	let a = {
+		session: or(),
+		db: G(),
+		user_data_folder: n.getPath("userData")
 	};
-	return routes[method](payload, context);
+	return e[r](i, a);
 }
-function listen(routes, public_routes) {
-	ipcMain.handle(LOCAL_REQUEST_CHANNEL, async (_event, method, payload) => {
+function af(e, t) {
+	i.handle(nr, async (n, r, i) => {
 		try {
 			return {
-				ok: true,
-				data: await run(routes, public_routes, method, payload)
+				ok: !0,
+				data: await rf(e, t, r, i)
 			};
-		} catch (error$3) {
-			if (error$3 instanceof ServiceError) return {
-				ok: false,
-				message: error$3.message,
-				status: error$3.status
-			};
-			error(`Error en ${method}:`, error$3);
-			return {
-				ok: false,
+		} catch (e) {
+			return e instanceof B ? {
+				ok: !1,
+				message: e.message,
+				status: e.status
+			} : (fr(`Error en ${r}:`, e), {
+				ok: !1,
 				message: "Ocurrió un error inesperado.",
 				status: 500
-			};
+			});
 		}
 	});
 }
 //#endregion
 //#region electron/main/app.ts
-function register_routes() {
-	listen({
-		...parish_routes,
-		...minister_routes,
-		...sacrament_routes,
-		...duplicate_routes,
-		...statistics_routes,
-		...sacrament_index_routes,
-		...sync_routes,
-		...user_routes,
-		...request_routes,
-		...legacy_import_routes,
-		...package_routes,
-		...backup_routes
+function of() {
+	af({
+		...cd,
+		...nd,
+		...wd,
+		...Da,
+		...Rd,
+		...md,
+		...zd,
+		...nf,
+		...Qt,
+		...Ku,
+		...Gi,
+		...fa
 	}, {
-		...login_routes,
-		...package_public_routes,
-		...backup_public_routes,
-		...server_routes
+		...Ni,
+		...Wi,
+		...pa,
+		...ld
 	});
 }
-function setup() {
-	ipcMain.handle("app:get-version", () => app.getVersion());
-	register_routes();
+function sf() {
+	i.handle("app:get-version", () => n.getVersion()), of();
 	try {
-		open_at_startup();
-	} catch (error$1) {
-		error("No se pudo abrir la base local:", error$1);
+		Zn();
+	} catch (e) {
+		fr("No se pudo abrir la base local:", e);
 	}
-	load_bundled_package();
+	Hi();
 }
-async function finish_pending_sync() {
-	stop_auto_sync();
+async function cf() {
+	mi();
 	try {
-		await sync_before_quit(QUIT_SYNC_LIMIT_MS);
-	} catch (error$2) {
-		error("No se pudo sincronizar al cerrar:", error$2);
+		await Ti(ye);
+	} catch (e) {
+		fr("No se pudo sincronizar al cerrar:", e);
 	}
 }
-function shutdown() {
-	close_database();
+function lf() {
+	tr();
 }
 //#endregion
 //#region electron/main/index.ts
-var __dirname = path.dirname(fileURLToPath(import.meta.url));
-var VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
-var main_window = null;
-var quit_sync_done = false;
-function create_window() {
-	main_window = new BrowserWindow({
+var uf = s.dirname(c(import.meta.url)), df = process.env.VITE_DEV_SERVER_URL, ff = null, pf = !1;
+function mf() {
+	if (ff = new t({
 		width: 1200,
 		height: 800,
 		webPreferences: {
-			preload: path.join(__dirname, "index.mjs"),
-			contextIsolation: true,
-			nodeIntegration: false
+			preload: s.join(uf, "index.mjs"),
+			contextIsolation: !0,
+			nodeIntegration: !1
 		}
-	});
-	if (process.env.PRELATURA_SECOND_SCREEN === "1") {
-		const other_screen = screen.getAllDisplays().find((display) => display.id !== screen.getPrimaryDisplay().id);
-		if (other_screen) main_window.setBounds(other_screen.workArea);
+	}), process.env.PRELATURA_SECOND_SCREEN === "1") {
+		let e = o.getAllDisplays().find((e) => e.id !== o.getPrimaryDisplay().id);
+		e && ff.setBounds(e.workArea);
 	}
-	main_window.maximize();
-	if (VITE_DEV_SERVER_URL) {
-		main_window.loadURL(VITE_DEV_SERVER_URL);
-		main_window.webContents.openDevTools();
-	} else main_window.loadFile(path.join(__dirname, "../dist/index.html"));
-	main_window.on("closed", () => {
-		main_window = null;
+	ff.maximize(), df ? (ff.loadURL(df), ff.webContents.openDevTools()) : ff.loadFile(s.join(uf, "../dist/index.html")), ff.on("closed", () => {
+		ff = null;
 	});
 }
-app.whenReady().then(() => {
-	setup();
-	create_window();
-});
-app.on("before-quit", (event) => {
-	if (quit_sync_done) return;
-	event.preventDefault();
-	quit_sync_done = true;
-	finish_pending_sync().finally(() => app.quit());
-});
-app.on("will-quit", shutdown);
-app.on("window-all-closed", () => {
-	if (process.platform !== "darwin") app.quit();
-});
-app.on("activate", () => {
-	if (BrowserWindow.getAllWindows().length === 0) create_window();
+n.whenReady().then(() => {
+	sf(), mf();
+}), n.on("before-quit", (e) => {
+	pf || (e.preventDefault(), pf = !0, cf().finally(() => n.quit()));
+}), n.on("will-quit", lf), n.on("window-all-closed", () => {
+	process.platform !== "darwin" && n.quit();
+}), n.on("activate", () => {
+	t.getAllWindows().length === 0 && mf();
 });
 //#endregion
 export {};

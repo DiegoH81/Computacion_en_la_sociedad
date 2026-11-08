@@ -1,15 +1,14 @@
-import { test, expect, _electron as electron } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { open_local_database } from '../../electron/main/db/database';
+import { launchApp } from './launch';
 
 test('la app crea la base local cifrada y la reabre con la clave guardada', async () => {
   const userData = mkdtempSync(path.join(tmpdir(), 'prelatura-e2e-'));
   const launch = () =>
-    electron.launch({
-      args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-    });
+    launchApp(userData);
   const databasePath = path.join(userData, 'prelatura-local.db');
   const keyPath = path.join(userData, 'prelatura-local.key');
 

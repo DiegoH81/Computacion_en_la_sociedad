@@ -47,10 +47,16 @@ tenga conexión, sube lo suyo y baja lo que cambió desde que se generó el paqu
 
 En desarrollo (`npm run dev`) la app también lo carga desde esta carpeta si la base local está vacía.
 
-## Sin rearmar el instalador
+Para probarlo sin armar el instalador, la variable de entorno `PRELATURA_PAQUETE` puede indicar otro archivo.
 
-Si el instalador no trae el paquete (o es más viejo), en la pantalla de inicio de sesión de una PC nueva
-aparece el botón **Cargar archivo de datos** para elegir el archivo, por ejemplo desde una USB.
+## Respaldos
+
+El paquete inicial solo se carga desde el instalador. Para pasar los datos de una PC a otra (por ejemplo,
+porque se dañó) se usa un **respaldo**: en **Configuración → Exportar respaldo** un administrador guarda
+todo lo de la PC, también lo que todavía no se subió, en un archivo `.respaldo` protegido con una contraseña.
+
+Se restaura en **Configuración → Restaurar respaldo** (reemplaza los datos de la PC y pide volver a entrar)
+o, en una PC sin usuarios, con el botón **Restaurar respaldo** de la pantalla de inicio de sesión.
 
 ## Cuidado
 

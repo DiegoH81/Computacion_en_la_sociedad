@@ -1,9 +1,10 @@
-import { test, expect, _electron as electron, type ElectronApplication, type Locator, type Page } from '@playwright/test';
+import { test, expect, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { field, saveRecord } from './form-helpers';
+import { launchApp } from './launch';
 
 // Dos PCs reales contra el Worker de pruebas. Entre ellas y el Worker hay un proxy que permite
 // simular que se va internet, o que la respuesta del servidor nunca llega.
@@ -68,10 +69,7 @@ function newPc(): string {
 }
 
 async function open(userData: string, env: Record<string, string> = {}): Promise<{ app: ElectronApplication; window: Page }> {
-  const app = await electron.launch({
-    args: [path.join(process.cwd(), 'dist-electron/index.js'), `--user-data-dir=${userData}`],
-    env: { ...process.env, PRELATURA_API_URL: proxyUrl, ...env } as Record<string, string>,
-  });
+  const app = await launchApp(userData, { ...process.env, PRELATURA_API_URL: proxyUrl, ...env } as Record<string, string>);
   apps.push(app);
   return { app, window: await app.firstWindow() };
 }
