@@ -2,15 +2,16 @@ import { createRequire } from "node:module";
 import { BrowserWindow, app, dialog, ipcMain, safeStorage, screen } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import fs, { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { gunzipSync, gzipSync } from "node:zlib";
+import Database from "better-sqlite3-multiple-ciphers";
+import { createCipheriv, createDecipheriv, pbkdf2, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import zlib from "zlib";
 import { Duplex, PassThrough, Transform, pipeline } from "stream";
-import fs, { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { Blob } from "node:buffer";
 import Stream, { Readable, Transform as Transform$1 } from "node:stream";
 import { createRequire as createRequire$1 } from "module";
-import Database from "better-sqlite3-multiple-ciphers";
-import { pbkdf2, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
 var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
 //#endregion
@@ -941,6 +942,1883 @@ var request_routes = {
 		return { success: true };
 	}
 };
+//#endregion
+//#region shared/sync.ts
+var ROLES = [
+	"admin_general",
+	"admin_parroquia",
+	"usuario"
+];
+//#endregion
+//#region shared/users.ts
+var USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
+function is_role(value) {
+	return ROLES.includes(value);
+}
+function role_parish_error(target) {
+	if (target.rol === "admin_general" && target.parroquia_id !== null) return "Un administrador general no pertenece a ninguna parroquia.";
+	if (target.rol !== "admin_general" && target.parroquia_id === null) return "Debe seleccionar una parroquia.";
+	return null;
+}
+function parish_admin_reason(actor, target, action) {
+	if (target.parroquia_id !== actor.parroquia_id) return `Solo puede ${action} cuentas de su propia parroquia.`;
+	if (target.rol === "usuario") return null;
+	if (target.rol === "admin_parroquia" && actor.principal) return null;
+	if (target.rol === "admin_parroquia") return `Solo el administrador principal de la parroquia puede ${action} a otros administradores.`;
+	return "El administrador de una parroquia no gestiona administradores generales.";
+}
+function cannot_create(actor, target) {
+	if (actor.rol === "admin_general") {
+		if (target.rol === "admin_general" && !actor.principal) return "Solo el administrador principal puede crear administradores generales.";
+		return null;
+	}
+	if (actor.rol === "admin_parroquia") return parish_admin_reason(actor, target, "crear");
+	return "No tiene permiso para gestionar usuarios.";
+}
+function cannot_modify(actor, target) {
+	if (target.id === actor.id) return null;
+	if (actor.rol === "admin_general") {
+		if (target.rol === "admin_general" && !actor.principal) return "Solo el administrador principal puede modificar a otros administradores generales.";
+		return null;
+	}
+	if (actor.rol === "admin_parroquia") return parish_admin_reason(actor, target, "modificar");
+	return "No tiene permiso para gestionar usuarios.";
+}
+function cannot_disable(target) {
+	if (target.principal) return "No se puede deshabilitar al administrador principal: primero pase la marca de principal a otro administrador.";
+	return null;
+}
+function can_manage_users(role) {
+	return role === "admin_general" || role === "admin_parroquia";
+}
+//#endregion
+//#region electron/main/utils/crypto.ts
+var KEY_LENGTH = 32;
+var HASH_LENGTH = 32;
+var SALT_LENGTH = 16;
+var COST = {
+	N: 2 ** 15,
+	r: 8,
+	p: 1,
+	maxmem: 67108864
+};
+function new_key() {
+	return randomBytes(KEY_LENGTH).toString("hex");
+}
+function compute_hash(password, salt, options, length) {
+	return new Promise((resolve, reject) => {
+		scrypt(password.normalize("NFKC"), salt, length, options, (error, hash) => {
+			if (error) reject(error);
+			else resolve(hash);
+		});
+	});
+}
+async function create_verifier(password) {
+	const salt = randomBytes(SALT_LENGTH);
+	const hash = await compute_hash(password, salt, COST, HASH_LENGTH);
+	return `scrypt:${COST.N}:${COST.r}:${COST.p}:${salt.toString("base64")}:${hash.toString("base64")}`;
+}
+var SERVER_ITERATIONS = 1e5;
+var SERVER_HASH_BITS = 256;
+function compute_server_hash(password, salt, iterations) {
+	return new Promise((resolve, reject) => {
+		pbkdf2(password, salt, iterations, SERVER_HASH_BITS / 8, "sha256", (error, hash) => {
+			if (error) reject(error);
+			else resolve(hash);
+		});
+	});
+}
+async function create_server_hash(password) {
+	const salt = randomBytes(SALT_LENGTH);
+	const hash = await compute_server_hash(password, salt, SERVER_ITERATIONS);
+	return `${SERVER_ITERATIONS}:${salt.toString("base64")}:${hash.toString("base64")}`;
+}
+async function matches_server_hash(password, stored) {
+	const [iterations, salt, hash] = stored.split(":");
+	if (!/^\d+$/.test(iterations ?? "") || !salt || !hash) return false;
+	const expected = Buffer.from(hash, "base64");
+	const actual = await compute_server_hash(password, Buffer.from(salt, "base64"), Number(iterations));
+	return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+async function matches_verifier(password, verifier) {
+	if (!verifier.startsWith("scrypt:")) return matches_server_hash(password, verifier);
+	const [, n, r, p, salt, hash] = verifier.split(":");
+	if (!salt || !hash) return false;
+	const expected = Buffer.from(hash, "base64");
+	const options = {
+		N: Number(n),
+		r: Number(r),
+		p: Number(p),
+		maxmem: COST.maxmem
+	};
+	const actual = await compute_hash(password, Buffer.from(salt, "base64"), options, expected.length);
+	return timingSafeEqual(actual, expected);
+}
+var IV_LENGTH = 12;
+async function encrypt_with_password(password, data) {
+	const salt = randomBytes(SALT_LENGTH);
+	const iv = randomBytes(IV_LENGTH);
+	const key = await compute_hash(password, salt, COST, KEY_LENGTH);
+	const cipher = createCipheriv("aes-256-gcm", key, iv);
+	const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+	return {
+		sal: salt.toString("base64"),
+		iv: iv.toString("base64"),
+		etiqueta: cipher.getAuthTag().toString("base64"),
+		datos: encrypted.toString("base64")
+	};
+}
+async function decrypt_with_password(password, encrypted) {
+	const key = await compute_hash(password, Buffer.from(encrypted.sal, "base64"), COST, KEY_LENGTH);
+	try {
+		const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(encrypted.iv, "base64"));
+		decipher.setAuthTag(Buffer.from(encrypted.etiqueta, "base64"));
+		return Buffer.concat([decipher.update(Buffer.from(encrypted.datos, "base64")), decipher.final()]);
+	} catch {
+		return null;
+	}
+}
+//#endregion
+//#region electron/main/db/migrations.ts
+var LOCAL_MIGRATIONS = [
+	`
+  CREATE TABLE parroquias (
+    id        INTEGER PRIMARY KEY,
+    nombre    TEXT    NOT NULL,
+    ubicacion TEXT,
+    activa    INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE usuarios (
+    id               INTEGER PRIMARY KEY,
+    parroquia_id     INTEGER REFERENCES parroquias(id),
+    username         TEXT    NOT NULL UNIQUE,
+    rol              TEXT    NOT NULL CHECK (rol IN ('admin', 'usuario_parroquia')),
+    nombre           TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL,
+    activo           INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE ministros (
+    id               INTEGER PRIMARY KEY,
+    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
+    titulo           TEXT,
+    nombre           TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL,
+    activo           INTEGER NOT NULL DEFAULT 1
+  );
+
+  CREATE TABLE personas (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id        TEXT    NOT NULL UNIQUE,
+    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
+    dni              TEXT    CHECK (dni IS NULL OR dni <> ''),
+    nombres          TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL DEFAULT '',
+    fecha_nacimiento TEXT,
+    edad             INTEGER CHECK (edad IS NULL OR edad >= 0),
+    lugar_nacimiento TEXT,
+    padre            TEXT,
+    madre            TEXT,
+    version          INTEGER NOT NULL DEFAULT 1,
+    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+  CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;
+  CREATE INDEX idx_personas_busqueda ON personas (nombres, apellido_paterno, apellido_materno);
+
+  CREATE TABLE sacramentos (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id              TEXT    NOT NULL UNIQUE,
+    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),
+    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),
+    ministro_id            INTEGER REFERENCES ministros(id),
+    libro                  TEXT    NOT NULL,
+    folio                  TEXT    NOT NULL,
+    numero                 TEXT    NOT NULL,
+    fecha_emision          TEXT    NOT NULL,
+    fecha_evento           TEXT,
+    anotaciones            TEXT,
+    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
+    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
+    anulado_en             TEXT,
+    motivo_anulacion       TEXT,
+    version                INTEGER NOT NULL DEFAULT 1,
+    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    -- Permite que cada subtipo enlace (id, tipo): un bautismo no puede colgar de un matrimonio.
+    UNIQUE (id, tipo),
+    CHECK (
+      estado = 'vigente'
+      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL
+          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')
+    )
+  );
+  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);
+
+  CREATE TABLE matrimonios (
+    sacramento_id                INTEGER PRIMARY KEY,
+    tipo                         TEXT    NOT NULL DEFAULT 'matrimonio' CHECK (tipo = 'matrimonio'),
+    conyuge_1_id                 INTEGER NOT NULL REFERENCES personas(id),
+    conyuge_2_id                 INTEGER NOT NULL REFERENCES personas(id),
+    lugar                        TEXT,
+    testigo_1                    TEXT,
+    testigo_2                    TEXT,
+    testigo_3                    TEXT,
+    testigo_4                    TEXT,
+    conyuge_1_bautismo_parroquia TEXT,
+    conyuge_1_bautismo_fecha     TEXT,
+    conyuge_2_bautismo_parroquia TEXT,
+    conyuge_2_bautismo_fecha     TEXT,
+    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo),
+    CHECK (conyuge_1_id <> conyuge_2_id)
+  );
+  CREATE INDEX idx_matrimonios_conyuge_1 ON matrimonios (conyuge_1_id);
+  CREATE INDEX idx_matrimonios_conyuge_2 ON matrimonios (conyuge_2_id);
+
+  CREATE TABLE bautismos (
+    sacramento_id INTEGER PRIMARY KEY,
+    tipo          TEXT    NOT NULL DEFAULT 'bautismo' CHECK (tipo = 'bautismo'),
+    persona_id    INTEGER NOT NULL REFERENCES personas(id),
+    padrino_1     TEXT,
+    padrino_2     TEXT,
+    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)
+  );
+  CREATE INDEX idx_bautismos_persona ON bautismos (persona_id);
+
+  CREATE TABLE confirmaciones (
+    sacramento_id INTEGER PRIMARY KEY,
+    tipo          TEXT    NOT NULL DEFAULT 'confirmacion' CHECK (tipo = 'confirmacion'),
+    persona_id    INTEGER NOT NULL REFERENCES personas(id),
+    padrino_1     TEXT,
+    padrino_2     TEXT,
+    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)
+  );
+  CREATE INDEX idx_confirmaciones_persona ON confirmaciones (persona_id);
+
+  CREATE TABLE cambios_persona (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- Evita duplicar la corrección si se reenvía tras un corte de internet.
+    client_id      TEXT    NOT NULL UNIQUE,
+    persona_id     INTEGER NOT NULL REFERENCES personas(id),
+    sacramento_id  INTEGER REFERENCES sacramentos(id),
+    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id),
+    campo_cambio   TEXT    NOT NULL,
+    valor_anterior TEXT,
+    valor_nuevo    TEXT,
+    fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+  CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);
+
+  -- Cada UPDATE sube version, salvo que la sincronización ya la haya fijado.
+  CREATE TRIGGER trg_personas_touch
+  AFTER UPDATE ON personas
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE personas
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+
+  CREATE TRIGGER trg_sacramentos_touch
+  AFTER UPDATE ON sacramentos
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE sacramentos
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+  `,
+	`
+  CREATE TABLE ministros_nueva (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id        TEXT    NOT NULL UNIQUE,
+    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
+    titulo           TEXT,
+    nombre           TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL,
+    activo           INTEGER NOT NULL DEFAULT 1,
+    version          INTEGER NOT NULL DEFAULT 1,
+    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  INSERT INTO ministros_nueva (id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo)
+  SELECT id, 'servidor-' || id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo
+  FROM ministros;
+
+  DROP TABLE ministros;
+  ALTER TABLE ministros_nueva RENAME TO ministros;
+
+  CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
+
+  CREATE TRIGGER trg_ministros_touch
+  AFTER UPDATE ON ministros
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE ministros
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+  `,
+	`
+  -- Registros con cambios sin subir. Se envía su estado final, así que basta una fila por registro.
+  -- version_base: última versión que conoce el servidor; NULL si el registro aún no existe allí.
+  CREATE TABLE sync_cola (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro')),
+    client_id    TEXT    NOT NULL,
+    version_base INTEGER,
+    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (entidad, client_id)
+  );
+
+  INSERT INTO sync_cola (entidad, client_id)
+  SELECT tipo, client_id FROM sacramentos ORDER BY id;
+
+  INSERT INTO sync_cola (entidad, client_id)
+  SELECT 'ministro', client_id FROM ministros ORDER BY id;
+  `,
+	`
+  -- cola_id: identifica la fila mientras siga pendiente, para reconocer un reenvío tras un corte.
+  -- revision: sube con cada edición; si cambió durante el envío, la fila no se quita al confirmarse.
+  ALTER TABLE sync_cola ADD COLUMN cola_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE sync_cola ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE sync_cola ADD COLUMN estado TEXT NOT NULL DEFAULT 'pendiente'
+    CHECK (estado IN ('pendiente', 'conflicto', 'rechazado'));
+  ALTER TABLE sync_cola ADD COLUMN motivo TEXT;
+  UPDATE sync_cola SET cola_id = lower(hex(randomblob(16)));
+
+  CREATE TABLE sync_estado (
+    clave TEXT PRIMARY KEY,
+    valor TEXT
+  );
+
+  -- Verificación para entrar sin internet. Solo existe para quien ya entró con conexión en esta PC.
+  CREATE TABLE credenciales_locales (
+    usuario_id     INTEGER PRIMARY KEY REFERENCES usuarios(id),
+    verificador    TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+  `,
+	`
+  -- La edad pasa a ser una fecha aproximada en texto libre: los libros traen cosas como
+  -- "22 AG 1978" o "(27 AÑOS AL DIA DE BODA)". Las edades que ya había se conservan como "N años".
+  ALTER TABLE personas ADD COLUMN fecha_aproximada TEXT;
+  UPDATE personas SET fecha_aproximada = edad || ' años' WHERE edad IS NOT NULL;
+  ALTER TABLE personas DROP COLUMN edad;
+  `,
+	`
+  -- Tres roles (ver worker/src/db/migrations/0015_roles_y_correcciones.sql):
+  --   admin_general, admin_parroquia (el párroco) y usuario (un ayudante).
+  -- Un admin sin parroquia pasa a admin_general; las demás cuentas, a admin_parroquia.
+  --
+  -- Los usuarios ahora se pueden crear y editar en esta PC sin internet y subirse después:
+  --   client_id      los identifica ante el servidor (el mismo 'servidor-<id>' que puso su migración).
+  --   id negativo    una cuenta creada aquí que el servidor todavía no conoce; al subirla se cambia por el suyo.
+  --   password_hash_pendiente   la contraseña cambiada aquí que falta subir (PBKDF2, el formato del
+  --                             servidor). Se borra en cuanto el servidor la recibe.
+  CREATE TABLE usuarios_nueva (
+    id               INTEGER PRIMARY KEY,
+    client_id        TEXT    NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
+    parroquia_id     INTEGER REFERENCES parroquias(id),
+    username         TEXT    NOT NULL UNIQUE,
+    rol              TEXT    NOT NULL CHECK (rol IN ('admin_general', 'admin_parroquia', 'usuario')),
+    nombre           TEXT    NOT NULL,
+    apellido_paterno TEXT    NOT NULL,
+    apellido_materno TEXT    NOT NULL,
+    activo           INTEGER NOT NULL DEFAULT 1,
+    principal        INTEGER NOT NULL DEFAULT 0,
+    password_hash_pendiente TEXT,
+    version          INTEGER NOT NULL DEFAULT 1,
+    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  INSERT INTO usuarios_nueva (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)
+  SELECT id, 'servidor-' || id, parroquia_id, username,
+         CASE WHEN rol = 'admin' AND parroquia_id IS NULL THEN 'admin_general' ELSE 'admin_parroquia' END,
+         nombre, apellido_paterno, apellido_materno, activo
+  FROM usuarios;
+
+  DROP TABLE usuarios;
+  ALTER TABLE usuarios_nueva RENAME TO usuarios;
+
+  CREATE TRIGGER trg_usuarios_touch
+  AFTER UPDATE ON usuarios
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE usuarios
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+
+  -- Una corrección pedida por un usuario queda 'pendiente' hasta que el admin_parroquia la revise.
+  ALTER TABLE cambios_persona ADD COLUMN estado TEXT NOT NULL DEFAULT 'aprobado'
+    CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'));
+  ALTER TABLE cambios_persona ADD COLUMN revisado_por_usuario_id INTEGER REFERENCES usuarios(id);
+  ALTER TABLE cambios_persona ADD COLUMN revisado_en TEXT;
+
+  -- La cola también lleva usuarios.
+  CREATE TABLE sync_cola_nueva (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro', 'usuario')),
+    client_id    TEXT    NOT NULL,
+    version_base INTEGER,
+    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    cola_id      TEXT    NOT NULL DEFAULT '',
+    revision     INTEGER NOT NULL DEFAULT 1,
+    estado       TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'conflicto', 'rechazado')),
+    motivo       TEXT,
+    UNIQUE (entidad, client_id)
+  );
+
+  INSERT INTO sync_cola_nueva (id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo)
+  SELECT id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo FROM sync_cola;
+
+  DROP TABLE sync_cola;
+  ALTER TABLE sync_cola_nueva RENAME TO sync_cola;
+  `,
+	`
+  ALTER TABLE sacramentos ADD COLUMN anotaciones_propuestas TEXT;
+  `,
+	`
+  CREATE TABLE solicitudes_cambio (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id               TEXT    NOT NULL UNIQUE,
+    sacramento_id           INTEGER NOT NULL REFERENCES sacramentos(id),
+    usuario_id              INTEGER NOT NULL REFERENCES usuarios(id),
+    parte                   TEXT    NOT NULL CHECK (parte IN ('sacramento', 'persona', 'conyuge_1', 'conyuge_2', 'detalle')),
+    campo                   TEXT    NOT NULL,
+    tipo                    TEXT    NOT NULL CHECK (tipo IN ('digitacion', 'nota_marginal')),
+    valor_anterior          TEXT,
+    valor_nuevo             TEXT,
+    estado                  TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'descartado')),
+    motivo                  TEXT,
+    revisado_por_usuario_id INTEGER REFERENCES usuarios(id),
+    revisado_en             TEXT,
+    creado_en               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  CREATE INDEX idx_solicitudes_sacramento ON solicitudes_cambio (sacramento_id);
+
+  CREATE TABLE historial_partidas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id     TEXT    NOT NULL UNIQUE,
+    sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
+    evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
+                                                     'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),
+    motivo        TEXT,
+    fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);
+
+  CREATE TABLE historial_campos (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    historial_id   INTEGER NOT NULL REFERENCES historial_partidas(id),
+    parte          TEXT    NOT NULL,
+    campo          TEXT    NOT NULL,
+    valor_anterior TEXT,
+    valor_nuevo    TEXT
+  );
+
+  CREATE INDEX idx_historial_campos ON historial_campos (historial_id);
+
+  -- Las correcciones de nombres pendientes: la misma client_id que tenían.
+  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
+  SELECT
+    c.client_id,
+    c.sacramento_id,
+    c.usuario_id,
+    CASE
+      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_1_id = c.persona_id) THEN 'conyuge_1'
+      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_2_id = c.persona_id) THEN 'conyuge_2'
+      ELSE 'persona'
+    END,
+    c.campo_cambio,
+    'nota_marginal',
+    c.valor_anterior,
+    c.valor_nuevo,
+    c.fecha_cambio
+  FROM cambios_persona c
+  WHERE c.estado = 'pendiente' AND c.sacramento_id IS NOT NULL;
+
+  -- La nota propuesta: la pidió quien pidió la corrección que iba con ella.
+  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
+  SELECT
+    s.client_id || '-nota',
+    s.id,
+    c.usuario_id,
+    'sacramento',
+    'anotaciones',
+    'digitacion',
+    s.anotaciones,
+    s.anotaciones_propuestas,
+    c.fecha_cambio
+  FROM sacramentos s
+  JOIN cambios_persona c ON c.id = (SELECT MIN(id) FROM cambios_persona WHERE sacramento_id = s.id AND estado = 'pendiente')
+  WHERE s.anotaciones_propuestas IS NOT NULL;
+
+  DELETE FROM cambios_persona WHERE estado = 'pendiente';
+
+  ALTER TABLE sacramentos DROP COLUMN anotaciones_propuestas;
+  `,
+	`
+  UPDATE usuarios SET principal = 1
+  WHERE id IN (
+    SELECT MIN(a.id) FROM usuarios a
+    WHERE a.rol = 'admin_parroquia' AND a.activo = 1 AND a.id > 0
+      AND NOT EXISTS (SELECT 1 FROM usuarios p WHERE p.principal = 1 AND p.parroquia_id = a.parroquia_id)
+    GROUP BY a.parroquia_id
+  );
+  `
+];
+//#endregion
+//#region electron/main/db/database.ts
+var HEX_KEY_PATTERN = /^[0-9a-f]{64}$/i;
+var NewerDatabaseError = class extends Error {};
+function migrate(db, migrations) {
+	const current_version = db.pragma("user_version", { simple: true });
+	if (current_version > migrations.length) throw new NewerDatabaseError(`La base local está en la versión ${current_version} y esta app solo conoce hasta la ${migrations.length}.`);
+	db.pragma("foreign_keys = OFF");
+	for (let i = current_version; i < migrations.length; i++) db.transaction(() => {
+		db.exec(migrations[i]);
+		if (db.pragma("foreign_key_check").length > 0) throw new Error("La migración dejó claves foráneas rotas.");
+		db.pragma(`user_version = ${i + 1}`);
+	})();
+	db.pragma("foreign_keys = ON");
+}
+function open_local_database(file_path, hex_key, migrations = LOCAL_MIGRATIONS) {
+	if (!HEX_KEY_PATTERN.test(hex_key)) throw new Error("La clave de la base local debe tener 32 bytes en hexadecimal.");
+	const db = new Database(file_path);
+	try {
+		db.pragma(`cipher='chacha20'`);
+		db.pragma(`hexkey='${hex_key}'`);
+		db.prepare("SELECT count(*) FROM sqlite_master").get();
+		db.pragma("foreign_keys = ON");
+		db.pragma("journal_mode = WAL");
+		db.pragma("synchronous = FULL");
+		migrate(db, migrations);
+		return db;
+	} catch (error) {
+		db.close();
+		throw error;
+	}
+}
+function is_unreadable(error) {
+	const code = error?.code ?? "";
+	return code.startsWith("SQLITE_NOTADB") || code.startsWith("SQLITE_CORRUPT");
+}
+function local_paths(directory) {
+	return {
+		directory,
+		database: path.join(directory, FILE_NAMES.database),
+		key: path.join(directory, FILE_NAMES.key),
+		device: path.join(directory, FILE_NAMES.device),
+		temp_database: path.join(directory, FILE_NAMES.temp_database),
+		temp_key: path.join(directory, FILE_NAMES.temp_key),
+		set_aside_folder: path.join(directory, FILE_NAMES.set_aside_folder)
+	};
+}
+function device_id(paths) {
+	if (existsSync(paths.device)) return readFileSync(paths.device, "utf8").trim();
+	const id = randomUUID();
+	writeFileSync(paths.device, id);
+	return id;
+}
+function move_with_extra_files(from, to) {
+	for (const suffix of [
+		"",
+		"-wal",
+		"-shm"
+	]) if (existsSync(from + suffix)) renameSync(from + suffix, to + suffix);
+}
+function remove_with_extra_files(file) {
+	for (const suffix of [
+		"",
+		"-wal",
+		"-shm"
+	]) rmSync(file + suffix, { force: true });
+}
+function clean_set_aside(paths) {
+	if (!existsSync(paths.set_aside_folder)) return;
+	readdirSync(paths.set_aside_folder).filter((name) => name.endsWith(".db")).sort().reverse().forEach((name, index) => {
+		const file = path.join(paths.set_aside_folder, name);
+		const too_old = Date.now() - statSync(file).mtimeMs > SET_ASIDE_DAYS_MS;
+		if (index > 0 || too_old) remove_with_extra_files(file);
+	});
+}
+function set_aside(paths) {
+	if (!existsSync(paths.database)) return;
+	mkdirSync(paths.set_aside_folder, { recursive: true });
+	const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+	move_with_extra_files(paths.database, path.join(paths.set_aside_folder, `prelatura-local-${stamp}.db`));
+	clean_set_aside(paths);
+}
+function open_or_detect(paths, keys) {
+	clean_set_aside(paths);
+	const key = keys.read(paths.key);
+	if (!existsSync(paths.database)) {
+		const created_key = key ?? new_key();
+		const db = open_local_database(paths.database, created_key);
+		if (!key) keys.write(paths.key, created_key);
+		return {
+			status: "open",
+			db,
+			key: created_key
+		};
+	}
+	if (!key) return { status: "needs-recovery" };
+	try {
+		const db = open_local_database(paths.database, key);
+		remove_with_extra_files(paths.temp_database);
+		rmSync(paths.temp_key, { force: true });
+		return {
+			status: "open",
+			db,
+			key
+		};
+	} catch (error) {
+		if (error instanceof NewerDatabaseError) return {
+			status: "failed",
+			message: "La base local es de una versión más nueva. Actualice la aplicación."
+		};
+		if (is_unreadable(error)) return { status: "needs-recovery" };
+		throw error;
+	}
+}
+function open_with_key_copy(paths, keys, key) {
+	try {
+		const db = open_local_database(paths.database, key);
+		keys.write(paths.key, key);
+		return db;
+	} catch (error) {
+		if (!is_unreadable(error)) throw error;
+		return null;
+	}
+}
+function open_temp_database(paths, keys) {
+	let key = keys.read(paths.temp_key);
+	if (!key || !existsSync(paths.temp_database)) {
+		remove_with_extra_files(paths.temp_database);
+		key = new_key();
+		keys.write(paths.temp_key, key);
+	}
+	try {
+		return {
+			db: open_local_database(paths.temp_database, key),
+			key
+		};
+	} catch (error) {
+		if (!is_unreadable(error)) throw error;
+		remove_with_extra_files(paths.temp_database);
+		return {
+			db: open_local_database(paths.temp_database, key),
+			key
+		};
+	}
+}
+function create_temp_database(paths, keys, migrations) {
+	remove_with_extra_files(paths.temp_database);
+	const key = new_key();
+	keys.write(paths.temp_key, key);
+	return {
+		db: open_local_database(paths.temp_database, key, migrations),
+		key
+	};
+}
+function install_temp_database(paths, keys, key) {
+	set_aside(paths);
+	move_with_extra_files(paths.temp_database, paths.database);
+	keys.write(paths.key, key);
+	rmSync(paths.temp_key, { force: true });
+	return open_local_database(paths.database, key);
+}
+//#endregion
+//#region electron/main/db/app_database.ts
+var database = null;
+var database_key = null;
+var needs_recovery = false;
+var unavailable_message = "La base local no está disponible.";
+function check_secure_storage() {
+	if (!safeStorage.isEncryptionAvailable()) throw new Error("El sistema operativo no ofrece almacenamiento seguro para la clave.");
+}
+function read_key_file(key_path) {
+	check_secure_storage();
+	if (!existsSync(key_path)) return null;
+	try {
+		return safeStorage.decryptString(readFileSync(key_path));
+	} catch {
+		return null;
+	}
+}
+function write_key_file(key_path, key) {
+	check_secure_storage();
+	writeFileSync(key_path, safeStorage.encryptString(key), { mode: 384 });
+}
+var KEY_STORE = {
+	read: read_key_file,
+	write: write_key_file
+};
+function database_paths() {
+	return local_paths(app.getPath("userData"));
+}
+function open_at_startup() {
+	const result = open_or_detect(database_paths(), KEY_STORE);
+	if (result.status === "open") {
+		database = result.db;
+		database_key = result.key;
+	} else if (result.status === "needs-recovery") {
+		needs_recovery = true;
+		unavailable_message = "La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.";
+	} else unavailable_message = result.message;
+}
+function get_database() {
+	if (!database) throw new ServiceError(unavailable_message, 503);
+	return database;
+}
+function current_key() {
+	return database_key;
+}
+function database_needs_recovery() {
+	return needs_recovery;
+}
+function use_database(db, key) {
+	database = db;
+	database_key = key;
+	needs_recovery = false;
+}
+function close_database() {
+	database?.close();
+	database = null;
+	database_key = null;
+}
+//#endregion
+//#region electron/shared/index.ts
+var LOCAL_REQUEST_CHANNEL = "local:request";
+var OFFLINE_TOKEN = "sin-conexion";
+//#endregion
+//#region electron/main/models/session.ts
+var session = null;
+var saved_login = null;
+function require_session() {
+	if (!session) throw new ServiceError("Sesión no válida.", 401);
+	return session;
+}
+function current_session() {
+	return session;
+}
+function saved_credentials() {
+	return saved_login;
+}
+function start_session(new_session, username, password) {
+	session = new_session;
+	saved_login = {
+		username,
+		password
+	};
+}
+function end_session() {
+	session = null;
+	saved_login = null;
+}
+//#endregion
+//#region electron/main/utils/logger.ts
+function info(...values) {
+	console.log(...values);
+}
+function error(...values) {
+	console.error(...values);
+}
+var DEVELOPMENT_SERVER = "http://localhost:8787";
+var cached = null;
+function read_config_file(file) {
+	if (!existsSync(file)) return null;
+	try {
+		const content = JSON.parse(readFileSync(file, "utf8"));
+		if (typeof content.servidor === "string" && /^https?:\/\/\S+$/.test(content.servidor.trim())) return content.servidor.trim().replace(/\/+$/, "");
+		error(`${file}: "servidor" debe ser una dirección que empiece con http:// o https://.`);
+	} catch (error$7) {
+		error(`No se pudo leer ${file}:`, error$7);
+	}
+	return null;
+}
+function installer_folder() {
+	if (app.isPackaged) return path.join(process.resourcesPath, "instalador");
+	return path.join(app.getAppPath(), "resources", "instalador");
+}
+function server_url() {
+	if (cached) return cached;
+	const url = process.env.PRELATURA_API_URL ?? read_config_file(path.join(app.getPath("userData"), "configuracion.json")) ?? read_config_file(path.join(installer_folder(), "configuracion.json")) ?? void 0 ?? DEVELOPMENT_SERVER;
+	info(`Servidor: ${url}`);
+	cached = url;
+	return url;
+}
+//#endregion
+//#region electron/main/sync/online.ts
+var CONNECTION_ERROR = "No se pudo conectar con el servidor. Verifique su conexión.";
+var remote_request = async (path, options = {}) => {
+	const method = options.method ?? "GET";
+	const timeout_ms = options.timeoutMs ?? 3e4;
+	const headers = {};
+	if (options.body !== void 0) headers["Content-Type"] = "application/json";
+	if (options.token) headers["Authorization"] = `Bearer ${options.token}`;
+	let response;
+	let data;
+	try {
+		response = await fetch(`${server_url()}${path}`, {
+			method,
+			headers,
+			body: options.body === void 0 ? void 0 : JSON.stringify(options.body),
+			signal: AbortSignal.timeout(timeout_ms)
+		});
+		data = await response.json().catch(() => null);
+	} catch {
+		throw new ServiceError(CONNECTION_ERROR, 0);
+	}
+	if (!response.ok) throw new ServiceError(data?.message ? String(data.message) : "Ocurrió un error inesperado.", response.status);
+	if (data === null) throw new ServiceError(CONNECTION_ERROR, 0);
+	return data;
+};
+function is_connection_error(error) {
+	return error instanceof ServiceError && (error.status === 0 || error.status >= 500);
+}
+function request_login(request, username, password) {
+	return request("/api/auth/login", {
+		method: "POST",
+		body: {
+			username,
+			password
+		},
+		timeoutMs: LOGIN_TIMEOUT_MS
+	});
+}
+function get_reference(request, token) {
+	return request("/api/reference", { token });
+}
+function push_changes(request, token, changes) {
+	return request("/api/sync/push", {
+		method: "POST",
+		body: { cambios: changes },
+		token
+	});
+}
+function pull_page(request, token, cursor) {
+	return request(`/api/sync/pull?cursor=${encodeURIComponent(cursor)}`, { token });
+}
+function get_record(request, token, entity, client_id) {
+	return request(`/api/sync/record?${`entidad=${encodeURIComponent(entity)}&client_id=${encodeURIComponent(client_id)}`}`, { token });
+}
+function get_key_copy(request, token, device) {
+	return request(`/api/devices/${device}/key`, { token });
+}
+function put_key_copy(request, token, device, key) {
+	return request(`/api/devices/${device}/key`, {
+		method: "PUT",
+		body: { clave: key },
+		token
+	});
+}
+//#endregion
+//#region electron/main/sync/records.ts
+var MissingReferenceError = class extends Error {};
+function allow_version_write(db, table, id) {
+	db.prepare(`UPDATE ${table} SET version = -1 WHERE id = ?`).run(id);
+}
+function table_of(entity) {
+	if (entity === "ministro") return "ministros";
+	if (entity === "usuario") return "usuarios";
+	return "sacramentos";
+}
+function set_server_version(db, entity, client_id, version) {
+	db.prepare(`UPDATE ${table_of(entity)} SET version = ? WHERE client_id = ? AND version <> ?`).run(version, client_id, version);
+}
+function read_local_minister(db, client_id) {
+	return db.prepare("SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(client_id);
+}
+function read_local_user(db, client_id) {
+	return db.prepare(`SELECT client_id, id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo,
+				password_hash_pendiente AS password_hash
+			 FROM usuarios WHERE client_id = ?`).get(client_id);
+}
+function read_local_record(db, client_id) {
+	const sacrament = db.prepare(`SELECT s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,
+				s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion
+			 FROM sacramentos s
+			 LEFT JOIN ministros m ON m.id = s.ministro_id
+			 WHERE s.client_id = ?`).get(client_id);
+	const type = sacrament.tipo;
+	const detail_row = db.prepare(`SELECT * FROM ${detail_table(type)} WHERE sacramento_id = ?`).get(sacrament.id);
+	const read_person = db.prepare(`SELECT client_id, ${PERSON_COLUMNS.join(", ")} FROM personas WHERE id = ?`);
+	const people = [];
+	for (const column of person_columns(type)) people.push(read_person.get(detail_row[column]));
+	const detail = {};
+	for (const column of detail_columns(type)) detail[column] = detail_row[column];
+	const corrections = db.prepare(`SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio,
+				c.estado, c.revisado_por_usuario_id, c.revisado_en
+			 FROM cambios_persona c
+			 JOIN personas p ON p.id = c.persona_id
+			 WHERE c.sacramento_id = ?
+			 ORDER BY c.id`).all(sacrament.id);
+	return {
+		tipo: type,
+		client_id: sacrament.client_id,
+		parroquia_id: sacrament.parroquia_id,
+		ministro_client_id: sacrament.ministro_client_id,
+		libro: sacrament.libro,
+		folio: sacrament.folio,
+		numero: sacrament.numero,
+		fecha_emision: sacrament.fecha_emision,
+		fecha_evento: sacrament.fecha_evento,
+		anotaciones: sacrament.anotaciones,
+		estado: sacrament.estado,
+		anulado_por_usuario_id: sacrament.anulado_por_usuario_id,
+		anulado_en: sacrament.anulado_en,
+		motivo_anulacion: sacrament.motivo_anulacion,
+		personas: people,
+		detalle: detail,
+		cambios: corrections,
+		solicitudes: read_request_data(db, sacrament.id),
+		historial: read_history_data(db, sacrament.id)
+	};
+}
+function save_downloaded_person(db, parish_id, person) {
+	const values = PERSON_COLUMNS.map((column) => person[column]);
+	const existing = db.prepare("SELECT id FROM personas WHERE client_id = ?").get(person.client_id);
+	if (existing) {
+		const assignments = PERSON_COLUMNS.map((column) => `${column} = ?`).join(", ");
+		db.prepare(`UPDATE personas SET ${assignments} WHERE id = ?`).run(...values, existing.id);
+		return existing.id;
+	}
+	const marks = PERSON_COLUMNS.map(() => "?").join(", ");
+	const result = db.prepare(`INSERT INTO personas (client_id, parroquia_id, ${PERSON_COLUMNS.join(", ")}) VALUES (?, ?, ${marks})`).run(person.client_id, parish_id, ...values);
+	return Number(result.lastInsertRowid);
+}
+function local_minister_id(db, client_id) {
+	if (!client_id) return null;
+	const row = db.prepare("SELECT id FROM ministros WHERE client_id = ?").get(client_id);
+	if (!row) throw new MissingReferenceError(`Ministro desconocido: ${client_id}`);
+	return row.id;
+}
+function save_downloaded_record(db, record, force = false) {
+	const version = record.version ?? 1;
+	const local = db.prepare("SELECT id, version FROM sacramentos WHERE client_id = ?").get(record.client_id);
+	if (!force) {
+		if (is_in_queue(db, record.tipo, record.client_id)) return;
+		if (local && local.version === version) return;
+	}
+	const minister_id = local_minister_id(db, record.ministro_client_id);
+	const people_ids = record.personas.map((person) => save_downloaded_person(db, record.parroquia_id, person));
+	const updated_at = record.updated_at ?? (/* @__PURE__ */ new Date()).toISOString();
+	const values = [
+		minister_id,
+		record.libro,
+		record.folio,
+		record.numero,
+		record.fecha_emision,
+		record.fecha_evento,
+		record.anotaciones,
+		record.estado,
+		record.anulado_por_usuario_id,
+		record.anulado_en,
+		record.motivo_anulacion,
+		version,
+		updated_at
+	];
+	let sacrament_id;
+	if (local) {
+		sacrament_id = local.id;
+		allow_version_write(db, "sacramentos", local.id);
+		db.prepare(`UPDATE sacramentos SET
+				ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?,
+				estado = ?, anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?, version = ?, updated_at = ?
+			 WHERE id = ?`).run(...values, local.id);
+	} else {
+		const result = db.prepare(`INSERT INTO sacramentos
+					(ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,
+					 estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, updated_at,
+					 client_id, tipo, parroquia_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...values, record.client_id, record.tipo, record.parroquia_id);
+		sacrament_id = Number(result.lastInsertRowid);
+	}
+	save_downloaded_detail(db, record, sacrament_id, people_ids);
+	save_downloaded_corrections(db, record, sacrament_id, people_ids);
+	save_downloaded_requests(db, sacrament_id, record.solicitudes ?? []);
+	save_downloaded_history(db, sacrament_id, record.historial ?? []);
+	if (force) {
+		const kept_ids = JSON.stringify(record.cambios.map((correction) => correction.client_id));
+		db.prepare("DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(sacrament_id, kept_ids);
+		discard_unsent_requests(db, sacrament_id, record.solicitudes ?? []);
+		discard_unsent_history(db, sacrament_id, record.historial ?? []);
+		remove_from_queue(db, record.tipo, record.client_id);
+	}
+}
+function save_downloaded_detail(db, record, sacrament_id, people_ids) {
+	const detail = record.detalle;
+	if (record.tipo === "matrimonio") {
+		db.prepare(`INSERT INTO matrimonios
+				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,
+				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT (sacramento_id) DO UPDATE SET
+				conyuge_1_id = excluded.conyuge_1_id,
+				conyuge_2_id = excluded.conyuge_2_id,
+				lugar = excluded.lugar,
+				testigo_1 = excluded.testigo_1,
+				testigo_2 = excluded.testigo_2,
+				testigo_3 = excluded.testigo_3,
+				testigo_4 = excluded.testigo_4,
+				conyuge_1_bautismo_parroquia = excluded.conyuge_1_bautismo_parroquia,
+				conyuge_1_bautismo_fecha = excluded.conyuge_1_bautismo_fecha,
+				conyuge_2_bautismo_parroquia = excluded.conyuge_2_bautismo_parroquia,
+				conyuge_2_bautismo_fecha = excluded.conyuge_2_bautismo_fecha`).run(sacrament_id, people_ids[0], people_ids[1], detail.lugar ?? null, detail.testigo_1 ?? null, detail.testigo_2 ?? null, detail.testigo_3 ?? null, detail.testigo_4 ?? null, detail.conyuge_1_bautismo_parroquia ?? null, detail.conyuge_1_bautismo_fecha ?? null, detail.conyuge_2_bautismo_parroquia ?? null, detail.conyuge_2_bautismo_fecha ?? null);
+		return;
+	}
+	db.prepare(`INSERT INTO ${detail_table(record.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT (sacramento_id) DO UPDATE SET
+			persona_id = excluded.persona_id,
+			padrino_1 = excluded.padrino_1,
+			padrino_2 = excluded.padrino_2`).run(sacrament_id, people_ids[0], detail.padrino_1 ?? null, detail.padrino_2 ?? null);
+}
+function save_downloaded_corrections(db, record, sacrament_id, people_ids) {
+	const local_person_ids = /* @__PURE__ */ new Map();
+	record.personas.forEach((person, i) => local_person_ids.set(person.client_id, people_ids[i]));
+	const insert = db.prepare(`INSERT INTO cambios_persona
+			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,
+			 estado, revisado_por_usuario_id, revisado_en)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT (client_id) DO UPDATE SET
+			estado = excluded.estado,
+			revisado_por_usuario_id = excluded.revisado_por_usuario_id,
+			revisado_en = excluded.revisado_en`);
+	for (const correction of record.cambios) insert.run(correction.client_id, local_person_ids.get(correction.persona_client_id), sacrament_id, correction.usuario_id, correction.campo_cambio, correction.valor_anterior, correction.valor_nuevo, correction.fecha_cambio, correction.estado ?? "aprobado", correction.revisado_por_usuario_id ?? null, correction.revisado_en ?? null);
+}
+function save_downloaded_user(db, user, force = false) {
+	user = {
+		...user,
+		client_id: user.client_id ?? `servidor-${user.id}`
+	};
+	if (!force && is_in_queue(db, "usuario", user.client_id)) return;
+	db.prepare(`UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?`).run(user.username, user.id);
+	db.prepare(`UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?`).run(user.client_id, user.id);
+	db.prepare(`INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)
+		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)
+		 ON CONFLICT (id) DO UPDATE SET
+			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,
+			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,
+			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL`).run({
+		id: user.id,
+		client_id: user.client_id,
+		parroquia_id: user.parroquia_id,
+		username: user.username,
+		rol: user.rol,
+		nombre: user.nombre,
+		apellido_paterno: user.apellido_paterno,
+		apellido_materno: user.apellido_materno ?? "",
+		activo: user.activo,
+		principal: user.principal ?? 0,
+		updated_at: user.updated_at ?? (/* @__PURE__ */ new Date()).toISOString()
+	});
+	allow_version_write(db, "usuarios", user.id);
+	db.prepare("UPDATE usuarios SET version = ? WHERE id = ?").run(user.version ?? 1, user.id);
+	if (user.password_hash) db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
+			 ON CONFLICT (usuario_id) DO UPDATE SET
+				verificador = excluded.verificador,
+				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user.id, user.password_hash);
+	if (force) remove_from_queue(db, "usuario", user.client_id);
+}
+function adopt_server_user_id(db, client_id, server_id) {
+	const row = db.prepare("SELECT id FROM usuarios WHERE client_id = ?").get(client_id);
+	if (!row || row.id === server_id) return null;
+	const old_id = row.id;
+	db.pragma("defer_foreign_keys = ON");
+	db.prepare("UPDATE usuarios SET id = ? WHERE id = ?").run(server_id, old_id);
+	db.prepare("UPDATE cambios_persona SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
+	db.prepare("UPDATE cambios_persona SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(server_id, old_id);
+	db.prepare("UPDATE sacramentos SET anulado_por_usuario_id = ? WHERE anulado_por_usuario_id = ?").run(server_id, old_id);
+	db.prepare("UPDATE solicitudes_cambio SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
+	db.prepare("UPDATE solicitudes_cambio SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(server_id, old_id);
+	db.prepare("UPDATE historial_partidas SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
+	db.prepare("UPDATE credenciales_locales SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
+	return old_id;
+}
+var MINISTER_FIELDS = [
+	"titulo",
+	"nombre",
+	"apellido_paterno",
+	"apellido_materno",
+	"activo"
+];
+function save_downloaded_minister(db, minister, force = false) {
+	const version = minister.version ?? 1;
+	const updated_at = minister.updated_at ?? (/* @__PURE__ */ new Date()).toISOString();
+	const local = db.prepare("SELECT id, version, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(minister.client_id);
+	if (!force && is_in_queue(db, "ministro", minister.client_id)) {
+		const same_data = local !== void 0 && MINISTER_FIELDS.every((field) => (local[field] ?? null) === (minister[field] ?? null));
+		const queued = db.prepare("SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?").get("ministro", minister.client_id);
+		if (!same_data || queued.version_base !== null) return;
+		remove_from_queue(db, "ministro", minister.client_id);
+		set_server_version(db, "ministro", minister.client_id, version);
+		return;
+	}
+	if (!local) {
+		db.prepare(`INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(minister.client_id, minister.parroquia_id, minister.titulo ?? null, minister.nombre, minister.apellido_paterno, minister.apellido_materno, minister.activo, version, updated_at);
+		return;
+	}
+	if (force || local.version !== version) {
+		allow_version_write(db, "ministros", local.id);
+		db.prepare(`UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?, version = ?, updated_at = ?
+			 WHERE id = ?`).run(minister.titulo ?? null, minister.nombre, minister.apellido_paterno, minister.apellido_materno, minister.activo, version, updated_at, local.id);
+	}
+	if (force) remove_from_queue(db, "ministro", minister.client_id);
+}
+//#endregion
+//#region electron/main/sync/sync.ts
+function save_reference_data(db, data) {
+	const save_parish = db.prepare(`INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)
+		 ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa`);
+	const adopt_minister = db.prepare("UPDATE ministros SET client_id = ? WHERE client_id = ?");
+	db.transaction(() => {
+		for (const parish of data.parroquias) save_parish.run(parish);
+		for (const minister of data.ministros) {
+			adopt_minister.run(minister.client_id, `servidor-${minister.id}`);
+			save_downloaded_minister(db, minister);
+		}
+		for (const user of data.usuarios) save_downloaded_user(db, user);
+		db.exec("DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)");
+	})();
+}
+async function refresh_reference(db, request, token) {
+	save_reference_data(db, await get_reference(request, token));
+}
+function read_local_data(db, row) {
+	if (row.entidad === "ministro") return read_local_minister(db, row.client_id);
+	if (row.entidad === "usuario") return read_local_user(db, row.client_id);
+	return read_local_record(db, row.client_id);
+}
+function adopt_user_id(db, client_id, server_id) {
+	if (!server_id) return;
+	const old_id = adopt_server_user_id(db, client_id, server_id);
+	const session = current_session();
+	if (old_id !== null && session && session.user_id === old_id) session.user_id = server_id;
+}
+function save_push_result(db, row, result) {
+	db.transaction(() => {
+		if (result.estado === "conflicto" || result.estado === "rechazado") {
+			db.prepare("UPDATE sync_cola SET estado = ?, motivo = ? WHERE id = ?").run(result.estado, result.motivo, row.id);
+			return;
+		}
+		if (row.entidad === "usuario") adopt_user_id(db, row.client_id, result.id);
+		if (db.prepare("SELECT revision FROM sync_cola WHERE id = ?").get(row.id).revision === row.revision) {
+			remove_from_queue(db, row.entidad, row.client_id);
+			set_server_version(db, row.entidad, row.client_id, result.version);
+			if (row.entidad === "usuario") db.prepare("UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?").run(row.client_id);
+		} else db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?`).run(result.version, row.id);
+	})();
+}
+async function push_pending(db, request, token) {
+	const pending = db.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' AND (entidad = 'usuario') = ? ORDER BY entidad = 'ministro' DESC, id`).pluck();
+	await push_rows(db, request, token, pending.all(1));
+	await push_rows(db, request, token, pending.all(0));
+}
+async function push_rows(db, request, token, pending_ids) {
+	const read_row = db.prepare("SELECT * FROM sync_cola WHERE id = ?");
+	for (let start = 0; start < pending_ids.length; start += 15) {
+		const rows = [];
+		for (const id of pending_ids.slice(start, start + 15)) {
+			const row = read_row.get(id);
+			if (row && row.estado !== "conflicto") rows.push(row);
+		}
+		if (rows.length === 0) continue;
+		const response = await push_changes(request, token, rows.map((row) => {
+			return {
+				entidad: row.entidad,
+				client_id: row.client_id,
+				version_base: row.version_base,
+				cola_id: row.cola_id,
+				datos: read_local_data(db, row)
+			};
+		}));
+		for (let i = 0; i < rows.length; i++) if (response.resultados[i]) save_push_result(db, rows[i], response.resultados[i]);
+	}
+}
+function save_page(db, page) {
+	db.transaction(() => {
+		for (const record of page.partidas) save_downloaded_record(db, record);
+		set_sync_value(db, SYNC_KEYS.cursor, String(page.cursor));
+	})();
+}
+function is_missing_reference(error) {
+	if (error instanceof MissingReferenceError) return true;
+	return error?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
+}
+async function pull_changes(db, request, token) {
+	while (true) {
+		const page = await pull_page(request, token, get_sync_value(db, SYNC_KEYS.cursor) ?? "0");
+		try {
+			save_page(db, page);
+		} catch (error) {
+			if (!is_missing_reference(error)) throw error;
+			await refresh_reference(db, request, token);
+			save_page(db, page);
+		}
+		if (!page.hayMas) return;
+	}
+}
+async function run_sync(db, request, token) {
+	await refresh_reference(db, request, token);
+	await push_pending(db, request, token);
+	await pull_changes(db, request, token);
+	set_sync_value(db, SYNC_KEYS.last_sync, (/* @__PURE__ */ new Date()).toISOString());
+}
+async function resolve_conflict(db, request, token, entity, client_id, choice) {
+	const server_record = (await get_record(request, token, entity, client_id)).registro;
+	db.transaction(() => {
+		if (choice === "local") db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE entidad = ? AND client_id = ?`).run(server_record.version, entity, client_id);
+		else if (entity === "ministro") save_downloaded_minister(db, server_record, true);
+		else if (entity === "usuario") save_downloaded_user(db, server_record, true);
+		else save_downloaded_record(db, server_record, true);
+	})();
+}
+var TYPE_NAMES = {
+	bautismo: "Bautismo",
+	confirmacion: "Confirmación",
+	matrimonio: "Matrimonio"
+};
+function describe(db, row) {
+	if (row.entidad === "ministro") {
+		const minister = db.prepare("SELECT nombre, apellido_paterno FROM ministros WHERE client_id = ?").get(row.client_id);
+		return `Ministro ${minister?.nombre ?? ""} ${minister?.apellido_paterno ?? ""}`.trim();
+	}
+	if (row.entidad === "usuario") return `Usuario ${db.prepare("SELECT username FROM usuarios WHERE client_id = ?").get(row.client_id)?.username ?? ""}`.trim();
+	const type_name = TYPE_NAMES[row.entidad];
+	const record = db.prepare("SELECT libro, folio, numero FROM sacramentos WHERE client_id = ?").get(row.client_id);
+	if (!record) return type_name;
+	return `${type_name}: libro ${record.libro}, folio ${record.folio}, registro ${record.numero}`;
+}
+function read_queue_summary(db) {
+	const counts = db.prepare("SELECT estado, COUNT(*) AS total FROM sync_cola GROUP BY estado").all();
+	const count_of = (state) => {
+		const row = counts.find((item) => item.estado === state);
+		return row ? row.total : 0;
+	};
+	const items = db.prepare(`SELECT * FROM sync_cola WHERE estado <> 'pendiente' ORDER BY id`).all().map((row) => ({
+		entidad: row.entidad,
+		client_id: row.client_id,
+		estado: row.estado,
+		motivo: row.motivo,
+		descripcion: describe(db, row)
+	}));
+	return {
+		pendientes: count_of("pendiente"),
+		conflictos: count_of("conflicto"),
+		rechazados: count_of("rechazado"),
+		ultima_sync: get_sync_value(db, SYNC_KEYS.last_sync),
+		aviso: get_sync_value(db, SYNC_KEYS.notice),
+		items
+	};
+}
+//#endregion
+//#region electron/main/sync/recovery.ts
+var REBUILT_NOTICE = "La base local se reconstruyó desde el servidor. Revise lo registrado recientemente: lo que no se había subido debe volver a digitarse desde el libro.";
+async function download_key_copy(paths, request, token) {
+	try {
+		return (await get_key_copy(request, token, device_id(paths))).clave;
+	} catch (error) {
+		if (error instanceof ServiceError && error.status === 404) return null;
+		throw error;
+	}
+}
+async function rebuild(paths, keys, request, token) {
+	const temp = open_temp_database(paths, keys);
+	try {
+		await refresh_reference(temp.db, request, token);
+		await pull_changes(temp.db, request, token);
+		set_sync_value(temp.db, SYNC_KEYS.last_sync, (/* @__PURE__ */ new Date()).toISOString());
+		set_sync_value(temp.db, SYNC_KEYS.notice, REBUILT_NOTICE);
+		set_sync_value(temp.db, SYNC_KEYS.key_registered, null);
+	} finally {
+		temp.db.close();
+	}
+	return {
+		db: install_temp_database(paths, keys, temp.key),
+		key: temp.key
+	};
+}
+async function recover_local_database(paths, keys, request, token) {
+	if (existsSync(paths.database)) {
+		const key_copy = await download_key_copy(paths, request, token);
+		if (key_copy) {
+			const db = open_with_key_copy(paths, keys, key_copy);
+			if (db) return {
+				db,
+				key: key_copy
+			};
+		}
+	}
+	return rebuild(paths, keys, request, token);
+}
+async function upload_key_copy(db, paths, key, request, token, parish_id) {
+	const registered = get_sync_value(db, SYNC_KEYS.key_registered);
+	if (registered && !(registered === "admin" && parish_id !== null)) return;
+	const response = await put_key_copy(request, token, device_id(paths), key);
+	set_sync_value(db, SYNC_KEYS.key_registered, response.parroquiaId === null ? "admin" : "parroquia");
+}
+//#endregion
+//#region electron/main/sync/auto_sync.ts
+var mode = "sin-conexion";
+var last_error = null;
+var running_sync = null;
+var sync_timer = null;
+function start_auto_sync(initial_mode) {
+	if (!sync_timer) sync_timer = setInterval(() => void sync_now(), SYNC_INTERVAL_MS);
+	mode = initial_mode;
+}
+function stop_auto_sync() {
+	if (sync_timer) clearInterval(sync_timer);
+	sync_timer = null;
+}
+function reset_sync_status() {
+	mode = "sin-conexion";
+	last_error = null;
+}
+var ACCOUNT_NOT_UPLOADED = "Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.";
+function is_waiting_upload(user_id) {
+	if (user_id < 0) return true;
+	try {
+		const row = get_database().prepare("SELECT password_hash_pendiente FROM usuarios WHERE id = ?").get(user_id);
+		return Boolean(row?.password_hash_pendiente);
+	} catch {
+		return false;
+	}
+}
+async function renew_token() {
+	const session = current_session();
+	const login = saved_credentials();
+	if (!session || !login) return null;
+	try {
+		const response = await request_login(remote_request, login.username, login.password);
+		session.token = response.token;
+		session.role = response.usuario.rol;
+		session.parish_id = response.usuario.parroquia_id;
+		return response.token;
+	} catch (error) {
+		session.token = "";
+		if (is_connection_error(error)) {
+			mode = "sin-conexion";
+			return null;
+		}
+		if (is_waiting_upload(session.user_id)) {
+			mode = "error";
+			last_error = ACCOUNT_NOT_UPLOADED;
+			return null;
+		}
+		mode = "requiere-login";
+		last_error = "La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.";
+		return null;
+	}
+}
+async function with_token(action) {
+	const token = current_session()?.token || await renew_token();
+	if (!token) return;
+	try {
+		await action(token);
+	} catch (error) {
+		if (!(error instanceof ServiceError && error.status === 401)) throw error;
+		const new_token = await renew_token();
+		if (new_token) await action(new_token);
+	}
+}
+async function perform_sync() {
+	last_error = null;
+	try {
+		let completed = false;
+		await with_token(async (token) => {
+			const db = get_database();
+			await run_sync(db, remote_request, token);
+			completed = true;
+			const key = current_key();
+			if (key) await upload_key_copy(db, database_paths(), key, remote_request, token, current_session()?.parish_id ?? null).catch((error$5) => {
+				error("No se pudo subir la copia de la clave:", error$5);
+			});
+		});
+		if (completed) mode = "en-linea";
+	} catch (error$6) {
+		if (is_connection_error(error$6)) {
+			mode = "sin-conexion";
+			return;
+		}
+		error("Falló la sincronización:", error$6);
+		mode = "error";
+		last_error = error$6 instanceof ServiceError ? error$6.message : "Ocurrió un error al sincronizar.";
+	}
+}
+function sync_now() {
+	if (!current_session()) return Promise.resolve();
+	if (!running_sync) running_sync = perform_sync().finally(() => {
+		running_sync = null;
+	});
+	return running_sync;
+}
+function wait_for_sync() {
+	return running_sync ?? Promise.resolve();
+}
+function get_sync_status() {
+	require_session();
+	return {
+		...read_queue_summary(get_database()),
+		modo: mode,
+		en_curso: running_sync !== null,
+		mensaje: last_error,
+		token: current_session()?.token || "sin-conexion"
+	};
+}
+async function resolve_sync_conflict(entity, client_id, choice) {
+	require_session();
+	let done = false;
+	await with_token(async (token) => {
+		await resolve_conflict(get_database(), remote_request, token, entity, client_id, choice);
+		done = true;
+	});
+	if (!done) throw new ServiceError("Se necesita conexión para resolver el conflicto.", 0);
+	await sync_now();
+}
+function dismiss_sync_notice() {
+	require_session();
+	set_sync_value(get_database(), SYNC_KEYS.notice, null);
+}
+async function sync_before_quit(limit_ms) {
+	if (!current_session()) return;
+	if (read_queue_summary(get_database()).pendientes === 0) return;
+	const time_limit = new Promise((resolve) => setTimeout(resolve, limit_ms));
+	await Promise.race([sync_now(), time_limit]);
+}
+//#endregion
+//#region electron/main/controllers/login.ts
+async function save_credential(db, user_id, password) {
+	const verifier = await create_verifier(password);
+	db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
+		 ON CONFLICT (usuario_id) DO UPDATE SET
+			verificador = excluded.verificador,
+			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user_id, verifier);
+}
+async function verify_offline(db, username, password) {
+	const row = db.prepare(`SELECT u.id, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,
+				c.verificador, p.nombre AS parroquia_nombre
+			 FROM usuarios u
+			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
+			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
+			 WHERE u.username = ?`).get(username);
+	if (!row || !row.verificador) return {
+		ok: false,
+		reason: "sin-credencial"
+	};
+	if (row.activo !== 1) return {
+		ok: false,
+		reason: "incorrecta"
+	};
+	if (!await matches_verifier(password, row.verificador)) return {
+		ok: false,
+		reason: "incorrecta"
+	};
+	return {
+		ok: true,
+		usuario: {
+			id: row.id,
+			rol: row.rol,
+			parroquia_id: row.parroquia_id,
+			parroquia_nombre: row.parroquia_nombre,
+			nombre_completo: full_name$1(row.nombre, row.apellido_paterno, row.apellido_materno)
+		}
+	};
+}
+async function login_online(response, username, password) {
+	const token = response.token;
+	const user = response.usuario;
+	if (database_needs_recovery()) {
+		const recovered = await recover_local_database(database_paths(), KEY_STORE, remote_request, token);
+		use_database(recovered.db, recovered.key);
+	}
+	const db = get_database();
+	try {
+		await refresh_reference(db, remote_request, token);
+	} catch (error) {
+		if (!db.prepare("SELECT 1 FROM usuarios WHERE id = ?").get(user.id)) throw error;
+	}
+	await save_credential(db, user.id, password);
+	start_session({
+		user_id: user.id,
+		role: user.rol,
+		parish_id: user.parroquia_id,
+		token
+	}, username, password);
+	start_auto_sync("en-linea");
+	await sync_now();
+	return response;
+}
+function start_local_session(user, username, password) {
+	start_session({
+		user_id: user.id,
+		role: user.rol,
+		parish_id: user.parroquia_id,
+		token: ""
+	}, username, password);
+	start_auto_sync("sin-conexion");
+	sync_now();
+	return {
+		token: OFFLINE_TOKEN,
+		usuario: user
+	};
+}
+var NOT_IN_THIS_PC = "Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.";
+async function login(payload) {
+	const username = typeof payload?.username === "string" ? payload.username.trim() : "";
+	const password = typeof payload?.password === "string" ? payload.password : "";
+	let local = {
+		ok: false,
+		reason: "sin-credencial"
+	};
+	if (!database_needs_recovery()) {
+		local = await verify_offline(get_database(), username, password);
+		if (local.ok) return start_local_session(local.usuario, username, password);
+	}
+	let response;
+	try {
+		response = await request_login(remote_request, username, password);
+	} catch (error) {
+		if (!is_connection_error(error)) throw error;
+		if (database_needs_recovery()) throw new ServiceError("La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.", 503);
+		if (local.reason === "sin-credencial") throw new ServiceError(NOT_IN_THIS_PC, 401);
+		throw new ServiceError("Usuario o contraseña incorrectos.", 401);
+	}
+	return login_online(response, username, password);
+}
+function logout() {
+	stop_auto_sync();
+	end_session();
+	reset_sync_status();
+}
+var login_routes = {
+	"auth.login": login,
+	"auth.logout": () => {
+		logout();
+		return { success: true };
+	}
+};
+//#endregion
+//#region electron/main/controllers/package.ts
+var PACKAGE_FORMAT = "prelatura-paquete-inicial";
+var PACKAGE_FILE = "paquete-inicial.json";
+function needs_package(db) {
+	return db.prepare("SELECT COUNT(*) FROM usuarios").pluck().get() === 0;
+}
+function build_package(db, session) {
+	if (session.role !== "admin_general") throw new ServiceError("Solo el administrador general puede generar el paquete inicial.", 403);
+	if (db.prepare("SELECT COUNT(*) FROM sync_cola").pluck().get() > 0) throw new ServiceError("Hay cambios sin subir. Sincronice con internet antes de generar el paquete inicial.", 409);
+	const users = db.prepare(`SELECT u.id, u.client_id, u.parroquia_id, u.username, u.rol, u.nombre, u.apellido_paterno, u.apellido_materno,
+				u.activo, u.principal, u.version, u.updated_at, c.verificador AS password_hash
+			 FROM usuarios u
+			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
+			 WHERE u.id > 0
+			 ORDER BY u.id`).all();
+	const ministers = db.prepare("SELECT id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at FROM ministros ORDER BY id").all();
+	const records = db.prepare("SELECT client_id, version, created_at, updated_at FROM sacramentos ORDER BY id").all();
+	return {
+		formato: PACKAGE_FORMAT,
+		version: 1,
+		generado_en: (/* @__PURE__ */ new Date()).toISOString(),
+		cursor: get_sync_value(db, SYNC_KEYS.cursor),
+		parroquias: db.prepare("SELECT id, nombre, ubicacion, activa FROM parroquias ORDER BY id").all(),
+		usuarios: users,
+		ministros: ministers,
+		partidas: records.map((row) => ({
+			...read_local_record(db, row.client_id),
+			version: row.version,
+			created_at: row.created_at,
+			updated_at: row.updated_at
+		}))
+	};
+}
+function check_package(data) {
+	const candidate = data;
+	if (!candidate || candidate.formato !== "prelatura-paquete-inicial") throw new ServiceError("El archivo no es un paquete inicial de esta aplicación.", 400);
+	if (candidate.version !== 1) throw new ServiceError("El paquete inicial es de otra versión de la aplicación.", 400);
+	if (!Array.isArray(candidate.parroquias) || !Array.isArray(candidate.usuarios) || !Array.isArray(candidate.ministros) || !Array.isArray(candidate.partidas)) throw new ServiceError("El paquete inicial está incompleto.", 400);
+	return candidate;
+}
+function load_package(db, data) {
+	const content = check_package(data);
+	if (!needs_package(db)) throw new ServiceError("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
+	db.transaction(() => {
+		save_reference_data(db, {
+			parroquias: content.parroquias,
+			ministros: content.ministros,
+			usuarios: content.usuarios
+		});
+		for (const record of content.partidas) save_downloaded_record(db, record);
+		if (content.cursor) set_sync_value(db, SYNC_KEYS.cursor, content.cursor);
+	})();
+	return {
+		parroquias: content.parroquias.length,
+		usuarios: content.usuarios.length,
+		partidas: content.partidas.length
+	};
+}
+function read_package_file(file_path) {
+	try {
+		return JSON.parse(readFileSync(file_path, "utf8"));
+	} catch {
+		throw new ServiceError("No se pudo leer el paquete inicial.", 400);
+	}
+}
+function bundled_package_path() {
+	if (app.isPackaged) return path.join(process.resourcesPath, "instalador", PACKAGE_FILE);
+	return path.join(app.getAppPath(), "resources", "instalador", PACKAGE_FILE);
+}
+function load_bundled_package() {
+	if (process.env.PRELATURA_SIN_PAQUETE === "1") return;
+	const file = process.env.PRELATURA_PAQUETE || bundled_package_path();
+	let db;
+	try {
+		db = get_database();
+	} catch {
+		return;
+	}
+	if (!existsSync(file) || !needs_package(db)) return;
+	try {
+		const summary = load_package(db, read_package_file(file));
+		info(`Paquete inicial cargado: ${summary.parroquias} parroquias, ${summary.usuarios} usuarios y ${summary.partidas} partidas.`);
+	} catch (error$4) {
+		error("No se pudo cargar el paquete inicial del instalador:", error$4);
+	}
+}
+function parent_window() {
+	return BrowserWindow.getFocusedWindow() ?? void 0;
+}
+var package_public_routes = { "package.status": () => {
+	try {
+		return { necesita_paquete: needs_package(get_database()) };
+	} catch {
+		return { necesita_paquete: false };
+	}
+} };
+var package_routes = { "package.export": async (_payload, { db, session }) => {
+	const content = build_package(db, session);
+	const options = {
+		title: "Guardar el paquete inicial",
+		defaultPath: PACKAGE_FILE,
+		filters: [{
+			name: "Paquete inicial",
+			extensions: ["json"]
+		}]
+	};
+	const window = parent_window();
+	const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+	if (choice.canceled || !choice.filePath) return { cancelado: true };
+	writeFileSync(choice.filePath, JSON.stringify(content), "utf8");
+	return {
+		cancelado: false,
+		parroquias: content.parroquias.length,
+		usuarios: content.usuarios.length,
+		partidas: content.partidas.length
+	};
+} };
+//#endregion
+//#region electron/main/controllers/backup.ts
+var BACKUP_FORMAT = "prelatura-respaldo";
+var BACKUP_EXTENSION = "respaldo";
+var LOGO_FILE = /^parroquia-\d+\.txt$/;
+var WRONG_PASSWORD = "La contraseña no es la del respaldo, o el archivo está dañado.";
+var NOT_A_BACKUP = "El archivo no es un respaldo de esta aplicación.";
+function table_names(db) {
+	return db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`).pluck().all();
+}
+function logos_folder(directory) {
+	return path.join(directory, FILE_NAMES.logos_folder);
+}
+function build_backup(db, directory) {
+	const tables = {};
+	for (const name of table_names(db)) {
+		const select = db.prepare(`SELECT * FROM "${name}"`).raw();
+		tables[name] = {
+			columnas: select.columns().map((column) => column.name),
+			filas: select.all()
+		};
+	}
+	const logos = {};
+	const folder = logos_folder(directory);
+	if (existsSync(folder)) for (const name of readdirSync(folder).filter((file) => LOGO_FILE.test(file))) logos[name] = readFileSync(path.join(folder, name), "utf8");
+	return {
+		version_base: db.pragma("user_version", { simple: true }),
+		tablas: tables,
+		logos
+	};
+}
+async function encode_backup(content, password) {
+	const encrypted = await encrypt_with_password(password, gzipSync(JSON.stringify(content)));
+	return JSON.stringify({
+		formato: BACKUP_FORMAT,
+		version: 1,
+		creado_en: (/* @__PURE__ */ new Date()).toISOString(),
+		...encrypted
+	});
+}
+async function decode_backup(text, password) {
+	let file;
+	try {
+		file = JSON.parse(text);
+	} catch {
+		throw new ServiceError(NOT_A_BACKUP, 400);
+	}
+	if (file?.formato !== "prelatura-respaldo" || !file.sal || !file.iv || !file.etiqueta || !file.datos) throw new ServiceError(NOT_A_BACKUP, 400);
+	if (file.version !== 1) throw new ServiceError("El respaldo es de otra versión de la aplicación.", 400);
+	const data = await decrypt_with_password(password, file);
+	if (!data) throw new ServiceError(WRONG_PASSWORD, 400);
+	const content = JSON.parse(gunzipSync(data).toString("utf8"));
+	if (!Number.isInteger(content?.version_base) || content.version_base < 1 || typeof content.tablas !== "object" || typeof content.logos !== "object") throw new ServiceError(NOT_A_BACKUP, 400);
+	return content;
+}
+function load_tables(db, content) {
+	const known = table_names(db);
+	for (const name of Object.keys(content.tablas)) if (!known.includes(name)) throw new ServiceError(NOT_A_BACKUP, 400);
+	const load = db.transaction(() => {
+		for (const name of known) db.prepare(`DELETE FROM "${name}"`).run();
+		for (const [name, table] of Object.entries(content.tablas)) {
+			const columns = db.pragma(`table_info("${name}")`).map((column) => column.name);
+			if (!table.columnas.every((column) => columns.includes(column))) throw new ServiceError(NOT_A_BACKUP, 400);
+			const names = table.columnas.map((column) => `"${column}"`).join(", ");
+			const marks = table.columnas.map(() => "?").join(", ");
+			const insert = db.prepare(`INSERT INTO "${name}" (${names}) VALUES (${marks})`);
+			for (const row of table.filas) insert.run(row);
+		}
+		db.prepare("DELETE FROM sync_estado WHERE clave = ?").run(SYNC_KEYS.key_registered);
+		if (db.pragma("foreign_key_check").length > 0) throw new ServiceError("El respaldo está incompleto: hay datos que apuntan a registros que no están.", 400);
+	});
+	db.pragma("foreign_keys = OFF");
+	try {
+		load();
+	} finally {
+		db.pragma("foreign_keys = ON");
+	}
+}
+function prepare_restore(paths, keys, content) {
+	if (content.version_base > LOCAL_MIGRATIONS.length) throw new ServiceError("El respaldo es de una versión más nueva de la aplicación. Actualícela antes de restaurarlo.", 400);
+	const temp = create_temp_database(paths, keys, LOCAL_MIGRATIONS.slice(0, content.version_base));
+	try {
+		load_tables(temp.db, content);
+	} finally {
+		temp.db.close();
+	}
+	open_local_database(paths.temp_database, temp.key).close();
+	return temp.key;
+}
+function write_logos(directory, logos) {
+	const folder = logos_folder(directory);
+	mkdirSync(folder, { recursive: true });
+	for (const name of readdirSync(folder).filter((file) => LOGO_FILE.test(file))) rmSync(path.join(folder, name), { force: true });
+	for (const [name, text] of Object.entries(logos)) if (LOGO_FILE.test(name) && typeof text === "string") writeFileSync(path.join(folder, name), text, "utf8");
+}
+async function replace_database(content) {
+	const paths = database_paths();
+	const key = prepare_restore(paths, KEY_STORE, content);
+	logout();
+	await wait_for_sync();
+	close_database();
+	use_database(install_temp_database(paths, KEY_STORE, key), key);
+	write_logos(paths.directory, content.logos);
+}
+function check_admin(session) {
+	if (!can_manage_users(session.role)) throw new ServiceError("Solo un administrador puede hacer o restaurar respaldos.", 403);
+}
+function read_password(value, is_new) {
+	const password = typeof value === "string" ? value : "";
+	if (is_new && password.length < 8) throw new ServiceError(`La contraseña del respaldo debe tener al menos 8 caracteres.`, 400);
+	if (!password) throw new ServiceError("Escriba la contraseña del respaldo.", 400);
+	return password;
+}
+function count_rows(content, table) {
+	return content.tablas[table]?.filas.length ?? 0;
+}
+function summary_of(content) {
+	return {
+		cancelado: false,
+		partidas: count_rows(content, "sacramentos"),
+		pendientes: count_rows(content, "sync_cola")
+	};
+}
+async function restore_from_file(password_value) {
+	const password = read_password(password_value, false);
+	const options = {
+		title: "Elegir el respaldo",
+		properties: ["openFile"],
+		filters: [{
+			name: "Respaldo",
+			extensions: [BACKUP_EXTENSION]
+		}]
+	};
+	const window = parent_window();
+	const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
+	if (choice.canceled || choice.filePaths.length === 0) return { cancelado: true };
+	let text;
+	try {
+		text = readFileSync(choice.filePaths[0], "utf8");
+	} catch {
+		throw new ServiceError("No se pudo leer el respaldo.", 400);
+	}
+	const content = await decode_backup(text, password);
+	await replace_database(content);
+	return summary_of(content);
+}
+function is_empty_pc() {
+	try {
+		return needs_package(get_database());
+	} catch {
+		return false;
+	}
+}
+var backup_routes = {
+	"backup.export": async (payload, { db, session }) => {
+		check_admin(session);
+		const password = read_password(payload?.password, true);
+		const options = {
+			title: "Guardar el respaldo",
+			defaultPath: `respaldo-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.${BACKUP_EXTENSION}`,
+			filters: [{
+				name: "Respaldo",
+				extensions: [BACKUP_EXTENSION]
+			}]
+		};
+		const window = parent_window();
+		const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+		if (choice.canceled || !choice.filePath) return { cancelado: true };
+		const content = build_backup(db, database_paths().directory);
+		writeFileSync(choice.filePath, await encode_backup(content, password), "utf8");
+		return summary_of(content);
+	},
+	"backup.restore": (payload, { session }) => {
+		check_admin(session);
+		return restore_from_file(payload?.password);
+	}
+};
+var backup_public_routes = { "backup.restoreEmpty": (payload) => {
+	if (!is_empty_pc()) throw new ServiceError("Esta PC ya tiene usuarios: entre como administrador y restaure el respaldo desde Configuración.", 409);
+	return restore_from_file(payload?.password);
+} };
 //#endregion
 //#region electron/main/controllers/duplicates.ts
 var MAX_MATCHES_PER_PERSON = 50;
@@ -6824,1495 +8702,6 @@ var legacy_import_routes = {
 	}
 };
 //#endregion
-//#region electron/shared/index.ts
-var LOCAL_REQUEST_CHANNEL = "local:request";
-var OFFLINE_TOKEN = "sin-conexion";
-//#endregion
-//#region electron/main/utils/crypto.ts
-var KEY_LENGTH = 32;
-var HASH_LENGTH = 32;
-var SALT_LENGTH = 16;
-var COST = {
-	N: 2 ** 15,
-	r: 8,
-	p: 1,
-	maxmem: 67108864
-};
-function new_key() {
-	return randomBytes(KEY_LENGTH).toString("hex");
-}
-function compute_hash(password, salt, options, length) {
-	return new Promise((resolve, reject) => {
-		scrypt(password.normalize("NFKC"), salt, length, options, (error, hash) => {
-			if (error) reject(error);
-			else resolve(hash);
-		});
-	});
-}
-async function create_verifier(password) {
-	const salt = randomBytes(SALT_LENGTH);
-	const hash = await compute_hash(password, salt, COST, HASH_LENGTH);
-	return `scrypt:${COST.N}:${COST.r}:${COST.p}:${salt.toString("base64")}:${hash.toString("base64")}`;
-}
-var SERVER_ITERATIONS = 1e5;
-var SERVER_HASH_BITS = 256;
-function compute_server_hash(password, salt, iterations) {
-	return new Promise((resolve, reject) => {
-		pbkdf2(password, salt, iterations, SERVER_HASH_BITS / 8, "sha256", (error, hash) => {
-			if (error) reject(error);
-			else resolve(hash);
-		});
-	});
-}
-async function create_server_hash(password) {
-	const salt = randomBytes(SALT_LENGTH);
-	const hash = await compute_server_hash(password, salt, SERVER_ITERATIONS);
-	return `${SERVER_ITERATIONS}:${salt.toString("base64")}:${hash.toString("base64")}`;
-}
-async function matches_server_hash(password, stored) {
-	const [iterations, salt, hash] = stored.split(":");
-	if (!/^\d+$/.test(iterations ?? "") || !salt || !hash) return false;
-	const expected = Buffer.from(hash, "base64");
-	const actual = await compute_server_hash(password, Buffer.from(salt, "base64"), Number(iterations));
-	return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-async function matches_verifier(password, verifier) {
-	if (!verifier.startsWith("scrypt:")) return matches_server_hash(password, verifier);
-	const [, n, r, p, salt, hash] = verifier.split(":");
-	if (!salt || !hash) return false;
-	const expected = Buffer.from(hash, "base64");
-	const options = {
-		N: Number(n),
-		r: Number(r),
-		p: Number(p),
-		maxmem: COST.maxmem
-	};
-	const actual = await compute_hash(password, Buffer.from(salt, "base64"), options, expected.length);
-	return timingSafeEqual(actual, expected);
-}
-//#endregion
-//#region electron/main/db/migrations.ts
-var LOCAL_MIGRATIONS = [
-	`
-  CREATE TABLE parroquias (
-    id        INTEGER PRIMARY KEY,
-    nombre    TEXT    NOT NULL,
-    ubicacion TEXT,
-    activa    INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE usuarios (
-    id               INTEGER PRIMARY KEY,
-    parroquia_id     INTEGER REFERENCES parroquias(id),
-    username         TEXT    NOT NULL UNIQUE,
-    rol              TEXT    NOT NULL CHECK (rol IN ('admin', 'usuario_parroquia')),
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE ministros (
-    id               INTEGER PRIMARY KEY,
-    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
-    titulo           TEXT,
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1
-  );
-
-  CREATE TABLE personas (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id        TEXT    NOT NULL UNIQUE,
-    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
-    dni              TEXT    CHECK (dni IS NULL OR dni <> ''),
-    nombres          TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL DEFAULT '',
-    fecha_nacimiento TEXT,
-    edad             INTEGER CHECK (edad IS NULL OR edad >= 0),
-    lugar_nacimiento TEXT,
-    padre            TEXT,
-    madre            TEXT,
-    version          INTEGER NOT NULL DEFAULT 1,
-    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-  CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;
-  CREATE INDEX idx_personas_busqueda ON personas (nombres, apellido_paterno, apellido_materno);
-
-  CREATE TABLE sacramentos (
-    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id              TEXT    NOT NULL UNIQUE,
-    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),
-    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),
-    ministro_id            INTEGER REFERENCES ministros(id),
-    libro                  TEXT    NOT NULL,
-    folio                  TEXT    NOT NULL,
-    numero                 TEXT    NOT NULL,
-    fecha_emision          TEXT    NOT NULL,
-    fecha_evento           TEXT,
-    anotaciones            TEXT,
-    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
-    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
-    anulado_en             TEXT,
-    motivo_anulacion       TEXT,
-    version                INTEGER NOT NULL DEFAULT 1,
-    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    -- Permite que cada subtipo enlace (id, tipo): un bautismo no puede colgar de un matrimonio.
-    UNIQUE (id, tipo),
-    CHECK (
-      estado = 'vigente'
-      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL
-          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')
-    )
-  );
-  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);
-
-  CREATE TABLE matrimonios (
-    sacramento_id                INTEGER PRIMARY KEY,
-    tipo                         TEXT    NOT NULL DEFAULT 'matrimonio' CHECK (tipo = 'matrimonio'),
-    conyuge_1_id                 INTEGER NOT NULL REFERENCES personas(id),
-    conyuge_2_id                 INTEGER NOT NULL REFERENCES personas(id),
-    lugar                        TEXT,
-    testigo_1                    TEXT,
-    testigo_2                    TEXT,
-    testigo_3                    TEXT,
-    testigo_4                    TEXT,
-    conyuge_1_bautismo_parroquia TEXT,
-    conyuge_1_bautismo_fecha     TEXT,
-    conyuge_2_bautismo_parroquia TEXT,
-    conyuge_2_bautismo_fecha     TEXT,
-    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo),
-    CHECK (conyuge_1_id <> conyuge_2_id)
-  );
-  CREATE INDEX idx_matrimonios_conyuge_1 ON matrimonios (conyuge_1_id);
-  CREATE INDEX idx_matrimonios_conyuge_2 ON matrimonios (conyuge_2_id);
-
-  CREATE TABLE bautismos (
-    sacramento_id INTEGER PRIMARY KEY,
-    tipo          TEXT    NOT NULL DEFAULT 'bautismo' CHECK (tipo = 'bautismo'),
-    persona_id    INTEGER NOT NULL REFERENCES personas(id),
-    padrino_1     TEXT,
-    padrino_2     TEXT,
-    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)
-  );
-  CREATE INDEX idx_bautismos_persona ON bautismos (persona_id);
-
-  CREATE TABLE confirmaciones (
-    sacramento_id INTEGER PRIMARY KEY,
-    tipo          TEXT    NOT NULL DEFAULT 'confirmacion' CHECK (tipo = 'confirmacion'),
-    persona_id    INTEGER NOT NULL REFERENCES personas(id),
-    padrino_1     TEXT,
-    padrino_2     TEXT,
-    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)
-  );
-  CREATE INDEX idx_confirmaciones_persona ON confirmaciones (persona_id);
-
-  CREATE TABLE cambios_persona (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    -- Evita duplicar la corrección si se reenvía tras un corte de internet.
-    client_id      TEXT    NOT NULL UNIQUE,
-    persona_id     INTEGER NOT NULL REFERENCES personas(id),
-    sacramento_id  INTEGER REFERENCES sacramentos(id),
-    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id),
-    campo_cambio   TEXT    NOT NULL,
-    valor_anterior TEXT,
-    valor_nuevo    TEXT,
-    fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-  CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);
-
-  -- Cada UPDATE sube version, salvo que la sincronización ya la haya fijado.
-  CREATE TRIGGER trg_personas_touch
-  AFTER UPDATE ON personas
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE personas
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-
-  CREATE TRIGGER trg_sacramentos_touch
-  AFTER UPDATE ON sacramentos
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE sacramentos
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-  `,
-	`
-  CREATE TABLE ministros_nueva (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id        TEXT    NOT NULL UNIQUE,
-    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),
-    titulo           TEXT,
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1,
-    version          INTEGER NOT NULL DEFAULT 1,
-    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  INSERT INTO ministros_nueva (id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo)
-  SELECT id, 'servidor-' || id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo
-  FROM ministros;
-
-  DROP TABLE ministros;
-  ALTER TABLE ministros_nueva RENAME TO ministros;
-
-  CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);
-
-  CREATE TRIGGER trg_ministros_touch
-  AFTER UPDATE ON ministros
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE ministros
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-  `,
-	`
-  -- Registros con cambios sin subir. Se envía su estado final, así que basta una fila por registro.
-  -- version_base: última versión que conoce el servidor; NULL si el registro aún no existe allí.
-  CREATE TABLE sync_cola (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro')),
-    client_id    TEXT    NOT NULL,
-    version_base INTEGER,
-    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    UNIQUE (entidad, client_id)
-  );
-
-  INSERT INTO sync_cola (entidad, client_id)
-  SELECT tipo, client_id FROM sacramentos ORDER BY id;
-
-  INSERT INTO sync_cola (entidad, client_id)
-  SELECT 'ministro', client_id FROM ministros ORDER BY id;
-  `,
-	`
-  -- cola_id: identifica la fila mientras siga pendiente, para reconocer un reenvío tras un corte.
-  -- revision: sube con cada edición; si cambió durante el envío, la fila no se quita al confirmarse.
-  ALTER TABLE sync_cola ADD COLUMN cola_id TEXT NOT NULL DEFAULT '';
-  ALTER TABLE sync_cola ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
-  ALTER TABLE sync_cola ADD COLUMN estado TEXT NOT NULL DEFAULT 'pendiente'
-    CHECK (estado IN ('pendiente', 'conflicto', 'rechazado'));
-  ALTER TABLE sync_cola ADD COLUMN motivo TEXT;
-  UPDATE sync_cola SET cola_id = lower(hex(randomblob(16)));
-
-  CREATE TABLE sync_estado (
-    clave TEXT PRIMARY KEY,
-    valor TEXT
-  );
-
-  -- Verificación para entrar sin internet. Solo existe para quien ya entró con conexión en esta PC.
-  CREATE TABLE credenciales_locales (
-    usuario_id     INTEGER PRIMARY KEY REFERENCES usuarios(id),
-    verificador    TEXT NOT NULL,
-    actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-  `,
-	`
-  -- La edad pasa a ser una fecha aproximada en texto libre: los libros traen cosas como
-  -- "22 AG 1978" o "(27 AÑOS AL DIA DE BODA)". Las edades que ya había se conservan como "N años".
-  ALTER TABLE personas ADD COLUMN fecha_aproximada TEXT;
-  UPDATE personas SET fecha_aproximada = edad || ' años' WHERE edad IS NOT NULL;
-  ALTER TABLE personas DROP COLUMN edad;
-  `,
-	`
-  -- Tres roles (ver worker/src/db/migrations/0015_roles_y_correcciones.sql):
-  --   admin_general, admin_parroquia (el párroco) y usuario (un ayudante).
-  -- Un admin sin parroquia pasa a admin_general; las demás cuentas, a admin_parroquia.
-  --
-  -- Los usuarios ahora se pueden crear y editar en esta PC sin internet y subirse después:
-  --   client_id      los identifica ante el servidor (el mismo 'servidor-<id>' que puso su migración).
-  --   id negativo    una cuenta creada aquí que el servidor todavía no conoce; al subirla se cambia por el suyo.
-  --   password_hash_pendiente   la contraseña cambiada aquí que falta subir (PBKDF2, el formato del
-  --                             servidor). Se borra en cuanto el servidor la recibe.
-  CREATE TABLE usuarios_nueva (
-    id               INTEGER PRIMARY KEY,
-    client_id        TEXT    NOT NULL UNIQUE DEFAULT (lower(hex(randomblob(16)))),
-    parroquia_id     INTEGER REFERENCES parroquias(id),
-    username         TEXT    NOT NULL UNIQUE,
-    rol              TEXT    NOT NULL CHECK (rol IN ('admin_general', 'admin_parroquia', 'usuario')),
-    nombre           TEXT    NOT NULL,
-    apellido_paterno TEXT    NOT NULL,
-    apellido_materno TEXT    NOT NULL,
-    activo           INTEGER NOT NULL DEFAULT 1,
-    principal        INTEGER NOT NULL DEFAULT 0,
-    password_hash_pendiente TEXT,
-    version          INTEGER NOT NULL DEFAULT 1,
-    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  INSERT INTO usuarios_nueva (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo)
-  SELECT id, 'servidor-' || id, parroquia_id, username,
-         CASE WHEN rol = 'admin' AND parroquia_id IS NULL THEN 'admin_general' ELSE 'admin_parroquia' END,
-         nombre, apellido_paterno, apellido_materno, activo
-  FROM usuarios;
-
-  DROP TABLE usuarios;
-  ALTER TABLE usuarios_nueva RENAME TO usuarios;
-
-  CREATE TRIGGER trg_usuarios_touch
-  AFTER UPDATE ON usuarios
-  FOR EACH ROW
-  WHEN NEW.version = OLD.version
-  BEGIN
-    UPDATE usuarios
-       SET version = OLD.version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-     WHERE id = NEW.id;
-  END;
-
-  -- Una corrección pedida por un usuario queda 'pendiente' hasta que el admin_parroquia la revise.
-  ALTER TABLE cambios_persona ADD COLUMN estado TEXT NOT NULL DEFAULT 'aprobado'
-    CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'));
-  ALTER TABLE cambios_persona ADD COLUMN revisado_por_usuario_id INTEGER REFERENCES usuarios(id);
-  ALTER TABLE cambios_persona ADD COLUMN revisado_en TEXT;
-
-  -- La cola también lleva usuarios.
-  CREATE TABLE sync_cola_nueva (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro', 'usuario')),
-    client_id    TEXT    NOT NULL,
-    version_base INTEGER,
-    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    cola_id      TEXT    NOT NULL DEFAULT '',
-    revision     INTEGER NOT NULL DEFAULT 1,
-    estado       TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'conflicto', 'rechazado')),
-    motivo       TEXT,
-    UNIQUE (entidad, client_id)
-  );
-
-  INSERT INTO sync_cola_nueva (id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo)
-  SELECT id, entidad, client_id, version_base, creado_en, cola_id, revision, estado, motivo FROM sync_cola;
-
-  DROP TABLE sync_cola;
-  ALTER TABLE sync_cola_nueva RENAME TO sync_cola;
-  `,
-	`
-  ALTER TABLE sacramentos ADD COLUMN anotaciones_propuestas TEXT;
-  `,
-	`
-  CREATE TABLE solicitudes_cambio (
-    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id               TEXT    NOT NULL UNIQUE,
-    sacramento_id           INTEGER NOT NULL REFERENCES sacramentos(id),
-    usuario_id              INTEGER NOT NULL REFERENCES usuarios(id),
-    parte                   TEXT    NOT NULL CHECK (parte IN ('sacramento', 'persona', 'conyuge_1', 'conyuge_2', 'detalle')),
-    campo                   TEXT    NOT NULL,
-    tipo                    TEXT    NOT NULL CHECK (tipo IN ('digitacion', 'nota_marginal')),
-    valor_anterior          TEXT,
-    valor_nuevo             TEXT,
-    estado                  TEXT    NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado', 'descartado')),
-    motivo                  TEXT,
-    revisado_por_usuario_id INTEGER REFERENCES usuarios(id),
-    revisado_en             TEXT,
-    creado_en               TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  CREATE INDEX idx_solicitudes_sacramento ON solicitudes_cambio (sacramento_id);
-
-  CREATE TABLE historial_partidas (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_id     TEXT    NOT NULL UNIQUE,
-    sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
-    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
-    evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
-                                                     'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),
-    motivo        TEXT,
-    fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  );
-
-  CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);
-
-  CREATE TABLE historial_campos (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    historial_id   INTEGER NOT NULL REFERENCES historial_partidas(id),
-    parte          TEXT    NOT NULL,
-    campo          TEXT    NOT NULL,
-    valor_anterior TEXT,
-    valor_nuevo    TEXT
-  );
-
-  CREATE INDEX idx_historial_campos ON historial_campos (historial_id);
-
-  -- Las correcciones de nombres pendientes: la misma client_id que tenían.
-  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
-  SELECT
-    c.client_id,
-    c.sacramento_id,
-    c.usuario_id,
-    CASE
-      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_1_id = c.persona_id) THEN 'conyuge_1'
-      WHEN EXISTS (SELECT 1 FROM matrimonios m WHERE m.sacramento_id = c.sacramento_id AND m.conyuge_2_id = c.persona_id) THEN 'conyuge_2'
-      ELSE 'persona'
-    END,
-    c.campo_cambio,
-    'nota_marginal',
-    c.valor_anterior,
-    c.valor_nuevo,
-    c.fecha_cambio
-  FROM cambios_persona c
-  WHERE c.estado = 'pendiente' AND c.sacramento_id IS NOT NULL;
-
-  -- La nota propuesta: la pidió quien pidió la corrección que iba con ella.
-  INSERT INTO solicitudes_cambio (client_id, sacramento_id, usuario_id, parte, campo, tipo, valor_anterior, valor_nuevo, creado_en)
-  SELECT
-    s.client_id || '-nota',
-    s.id,
-    c.usuario_id,
-    'sacramento',
-    'anotaciones',
-    'digitacion',
-    s.anotaciones,
-    s.anotaciones_propuestas,
-    c.fecha_cambio
-  FROM sacramentos s
-  JOIN cambios_persona c ON c.id = (SELECT MIN(id) FROM cambios_persona WHERE sacramento_id = s.id AND estado = 'pendiente')
-  WHERE s.anotaciones_propuestas IS NOT NULL;
-
-  DELETE FROM cambios_persona WHERE estado = 'pendiente';
-
-  ALTER TABLE sacramentos DROP COLUMN anotaciones_propuestas;
-  `,
-	`
-  UPDATE usuarios SET principal = 1
-  WHERE id IN (
-    SELECT MIN(a.id) FROM usuarios a
-    WHERE a.rol = 'admin_parroquia' AND a.activo = 1 AND a.id > 0
-      AND NOT EXISTS (SELECT 1 FROM usuarios p WHERE p.principal = 1 AND p.parroquia_id = a.parroquia_id)
-    GROUP BY a.parroquia_id
-  );
-  `
-];
-//#endregion
-//#region electron/main/db/database.ts
-var HEX_KEY_PATTERN = /^[0-9a-f]{64}$/i;
-var NewerDatabaseError = class extends Error {};
-function migrate(db, migrations) {
-	const current_version = db.pragma("user_version", { simple: true });
-	if (current_version > migrations.length) throw new NewerDatabaseError(`La base local está en la versión ${current_version} y esta app solo conoce hasta la ${migrations.length}.`);
-	db.pragma("foreign_keys = OFF");
-	for (let i = current_version; i < migrations.length; i++) db.transaction(() => {
-		db.exec(migrations[i]);
-		if (db.pragma("foreign_key_check").length > 0) throw new Error("La migración dejó claves foráneas rotas.");
-		db.pragma(`user_version = ${i + 1}`);
-	})();
-	db.pragma("foreign_keys = ON");
-}
-function open_local_database(file_path, hex_key, migrations = LOCAL_MIGRATIONS) {
-	if (!HEX_KEY_PATTERN.test(hex_key)) throw new Error("La clave de la base local debe tener 32 bytes en hexadecimal.");
-	const db = new Database(file_path);
-	try {
-		db.pragma(`cipher='chacha20'`);
-		db.pragma(`hexkey='${hex_key}'`);
-		db.prepare("SELECT count(*) FROM sqlite_master").get();
-		db.pragma("foreign_keys = ON");
-		db.pragma("journal_mode = WAL");
-		db.pragma("synchronous = FULL");
-		migrate(db, migrations);
-		return db;
-	} catch (error) {
-		db.close();
-		throw error;
-	}
-}
-function is_unreadable(error) {
-	const code = error?.code ?? "";
-	return code.startsWith("SQLITE_NOTADB") || code.startsWith("SQLITE_CORRUPT");
-}
-function local_paths(directory) {
-	return {
-		directory,
-		database: path.join(directory, FILE_NAMES.database),
-		key: path.join(directory, FILE_NAMES.key),
-		device: path.join(directory, FILE_NAMES.device),
-		temp_database: path.join(directory, FILE_NAMES.temp_database),
-		temp_key: path.join(directory, FILE_NAMES.temp_key),
-		set_aside_folder: path.join(directory, FILE_NAMES.set_aside_folder)
-	};
-}
-function device_id(paths) {
-	if (existsSync(paths.device)) return readFileSync(paths.device, "utf8").trim();
-	const id = randomUUID();
-	writeFileSync(paths.device, id);
-	return id;
-}
-function move_with_extra_files(from, to) {
-	for (const suffix of [
-		"",
-		"-wal",
-		"-shm"
-	]) if (existsSync(from + suffix)) renameSync(from + suffix, to + suffix);
-}
-function remove_with_extra_files(file) {
-	for (const suffix of [
-		"",
-		"-wal",
-		"-shm"
-	]) rmSync(file + suffix, { force: true });
-}
-function clean_set_aside(paths) {
-	if (!existsSync(paths.set_aside_folder)) return;
-	readdirSync(paths.set_aside_folder).filter((name) => name.endsWith(".db")).sort().reverse().forEach((name, index) => {
-		const file = path.join(paths.set_aside_folder, name);
-		const too_old = Date.now() - statSync(file).mtimeMs > SET_ASIDE_DAYS_MS;
-		if (index > 0 || too_old) remove_with_extra_files(file);
-	});
-}
-function set_aside(paths) {
-	if (!existsSync(paths.database)) return;
-	mkdirSync(paths.set_aside_folder, { recursive: true });
-	const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-	move_with_extra_files(paths.database, path.join(paths.set_aside_folder, `prelatura-local-${stamp}.db`));
-	clean_set_aside(paths);
-}
-function open_or_detect(paths, keys) {
-	clean_set_aside(paths);
-	const key = keys.read(paths.key);
-	if (!existsSync(paths.database)) {
-		const created_key = key ?? new_key();
-		const db = open_local_database(paths.database, created_key);
-		if (!key) keys.write(paths.key, created_key);
-		return {
-			status: "open",
-			db,
-			key: created_key
-		};
-	}
-	if (!key) return { status: "needs-recovery" };
-	try {
-		const db = open_local_database(paths.database, key);
-		remove_with_extra_files(paths.temp_database);
-		rmSync(paths.temp_key, { force: true });
-		return {
-			status: "open",
-			db,
-			key
-		};
-	} catch (error) {
-		if (error instanceof NewerDatabaseError) return {
-			status: "failed",
-			message: "La base local es de una versión más nueva. Actualice la aplicación."
-		};
-		if (is_unreadable(error)) return { status: "needs-recovery" };
-		throw error;
-	}
-}
-function open_with_key_copy(paths, keys, key) {
-	try {
-		const db = open_local_database(paths.database, key);
-		keys.write(paths.key, key);
-		return db;
-	} catch (error) {
-		if (!is_unreadable(error)) throw error;
-		return null;
-	}
-}
-function open_temp_database(paths, keys) {
-	let key = keys.read(paths.temp_key);
-	if (!key || !existsSync(paths.temp_database)) {
-		remove_with_extra_files(paths.temp_database);
-		key = new_key();
-		keys.write(paths.temp_key, key);
-	}
-	try {
-		return {
-			db: open_local_database(paths.temp_database, key),
-			key
-		};
-	} catch (error) {
-		if (!is_unreadable(error)) throw error;
-		remove_with_extra_files(paths.temp_database);
-		return {
-			db: open_local_database(paths.temp_database, key),
-			key
-		};
-	}
-}
-function install_temp_database(paths, keys, key) {
-	set_aside(paths);
-	move_with_extra_files(paths.temp_database, paths.database);
-	keys.write(paths.key, key);
-	rmSync(paths.temp_key, { force: true });
-	return open_local_database(paths.database, key);
-}
-//#endregion
-//#region electron/main/db/app_database.ts
-var database = null;
-var database_key = null;
-var needs_recovery = false;
-var unavailable_message = "La base local no está disponible.";
-function check_secure_storage() {
-	if (!safeStorage.isEncryptionAvailable()) throw new Error("El sistema operativo no ofrece almacenamiento seguro para la clave.");
-}
-function read_key_file(key_path) {
-	check_secure_storage();
-	if (!existsSync(key_path)) return null;
-	try {
-		return safeStorage.decryptString(readFileSync(key_path));
-	} catch {
-		return null;
-	}
-}
-function write_key_file(key_path, key) {
-	check_secure_storage();
-	writeFileSync(key_path, safeStorage.encryptString(key), { mode: 384 });
-}
-var KEY_STORE = {
-	read: read_key_file,
-	write: write_key_file
-};
-function database_paths() {
-	return local_paths(app.getPath("userData"));
-}
-function open_at_startup() {
-	const result = open_or_detect(database_paths(), KEY_STORE);
-	if (result.status === "open") {
-		database = result.db;
-		database_key = result.key;
-	} else if (result.status === "needs-recovery") {
-		needs_recovery = true;
-		unavailable_message = "La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.";
-	} else unavailable_message = result.message;
-}
-function get_database() {
-	if (!database) throw new ServiceError(unavailable_message, 503);
-	return database;
-}
-function current_key() {
-	return database_key;
-}
-function database_needs_recovery() {
-	return needs_recovery;
-}
-function use_database(db, key) {
-	database = db;
-	database_key = key;
-	needs_recovery = false;
-}
-function close_database() {
-	database?.close();
-	database = null;
-	database_key = null;
-}
-//#endregion
-//#region electron/main/models/session.ts
-var session = null;
-var saved_login = null;
-function require_session() {
-	if (!session) throw new ServiceError("Sesión no válida.", 401);
-	return session;
-}
-function current_session() {
-	return session;
-}
-function saved_credentials() {
-	return saved_login;
-}
-function start_session(new_session, username, password) {
-	session = new_session;
-	saved_login = {
-		username,
-		password
-	};
-}
-function end_session() {
-	session = null;
-	saved_login = null;
-}
-//#endregion
-//#region electron/main/utils/logger.ts
-function info(...values) {
-	console.log(...values);
-}
-function error(...values) {
-	console.error(...values);
-}
-var DEVELOPMENT_SERVER = "http://localhost:8787";
-var cached = null;
-function read_config_file(file) {
-	if (!existsSync(file)) return null;
-	try {
-		const content = JSON.parse(readFileSync(file, "utf8"));
-		if (typeof content.servidor === "string" && /^https?:\/\/\S+$/.test(content.servidor.trim())) return content.servidor.trim().replace(/\/+$/, "");
-		error(`${file}: "servidor" debe ser una dirección que empiece con http:// o https://.`);
-	} catch (error$7) {
-		error(`No se pudo leer ${file}:`, error$7);
-	}
-	return null;
-}
-function installer_folder() {
-	if (app.isPackaged) return path.join(process.resourcesPath, "instalador");
-	return path.join(app.getAppPath(), "resources", "instalador");
-}
-function server_url() {
-	if (cached) return cached;
-	const url = process.env.PRELATURA_API_URL ?? read_config_file(path.join(app.getPath("userData"), "configuracion.json")) ?? read_config_file(path.join(installer_folder(), "configuracion.json")) ?? void 0 ?? DEVELOPMENT_SERVER;
-	info(`Servidor: ${url}`);
-	cached = url;
-	return url;
-}
-//#endregion
-//#region electron/main/sync/online.ts
-var CONNECTION_ERROR = "No se pudo conectar con el servidor. Verifique su conexión.";
-var remote_request = async (path, options = {}) => {
-	const method = options.method ?? "GET";
-	const timeout_ms = options.timeoutMs ?? 3e4;
-	const headers = {};
-	if (options.body !== void 0) headers["Content-Type"] = "application/json";
-	if (options.token) headers["Authorization"] = `Bearer ${options.token}`;
-	let response;
-	let data;
-	try {
-		response = await fetch(`${server_url()}${path}`, {
-			method,
-			headers,
-			body: options.body === void 0 ? void 0 : JSON.stringify(options.body),
-			signal: AbortSignal.timeout(timeout_ms)
-		});
-		data = await response.json().catch(() => null);
-	} catch {
-		throw new ServiceError(CONNECTION_ERROR, 0);
-	}
-	if (!response.ok) throw new ServiceError(data?.message ? String(data.message) : "Ocurrió un error inesperado.", response.status);
-	if (data === null) throw new ServiceError(CONNECTION_ERROR, 0);
-	return data;
-};
-function is_connection_error(error) {
-	return error instanceof ServiceError && (error.status === 0 || error.status >= 500);
-}
-function request_login(request, username, password) {
-	return request("/api/auth/login", {
-		method: "POST",
-		body: {
-			username,
-			password
-		},
-		timeoutMs: LOGIN_TIMEOUT_MS
-	});
-}
-function get_reference(request, token) {
-	return request("/api/reference", { token });
-}
-function push_changes(request, token, changes) {
-	return request("/api/sync/push", {
-		method: "POST",
-		body: { cambios: changes },
-		token
-	});
-}
-function pull_page(request, token, cursor) {
-	return request(`/api/sync/pull?cursor=${encodeURIComponent(cursor)}`, { token });
-}
-function get_record(request, token, entity, client_id) {
-	return request(`/api/sync/record?${`entidad=${encodeURIComponent(entity)}&client_id=${encodeURIComponent(client_id)}`}`, { token });
-}
-function get_key_copy(request, token, device) {
-	return request(`/api/devices/${device}/key`, { token });
-}
-function put_key_copy(request, token, device, key) {
-	return request(`/api/devices/${device}/key`, {
-		method: "PUT",
-		body: { clave: key },
-		token
-	});
-}
-//#endregion
-//#region electron/main/sync/records.ts
-var MissingReferenceError = class extends Error {};
-function allow_version_write(db, table, id) {
-	db.prepare(`UPDATE ${table} SET version = -1 WHERE id = ?`).run(id);
-}
-function table_of(entity) {
-	if (entity === "ministro") return "ministros";
-	if (entity === "usuario") return "usuarios";
-	return "sacramentos";
-}
-function set_server_version(db, entity, client_id, version) {
-	db.prepare(`UPDATE ${table_of(entity)} SET version = ? WHERE client_id = ? AND version <> ?`).run(version, client_id, version);
-}
-function read_local_minister(db, client_id) {
-	return db.prepare("SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(client_id);
-}
-function read_local_user(db, client_id) {
-	return db.prepare(`SELECT client_id, id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo,
-				password_hash_pendiente AS password_hash
-			 FROM usuarios WHERE client_id = ?`).get(client_id);
-}
-function read_local_record(db, client_id) {
-	const sacrament = db.prepare(`SELECT s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,
-				s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion
-			 FROM sacramentos s
-			 LEFT JOIN ministros m ON m.id = s.ministro_id
-			 WHERE s.client_id = ?`).get(client_id);
-	const type = sacrament.tipo;
-	const detail_row = db.prepare(`SELECT * FROM ${detail_table(type)} WHERE sacramento_id = ?`).get(sacrament.id);
-	const read_person = db.prepare(`SELECT client_id, ${PERSON_COLUMNS.join(", ")} FROM personas WHERE id = ?`);
-	const people = [];
-	for (const column of person_columns(type)) people.push(read_person.get(detail_row[column]));
-	const detail = {};
-	for (const column of detail_columns(type)) detail[column] = detail_row[column];
-	const corrections = db.prepare(`SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio,
-				c.estado, c.revisado_por_usuario_id, c.revisado_en
-			 FROM cambios_persona c
-			 JOIN personas p ON p.id = c.persona_id
-			 WHERE c.sacramento_id = ?
-			 ORDER BY c.id`).all(sacrament.id);
-	return {
-		tipo: type,
-		client_id: sacrament.client_id,
-		parroquia_id: sacrament.parroquia_id,
-		ministro_client_id: sacrament.ministro_client_id,
-		libro: sacrament.libro,
-		folio: sacrament.folio,
-		numero: sacrament.numero,
-		fecha_emision: sacrament.fecha_emision,
-		fecha_evento: sacrament.fecha_evento,
-		anotaciones: sacrament.anotaciones,
-		estado: sacrament.estado,
-		anulado_por_usuario_id: sacrament.anulado_por_usuario_id,
-		anulado_en: sacrament.anulado_en,
-		motivo_anulacion: sacrament.motivo_anulacion,
-		personas: people,
-		detalle: detail,
-		cambios: corrections,
-		solicitudes: read_request_data(db, sacrament.id),
-		historial: read_history_data(db, sacrament.id)
-	};
-}
-function save_downloaded_person(db, parish_id, person) {
-	const values = PERSON_COLUMNS.map((column) => person[column]);
-	const existing = db.prepare("SELECT id FROM personas WHERE client_id = ?").get(person.client_id);
-	if (existing) {
-		const assignments = PERSON_COLUMNS.map((column) => `${column} = ?`).join(", ");
-		db.prepare(`UPDATE personas SET ${assignments} WHERE id = ?`).run(...values, existing.id);
-		return existing.id;
-	}
-	const marks = PERSON_COLUMNS.map(() => "?").join(", ");
-	const result = db.prepare(`INSERT INTO personas (client_id, parroquia_id, ${PERSON_COLUMNS.join(", ")}) VALUES (?, ?, ${marks})`).run(person.client_id, parish_id, ...values);
-	return Number(result.lastInsertRowid);
-}
-function local_minister_id(db, client_id) {
-	if (!client_id) return null;
-	const row = db.prepare("SELECT id FROM ministros WHERE client_id = ?").get(client_id);
-	if (!row) throw new MissingReferenceError(`Ministro desconocido: ${client_id}`);
-	return row.id;
-}
-function save_downloaded_record(db, record, force = false) {
-	const version = record.version ?? 1;
-	const local = db.prepare("SELECT id, version FROM sacramentos WHERE client_id = ?").get(record.client_id);
-	if (!force) {
-		if (is_in_queue(db, record.tipo, record.client_id)) return;
-		if (local && local.version === version) return;
-	}
-	const minister_id = local_minister_id(db, record.ministro_client_id);
-	const people_ids = record.personas.map((person) => save_downloaded_person(db, record.parroquia_id, person));
-	const updated_at = record.updated_at ?? (/* @__PURE__ */ new Date()).toISOString();
-	const values = [
-		minister_id,
-		record.libro,
-		record.folio,
-		record.numero,
-		record.fecha_emision,
-		record.fecha_evento,
-		record.anotaciones,
-		record.estado,
-		record.anulado_por_usuario_id,
-		record.anulado_en,
-		record.motivo_anulacion,
-		version,
-		updated_at
-	];
-	let sacrament_id;
-	if (local) {
-		sacrament_id = local.id;
-		allow_version_write(db, "sacramentos", local.id);
-		db.prepare(`UPDATE sacramentos SET
-				ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?,
-				estado = ?, anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?, version = ?, updated_at = ?
-			 WHERE id = ?`).run(...values, local.id);
-	} else {
-		const result = db.prepare(`INSERT INTO sacramentos
-					(ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,
-					 estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, updated_at,
-					 client_id, tipo, parroquia_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...values, record.client_id, record.tipo, record.parroquia_id);
-		sacrament_id = Number(result.lastInsertRowid);
-	}
-	save_downloaded_detail(db, record, sacrament_id, people_ids);
-	save_downloaded_corrections(db, record, sacrament_id, people_ids);
-	save_downloaded_requests(db, sacrament_id, record.solicitudes ?? []);
-	save_downloaded_history(db, sacrament_id, record.historial ?? []);
-	if (force) {
-		const kept_ids = JSON.stringify(record.cambios.map((correction) => correction.client_id));
-		db.prepare("DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(sacrament_id, kept_ids);
-		discard_unsent_requests(db, sacrament_id, record.solicitudes ?? []);
-		discard_unsent_history(db, sacrament_id, record.historial ?? []);
-		remove_from_queue(db, record.tipo, record.client_id);
-	}
-}
-function save_downloaded_detail(db, record, sacrament_id, people_ids) {
-	const detail = record.detalle;
-	if (record.tipo === "matrimonio") {
-		db.prepare(`INSERT INTO matrimonios
-				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,
-				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			 ON CONFLICT (sacramento_id) DO UPDATE SET
-				conyuge_1_id = excluded.conyuge_1_id,
-				conyuge_2_id = excluded.conyuge_2_id,
-				lugar = excluded.lugar,
-				testigo_1 = excluded.testigo_1,
-				testigo_2 = excluded.testigo_2,
-				testigo_3 = excluded.testigo_3,
-				testigo_4 = excluded.testigo_4,
-				conyuge_1_bautismo_parroquia = excluded.conyuge_1_bautismo_parroquia,
-				conyuge_1_bautismo_fecha = excluded.conyuge_1_bautismo_fecha,
-				conyuge_2_bautismo_parroquia = excluded.conyuge_2_bautismo_parroquia,
-				conyuge_2_bautismo_fecha = excluded.conyuge_2_bautismo_fecha`).run(sacrament_id, people_ids[0], people_ids[1], detail.lugar ?? null, detail.testigo_1 ?? null, detail.testigo_2 ?? null, detail.testigo_3 ?? null, detail.testigo_4 ?? null, detail.conyuge_1_bautismo_parroquia ?? null, detail.conyuge_1_bautismo_fecha ?? null, detail.conyuge_2_bautismo_parroquia ?? null, detail.conyuge_2_bautismo_fecha ?? null);
-		return;
-	}
-	db.prepare(`INSERT INTO ${detail_table(record.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2)
-		 VALUES (?, ?, ?, ?)
-		 ON CONFLICT (sacramento_id) DO UPDATE SET
-			persona_id = excluded.persona_id,
-			padrino_1 = excluded.padrino_1,
-			padrino_2 = excluded.padrino_2`).run(sacrament_id, people_ids[0], detail.padrino_1 ?? null, detail.padrino_2 ?? null);
-}
-function save_downloaded_corrections(db, record, sacrament_id, people_ids) {
-	const local_person_ids = /* @__PURE__ */ new Map();
-	record.personas.forEach((person, i) => local_person_ids.set(person.client_id, people_ids[i]));
-	const insert = db.prepare(`INSERT INTO cambios_persona
-			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,
-			 estado, revisado_por_usuario_id, revisado_en)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		 ON CONFLICT (client_id) DO UPDATE SET
-			estado = excluded.estado,
-			revisado_por_usuario_id = excluded.revisado_por_usuario_id,
-			revisado_en = excluded.revisado_en`);
-	for (const correction of record.cambios) insert.run(correction.client_id, local_person_ids.get(correction.persona_client_id), sacrament_id, correction.usuario_id, correction.campo_cambio, correction.valor_anterior, correction.valor_nuevo, correction.fecha_cambio, correction.estado ?? "aprobado", correction.revisado_por_usuario_id ?? null, correction.revisado_en ?? null);
-}
-function save_downloaded_user(db, user, force = false) {
-	user = {
-		...user,
-		client_id: user.client_id ?? `servidor-${user.id}`
-	};
-	if (!force && is_in_queue(db, "usuario", user.client_id)) return;
-	db.prepare(`UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?`).run(user.username, user.id);
-	db.prepare(`UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?`).run(user.client_id, user.id);
-	db.prepare(`INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)
-		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)
-		 ON CONFLICT (id) DO UPDATE SET
-			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,
-			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,
-			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL`).run({
-		id: user.id,
-		client_id: user.client_id,
-		parroquia_id: user.parroquia_id,
-		username: user.username,
-		rol: user.rol,
-		nombre: user.nombre,
-		apellido_paterno: user.apellido_paterno,
-		apellido_materno: user.apellido_materno ?? "",
-		activo: user.activo,
-		principal: user.principal ?? 0,
-		updated_at: user.updated_at ?? (/* @__PURE__ */ new Date()).toISOString()
-	});
-	allow_version_write(db, "usuarios", user.id);
-	db.prepare("UPDATE usuarios SET version = ? WHERE id = ?").run(user.version ?? 1, user.id);
-	if (user.password_hash) db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
-			 ON CONFLICT (usuario_id) DO UPDATE SET
-				verificador = excluded.verificador,
-				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user.id, user.password_hash);
-	if (force) remove_from_queue(db, "usuario", user.client_id);
-}
-function adopt_server_user_id(db, client_id, server_id) {
-	const row = db.prepare("SELECT id FROM usuarios WHERE client_id = ?").get(client_id);
-	if (!row || row.id === server_id) return null;
-	const old_id = row.id;
-	db.pragma("defer_foreign_keys = ON");
-	db.prepare("UPDATE usuarios SET id = ? WHERE id = ?").run(server_id, old_id);
-	db.prepare("UPDATE cambios_persona SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE cambios_persona SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE sacramentos SET anulado_por_usuario_id = ? WHERE anulado_por_usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE solicitudes_cambio SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE solicitudes_cambio SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE historial_partidas SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	db.prepare("UPDATE credenciales_locales SET usuario_id = ? WHERE usuario_id = ?").run(server_id, old_id);
-	return old_id;
-}
-var MINISTER_FIELDS = [
-	"titulo",
-	"nombre",
-	"apellido_paterno",
-	"apellido_materno",
-	"activo"
-];
-function save_downloaded_minister(db, minister, force = false) {
-	const version = minister.version ?? 1;
-	const updated_at = minister.updated_at ?? (/* @__PURE__ */ new Date()).toISOString();
-	const local = db.prepare("SELECT id, version, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(minister.client_id);
-	if (!force && is_in_queue(db, "ministro", minister.client_id)) {
-		const same_data = local !== void 0 && MINISTER_FIELDS.every((field) => (local[field] ?? null) === (minister[field] ?? null));
-		const queued = db.prepare("SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?").get("ministro", minister.client_id);
-		if (!same_data || queued.version_base !== null) return;
-		remove_from_queue(db, "ministro", minister.client_id);
-		set_server_version(db, "ministro", minister.client_id, version);
-		return;
-	}
-	if (!local) {
-		db.prepare(`INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(minister.client_id, minister.parroquia_id, minister.titulo ?? null, minister.nombre, minister.apellido_paterno, minister.apellido_materno, minister.activo, version, updated_at);
-		return;
-	}
-	if (force || local.version !== version) {
-		allow_version_write(db, "ministros", local.id);
-		db.prepare(`UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?, version = ?, updated_at = ?
-			 WHERE id = ?`).run(minister.titulo ?? null, minister.nombre, minister.apellido_paterno, minister.apellido_materno, minister.activo, version, updated_at, local.id);
-	}
-	if (force) remove_from_queue(db, "ministro", minister.client_id);
-}
-//#endregion
-//#region electron/main/sync/sync.ts
-function save_reference_data(db, data) {
-	const save_parish = db.prepare(`INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)
-		 ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa`);
-	const adopt_minister = db.prepare("UPDATE ministros SET client_id = ? WHERE client_id = ?");
-	db.transaction(() => {
-		for (const parish of data.parroquias) save_parish.run(parish);
-		for (const minister of data.ministros) {
-			adopt_minister.run(minister.client_id, `servidor-${minister.id}`);
-			save_downloaded_minister(db, minister);
-		}
-		for (const user of data.usuarios) save_downloaded_user(db, user);
-		db.exec("DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)");
-	})();
-}
-async function refresh_reference(db, request, token) {
-	save_reference_data(db, await get_reference(request, token));
-}
-function read_local_data(db, row) {
-	if (row.entidad === "ministro") return read_local_minister(db, row.client_id);
-	if (row.entidad === "usuario") return read_local_user(db, row.client_id);
-	return read_local_record(db, row.client_id);
-}
-function adopt_user_id(db, client_id, server_id) {
-	if (!server_id) return;
-	const old_id = adopt_server_user_id(db, client_id, server_id);
-	const session = current_session();
-	if (old_id !== null && session && session.user_id === old_id) session.user_id = server_id;
-}
-function save_push_result(db, row, result) {
-	db.transaction(() => {
-		if (result.estado === "conflicto" || result.estado === "rechazado") {
-			db.prepare("UPDATE sync_cola SET estado = ?, motivo = ? WHERE id = ?").run(result.estado, result.motivo, row.id);
-			return;
-		}
-		if (row.entidad === "usuario") adopt_user_id(db, row.client_id, result.id);
-		if (db.prepare("SELECT revision FROM sync_cola WHERE id = ?").get(row.id).revision === row.revision) {
-			remove_from_queue(db, row.entidad, row.client_id);
-			set_server_version(db, row.entidad, row.client_id, result.version);
-			if (row.entidad === "usuario") db.prepare("UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?").run(row.client_id);
-		} else db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?`).run(result.version, row.id);
-	})();
-}
-async function push_pending(db, request, token) {
-	const pending_ids = db.prepare(`SELECT id FROM sync_cola WHERE estado <> 'conflicto' ORDER BY entidad = 'usuario' DESC, entidad = 'ministro' DESC, id`).pluck().all();
-	const read_row = db.prepare("SELECT * FROM sync_cola WHERE id = ?");
-	for (let start = 0; start < pending_ids.length; start += 15) {
-		const rows = [];
-		for (const id of pending_ids.slice(start, start + 15)) {
-			const row = read_row.get(id);
-			if (row && row.estado !== "conflicto") rows.push(row);
-		}
-		if (rows.length === 0) continue;
-		const response = await push_changes(request, token, rows.map((row) => {
-			return {
-				entidad: row.entidad,
-				client_id: row.client_id,
-				version_base: row.version_base,
-				cola_id: row.cola_id,
-				datos: read_local_data(db, row)
-			};
-		}));
-		for (let i = 0; i < rows.length; i++) if (response.resultados[i]) save_push_result(db, rows[i], response.resultados[i]);
-	}
-}
-function save_page(db, page) {
-	db.transaction(() => {
-		for (const record of page.partidas) save_downloaded_record(db, record);
-		set_sync_value(db, SYNC_KEYS.cursor, String(page.cursor));
-	})();
-}
-function is_missing_reference(error) {
-	if (error instanceof MissingReferenceError) return true;
-	return error?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
-}
-async function pull_changes(db, request, token) {
-	while (true) {
-		const page = await pull_page(request, token, get_sync_value(db, SYNC_KEYS.cursor) ?? "0");
-		try {
-			save_page(db, page);
-		} catch (error) {
-			if (!is_missing_reference(error)) throw error;
-			await refresh_reference(db, request, token);
-			save_page(db, page);
-		}
-		if (!page.hayMas) return;
-	}
-}
-async function run_sync(db, request, token) {
-	await refresh_reference(db, request, token);
-	await push_pending(db, request, token);
-	await pull_changes(db, request, token);
-	set_sync_value(db, SYNC_KEYS.last_sync, (/* @__PURE__ */ new Date()).toISOString());
-}
-async function resolve_conflict(db, request, token, entity, client_id, choice) {
-	const server_record = (await get_record(request, token, entity, client_id)).registro;
-	db.transaction(() => {
-		if (choice === "local") db.prepare(`UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE entidad = ? AND client_id = ?`).run(server_record.version, entity, client_id);
-		else if (entity === "ministro") save_downloaded_minister(db, server_record, true);
-		else if (entity === "usuario") save_downloaded_user(db, server_record, true);
-		else save_downloaded_record(db, server_record, true);
-	})();
-}
-var TYPE_NAMES = {
-	bautismo: "Bautismo",
-	confirmacion: "Confirmación",
-	matrimonio: "Matrimonio"
-};
-function describe(db, row) {
-	if (row.entidad === "ministro") {
-		const minister = db.prepare("SELECT nombre, apellido_paterno FROM ministros WHERE client_id = ?").get(row.client_id);
-		return `Ministro ${minister?.nombre ?? ""} ${minister?.apellido_paterno ?? ""}`.trim();
-	}
-	if (row.entidad === "usuario") return `Usuario ${db.prepare("SELECT username FROM usuarios WHERE client_id = ?").get(row.client_id)?.username ?? ""}`.trim();
-	const type_name = TYPE_NAMES[row.entidad];
-	const record = db.prepare("SELECT libro, folio, numero FROM sacramentos WHERE client_id = ?").get(row.client_id);
-	if (!record) return type_name;
-	return `${type_name}: libro ${record.libro}, folio ${record.folio}, registro ${record.numero}`;
-}
-function read_queue_summary(db) {
-	const counts = db.prepare("SELECT estado, COUNT(*) AS total FROM sync_cola GROUP BY estado").all();
-	const count_of = (state) => {
-		const row = counts.find((item) => item.estado === state);
-		return row ? row.total : 0;
-	};
-	const items = db.prepare(`SELECT * FROM sync_cola WHERE estado <> 'pendiente' ORDER BY id`).all().map((row) => ({
-		entidad: row.entidad,
-		client_id: row.client_id,
-		estado: row.estado,
-		motivo: row.motivo,
-		descripcion: describe(db, row)
-	}));
-	return {
-		pendientes: count_of("pendiente"),
-		conflictos: count_of("conflicto"),
-		rechazados: count_of("rechazado"),
-		ultima_sync: get_sync_value(db, SYNC_KEYS.last_sync),
-		aviso: get_sync_value(db, SYNC_KEYS.notice),
-		items
-	};
-}
-//#endregion
-//#region electron/main/sync/recovery.ts
-var REBUILT_NOTICE = "La base local se reconstruyó desde el servidor. Revise lo registrado recientemente: lo que no se había subido debe volver a digitarse desde el libro.";
-async function download_key_copy(paths, request, token) {
-	try {
-		return (await get_key_copy(request, token, device_id(paths))).clave;
-	} catch (error) {
-		if (error instanceof ServiceError && error.status === 404) return null;
-		throw error;
-	}
-}
-async function rebuild(paths, keys, request, token) {
-	const temp = open_temp_database(paths, keys);
-	try {
-		await refresh_reference(temp.db, request, token);
-		await pull_changes(temp.db, request, token);
-		set_sync_value(temp.db, SYNC_KEYS.last_sync, (/* @__PURE__ */ new Date()).toISOString());
-		set_sync_value(temp.db, SYNC_KEYS.notice, REBUILT_NOTICE);
-		set_sync_value(temp.db, SYNC_KEYS.key_registered, null);
-	} finally {
-		temp.db.close();
-	}
-	return {
-		db: install_temp_database(paths, keys, temp.key),
-		key: temp.key
-	};
-}
-async function recover_local_database(paths, keys, request, token) {
-	if (existsSync(paths.database)) {
-		const key_copy = await download_key_copy(paths, request, token);
-		if (key_copy) {
-			const db = open_with_key_copy(paths, keys, key_copy);
-			if (db) return {
-				db,
-				key: key_copy
-			};
-		}
-	}
-	return rebuild(paths, keys, request, token);
-}
-async function upload_key_copy(db, paths, key, request, token, parish_id) {
-	const registered = get_sync_value(db, SYNC_KEYS.key_registered);
-	if (registered && !(registered === "admin" && parish_id !== null)) return;
-	const response = await put_key_copy(request, token, device_id(paths), key);
-	set_sync_value(db, SYNC_KEYS.key_registered, response.parroquiaId === null ? "admin" : "parroquia");
-}
-//#endregion
-//#region electron/main/sync/auto_sync.ts
-var mode = "sin-conexion";
-var last_error = null;
-var running_sync = null;
-var sync_timer = null;
-function start_auto_sync(initial_mode) {
-	if (!sync_timer) sync_timer = setInterval(() => void sync_now(), SYNC_INTERVAL_MS);
-	mode = initial_mode;
-}
-function stop_auto_sync() {
-	if (sync_timer) clearInterval(sync_timer);
-	sync_timer = null;
-}
-function reset_sync_status() {
-	mode = "sin-conexion";
-	last_error = null;
-}
-var ACCOUNT_NOT_UPLOADED = "Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.";
-function is_waiting_upload(user_id) {
-	if (user_id < 0) return true;
-	try {
-		const row = get_database().prepare("SELECT password_hash_pendiente FROM usuarios WHERE id = ?").get(user_id);
-		return Boolean(row?.password_hash_pendiente);
-	} catch {
-		return false;
-	}
-}
-async function renew_token() {
-	const session = current_session();
-	const login = saved_credentials();
-	if (!session || !login) return null;
-	try {
-		const response = await request_login(remote_request, login.username, login.password);
-		session.token = response.token;
-		session.role = response.usuario.rol;
-		session.parish_id = response.usuario.parroquia_id;
-		return response.token;
-	} catch (error) {
-		session.token = "";
-		if (is_connection_error(error)) {
-			mode = "sin-conexion";
-			return null;
-		}
-		if (is_waiting_upload(session.user_id)) {
-			mode = "error";
-			last_error = ACCOUNT_NOT_UPLOADED;
-			return null;
-		}
-		mode = "requiere-login";
-		last_error = "La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.";
-		return null;
-	}
-}
-async function with_token(action) {
-	const token = current_session()?.token || await renew_token();
-	if (!token) return;
-	try {
-		await action(token);
-	} catch (error) {
-		if (!(error instanceof ServiceError && error.status === 401)) throw error;
-		const new_token = await renew_token();
-		if (new_token) await action(new_token);
-	}
-}
-async function perform_sync() {
-	last_error = null;
-	try {
-		let completed = false;
-		await with_token(async (token) => {
-			const db = get_database();
-			await run_sync(db, remote_request, token);
-			completed = true;
-			const key = current_key();
-			if (key) await upload_key_copy(db, database_paths(), key, remote_request, token, current_session()?.parish_id ?? null).catch((error$5) => {
-				error("No se pudo subir la copia de la clave:", error$5);
-			});
-		});
-		if (completed) mode = "en-linea";
-	} catch (error$6) {
-		if (is_connection_error(error$6)) {
-			mode = "sin-conexion";
-			return;
-		}
-		error("Falló la sincronización:", error$6);
-		mode = "error";
-		last_error = error$6 instanceof ServiceError ? error$6.message : "Ocurrió un error al sincronizar.";
-	}
-}
-function sync_now() {
-	if (!current_session()) return Promise.resolve();
-	if (!running_sync) running_sync = perform_sync().finally(() => {
-		running_sync = null;
-	});
-	return running_sync;
-}
-function get_sync_status() {
-	require_session();
-	return {
-		...read_queue_summary(get_database()),
-		modo: mode,
-		en_curso: running_sync !== null,
-		mensaje: last_error,
-		token: current_session()?.token || "sin-conexion"
-	};
-}
-async function resolve_sync_conflict(entity, client_id, choice) {
-	require_session();
-	let done = false;
-	await with_token(async (token) => {
-		await resolve_conflict(get_database(), remote_request, token, entity, client_id, choice);
-		done = true;
-	});
-	if (!done) throw new ServiceError("Se necesita conexión para resolver el conflicto.", 0);
-	await sync_now();
-}
-function dismiss_sync_notice() {
-	require_session();
-	set_sync_value(get_database(), SYNC_KEYS.notice, null);
-}
-async function sync_before_quit(limit_ms) {
-	if (!current_session()) return;
-	if (read_queue_summary(get_database()).pendientes === 0) return;
-	const time_limit = new Promise((resolve) => setTimeout(resolve, limit_ms));
-	await Promise.race([sync_now(), time_limit]);
-}
-//#endregion
-//#region electron/main/controllers/login.ts
-async function save_credential(db, user_id, password) {
-	const verifier = await create_verifier(password);
-	db.prepare(`INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)
-		 ON CONFLICT (usuario_id) DO UPDATE SET
-			verificador = excluded.verificador,
-			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).run(user_id, verifier);
-}
-async function verify_offline(db, username, password) {
-	const row = db.prepare(`SELECT u.id, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,
-				c.verificador, p.nombre AS parroquia_nombre
-			 FROM usuarios u
-			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
-			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
-			 WHERE u.username = ?`).get(username);
-	if (!row || !row.verificador) return {
-		ok: false,
-		reason: "sin-credencial"
-	};
-	if (row.activo !== 1) return {
-		ok: false,
-		reason: "incorrecta"
-	};
-	if (!await matches_verifier(password, row.verificador)) return {
-		ok: false,
-		reason: "incorrecta"
-	};
-	return {
-		ok: true,
-		usuario: {
-			id: row.id,
-			rol: row.rol,
-			parroquia_id: row.parroquia_id,
-			parroquia_nombre: row.parroquia_nombre,
-			nombre_completo: full_name$1(row.nombre, row.apellido_paterno, row.apellido_materno)
-		}
-	};
-}
-async function login_online(response, username, password) {
-	const token = response.token;
-	const user = response.usuario;
-	if (database_needs_recovery()) {
-		const recovered = await recover_local_database(database_paths(), KEY_STORE, remote_request, token);
-		use_database(recovered.db, recovered.key);
-	}
-	const db = get_database();
-	try {
-		await refresh_reference(db, remote_request, token);
-	} catch (error) {
-		if (!db.prepare("SELECT 1 FROM usuarios WHERE id = ?").get(user.id)) throw error;
-	}
-	await save_credential(db, user.id, password);
-	start_session({
-		user_id: user.id,
-		role: user.rol,
-		parish_id: user.parroquia_id,
-		token
-	}, username, password);
-	start_auto_sync("en-linea");
-	await sync_now();
-	return response;
-}
-function start_local_session(user, username, password) {
-	start_session({
-		user_id: user.id,
-		role: user.rol,
-		parish_id: user.parroquia_id,
-		token: ""
-	}, username, password);
-	start_auto_sync("sin-conexion");
-	sync_now();
-	return {
-		token: OFFLINE_TOKEN,
-		usuario: user
-	};
-}
-var NOT_IN_THIS_PC = "Este usuario todavía no está en esta PC. Cargue el paquete inicial o conéctese a internet para entrar por primera vez.";
-async function login(payload) {
-	const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-	const password = typeof payload?.password === "string" ? payload.password : "";
-	let local = {
-		ok: false,
-		reason: "sin-credencial"
-	};
-	if (!database_needs_recovery()) {
-		local = await verify_offline(get_database(), username, password);
-		if (local.ok) return start_local_session(local.usuario, username, password);
-	}
-	let response;
-	try {
-		response = await request_login(remote_request, username, password);
-	} catch (error) {
-		if (!is_connection_error(error)) throw error;
-		if (database_needs_recovery()) throw new ServiceError("La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.", 503);
-		if (local.reason === "sin-credencial") throw new ServiceError(NOT_IN_THIS_PC, 401);
-		throw new ServiceError("Usuario o contraseña incorrectos.", 401);
-	}
-	return login_online(response, username, password);
-}
-function logout() {
-	stop_auto_sync();
-	end_session();
-	reset_sync_status();
-}
-var login_routes = {
-	"auth.login": login,
-	"auth.logout": () => {
-		logout();
-		return { success: true };
-	}
-};
-//#endregion
 //#region electron/main/controllers/ministers.ts
 var NOT_FOUND$1 = "Ministro no encontrado.";
 var SORT_COLUMNS$1 = {
@@ -8413,145 +8802,6 @@ var minister_routes = {
 		return { success: true };
 	}
 };
-//#endregion
-//#region electron/main/controllers/package.ts
-var PACKAGE_FORMAT = "prelatura-paquete-inicial";
-var PACKAGE_FILE = "paquete-inicial.json";
-function needs_package(db) {
-	return db.prepare("SELECT COUNT(*) FROM usuarios").pluck().get() === 0;
-}
-function build_package(db, session) {
-	if (session.role !== "admin_general") throw new ServiceError("Solo el administrador general puede generar el paquete inicial.", 403);
-	if (db.prepare("SELECT COUNT(*) FROM sync_cola").pluck().get() > 0) throw new ServiceError("Hay cambios sin subir. Sincronice con internet antes de generar el paquete inicial.", 409);
-	const users = db.prepare(`SELECT u.id, u.client_id, u.parroquia_id, u.username, u.rol, u.nombre, u.apellido_paterno, u.apellido_materno,
-				u.activo, u.principal, u.version, u.updated_at, c.verificador AS password_hash
-			 FROM usuarios u
-			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
-			 WHERE u.id > 0
-			 ORDER BY u.id`).all();
-	const ministers = db.prepare("SELECT id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at FROM ministros ORDER BY id").all();
-	const records = db.prepare("SELECT client_id, version, created_at, updated_at FROM sacramentos ORDER BY id").all();
-	return {
-		formato: PACKAGE_FORMAT,
-		version: 1,
-		generado_en: (/* @__PURE__ */ new Date()).toISOString(),
-		cursor: get_sync_value(db, SYNC_KEYS.cursor),
-		parroquias: db.prepare("SELECT id, nombre, ubicacion, activa FROM parroquias ORDER BY id").all(),
-		usuarios: users,
-		ministros: ministers,
-		partidas: records.map((row) => ({
-			...read_local_record(db, row.client_id),
-			version: row.version,
-			created_at: row.created_at,
-			updated_at: row.updated_at
-		}))
-	};
-}
-function check_package(data) {
-	const candidate = data;
-	if (!candidate || candidate.formato !== "prelatura-paquete-inicial") throw new ServiceError("El archivo no es un paquete inicial de esta aplicación.", 400);
-	if (candidate.version !== 1) throw new ServiceError("El paquete inicial es de otra versión de la aplicación.", 400);
-	if (!Array.isArray(candidate.parroquias) || !Array.isArray(candidate.usuarios) || !Array.isArray(candidate.ministros) || !Array.isArray(candidate.partidas)) throw new ServiceError("El paquete inicial está incompleto.", 400);
-	return candidate;
-}
-function load_package(db, data) {
-	const content = check_package(data);
-	if (!needs_package(db)) throw new ServiceError("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
-	db.transaction(() => {
-		save_reference_data(db, {
-			parroquias: content.parroquias,
-			ministros: content.ministros,
-			usuarios: content.usuarios
-		});
-		for (const record of content.partidas) save_downloaded_record(db, record);
-		if (content.cursor) set_sync_value(db, SYNC_KEYS.cursor, content.cursor);
-	})();
-	return {
-		parroquias: content.parroquias.length,
-		usuarios: content.usuarios.length,
-		partidas: content.partidas.length
-	};
-}
-function read_package_file(file_path) {
-	try {
-		return JSON.parse(readFileSync(file_path, "utf8"));
-	} catch {
-		throw new ServiceError("No se pudo leer el paquete inicial.", 400);
-	}
-}
-function bundled_package_path() {
-	if (app.isPackaged) return path.join(process.resourcesPath, "instalador", PACKAGE_FILE);
-	return path.join(app.getAppPath(), "resources", "instalador", PACKAGE_FILE);
-}
-function load_bundled_package() {
-	if (process.env.PRELATURA_SIN_PAQUETE === "1") return;
-	const file = bundled_package_path();
-	let db;
-	try {
-		db = get_database();
-	} catch {
-		return;
-	}
-	if (!existsSync(file) || !needs_package(db)) return;
-	try {
-		const summary = load_package(db, read_package_file(file));
-		info(`Paquete inicial cargado: ${summary.parroquias} parroquias, ${summary.usuarios} usuarios y ${summary.partidas} partidas.`);
-	} catch (error$4) {
-		error("No se pudo cargar el paquete inicial del instalador:", error$4);
-	}
-}
-function parent_window() {
-	return BrowserWindow.getFocusedWindow() ?? void 0;
-}
-var package_public_routes = {
-	"package.status": () => {
-		try {
-			return { necesita_paquete: needs_package(get_database()) };
-		} catch {
-			return { necesita_paquete: false };
-		}
-	},
-	"package.import": async () => {
-		const db = get_database();
-		if (!needs_package(db)) throw new ServiceError("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
-		const options = {
-			title: "Elegir el paquete inicial",
-			properties: ["openFile"],
-			filters: [{
-				name: "Paquete inicial",
-				extensions: ["json"]
-			}]
-		};
-		const window = parent_window();
-		const choice = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
-		if (choice.canceled || choice.filePaths.length === 0) return { cancelado: true };
-		return {
-			cancelado: false,
-			...load_package(db, read_package_file(choice.filePaths[0]))
-		};
-	}
-};
-var package_routes = { "package.export": async (_payload, { db, session }) => {
-	const content = build_package(db, session);
-	const options = {
-		title: "Guardar el paquete inicial",
-		defaultPath: PACKAGE_FILE,
-		filters: [{
-			name: "Paquete inicial",
-			extensions: ["json"]
-		}]
-	};
-	const window = parent_window();
-	const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
-	if (choice.canceled || !choice.filePath) return { cancelado: true };
-	writeFileSync(choice.filePath, JSON.stringify(content), "utf8");
-	return {
-		cancelado: false,
-		parroquias: content.parroquias.length,
-		usuarios: content.usuarios.length,
-		partidas: content.partidas.length
-	};
-} };
 //#endregion
 //#region electron/main/controllers/parishes.ts
 var LOGO_FORMAT = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
@@ -8976,55 +9226,6 @@ var sync_routes = {
 		return { success: true };
 	}
 };
-//#endregion
-//#region shared/sync.ts
-var ROLES = [
-	"admin_general",
-	"admin_parroquia",
-	"usuario"
-];
-//#endregion
-//#region shared/users.ts
-var USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
-function is_role(value) {
-	return ROLES.includes(value);
-}
-function role_parish_error(target) {
-	if (target.rol === "admin_general" && target.parroquia_id !== null) return "Un administrador general no pertenece a ninguna parroquia.";
-	if (target.rol !== "admin_general" && target.parroquia_id === null) return "Debe seleccionar una parroquia.";
-	return null;
-}
-function parish_admin_reason(actor, target, action) {
-	if (target.parroquia_id !== actor.parroquia_id) return `Solo puede ${action} cuentas de su propia parroquia.`;
-	if (target.rol === "usuario") return null;
-	if (target.rol === "admin_parroquia" && actor.principal) return null;
-	if (target.rol === "admin_parroquia") return `Solo el administrador principal de la parroquia puede ${action} a otros administradores.`;
-	return "El administrador de una parroquia no gestiona administradores generales.";
-}
-function cannot_create(actor, target) {
-	if (actor.rol === "admin_general") {
-		if (target.rol === "admin_general" && !actor.principal) return "Solo el administrador principal puede crear administradores generales.";
-		return null;
-	}
-	if (actor.rol === "admin_parroquia") return parish_admin_reason(actor, target, "crear");
-	return "No tiene permiso para gestionar usuarios.";
-}
-function cannot_modify(actor, target) {
-	if (target.id === actor.id) return null;
-	if (actor.rol === "admin_general") {
-		if (target.rol === "admin_general" && !actor.principal) return "Solo el administrador principal puede modificar a otros administradores generales.";
-		return null;
-	}
-	if (actor.rol === "admin_parroquia") return parish_admin_reason(actor, target, "modificar");
-	return "No tiene permiso para gestionar usuarios.";
-}
-function cannot_disable(target) {
-	if (target.principal) return "No se puede deshabilitar al administrador principal: primero pase la marca de principal a otro administrador.";
-	return null;
-}
-function can_manage_users(role) {
-	return role === "admin_general" || role === "admin_parroquia";
-}
 var NOT_FOUND = "Usuario no encontrado.";
 var SORT_COLUMNS = {
 	nombres: "nombre",
@@ -9268,10 +9469,12 @@ function register_routes() {
 		...user_routes,
 		...request_routes,
 		...legacy_import_routes,
-		...package_routes
+		...package_routes,
+		...backup_routes
 	}, {
 		...login_routes,
 		...package_public_routes,
+		...backup_public_routes,
 		...server_routes
 	});
 }
