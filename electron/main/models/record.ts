@@ -236,8 +236,11 @@ export function save_edit(db: LocalDatabase, session: Session, saved: SacramentR
 
 	for (const part of person_parts(saved.sacramento.tipo))
 	{
-		const person_id = person_at(saved, part).id as number;
-		const corrected = apply_corrections(person_at(record, part));
+		const saved_person = person_at(saved, part);
+		const person_id = saved_person.id as number;
+		const incoming = person_at(record, part);
+		const new_changes = (incoming.cambios ?? []).filter((change) => change.id === undefined);
+		const corrected = apply_corrections({ ...incoming, cambios: [...saved_person.cambios, ...new_changes] });
 
 		update_person(db, person_id, corrected.person);
 		save_corrections(db, session, person_id, sacrament_id, corrected.corrections);

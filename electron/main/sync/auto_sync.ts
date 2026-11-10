@@ -69,8 +69,6 @@ async function renew_token(): Promise<string | null>
 	{
 		const response = await request_login(remote_request, login.username, login.password);
 		session.token = response.token;
-		session.role = response.usuario.rol;
-		session.parish_id = response.usuario.parroquia_id;
 		return response.token;
 	}
 	catch (error)

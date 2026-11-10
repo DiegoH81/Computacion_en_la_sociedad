@@ -1,5 +1,5 @@
 import type { NameColumn, Person, PersonChange } from '../../../shared/models';
-import { PERSON_COLUMNS, type PersonColumn } from '../../../shared/record_fields';
+import { corrected_value, PERSON_COLUMNS, type PersonColumn } from '../../../shared/record_fields';
 import type { LocalDatabase } from '../db/database';
 import { ServiceError } from '../utils/errors';
 import { clean_text } from '../utils/helpers';
@@ -84,7 +84,6 @@ export function update_person(db: LocalDatabase, person_id: number, person: Pers
 export function apply_corrections(person: Person): { person: Person; corrections: Correction[] }
 {
 	const changes = Array.isArray(person.cambios) ? person.cambios.filter((change) => change.id === undefined) : [];
-	const corrected: Person = { ...person };
 	const result: Correction[] = [];
 
 	for (const change of changes)
@@ -96,7 +95,7 @@ export function apply_corrections(person: Person): { person: Person; corrections
 		if (result.some((item) => item.campo_cambio === field.column))
 			throw new ServiceError(`La nota marginal repite el campo ${field.label}.`, 400);
 
-		const old_value = clean_text(person[field.column]);
+		const old_value = clean_text(corrected_value(person, field.column));
 		const new_value = clean_text(change.valor_nuevo);
 
 		if (!old_value)
@@ -108,11 +107,10 @@ export function apply_corrections(person: Person): { person: Person; corrections
 		if (new_value === old_value)
 			throw new ServiceError(`El valor nuevo de ${field.label} es igual al anterior.`, 400);
 
-		corrected[field.column] = new_value;
 		result.push({ campo_cambio: field.column, valor_anterior: old_value, valor_nuevo: new_value });
 	}
 
-	return { person: corrected, corrections: result };
+	return { person: person, corrections: result };
 }
 
 export function save_corrections(db: LocalDatabase, session: Session, person_id: number, sacrament_id: number, corrections: Correction[]): void
@@ -144,6 +142,6 @@ export function name_condition(table_alias: string, column: NameColumn): string
 {
 	return `(${table_alias}.${column} LIKE ? OR EXISTS (
 		SELECT 1 FROM cambios_persona cp
-		WHERE cp.persona_id = ${table_alias}.id AND cp.campo_cambio = '${column}' AND cp.estado = 'aprobado' AND cp.valor_anterior LIKE ?
+		WHERE cp.persona_id = ${table_alias}.id AND cp.campo_cambio = '${column}' AND cp.estado = 'aprobado' AND cp.valor_nuevo LIKE ?
 	))`;
 }
