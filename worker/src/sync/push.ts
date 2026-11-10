@@ -4,8 +4,8 @@
 import type { ChangeResult, PersonCorrection, PersonData, RecordData, SacramentType, SyncChange, UserData } from '../../../shared/sync';
 import { PERSON_COLUMNS } from '../../../shared/record_fields';
 import { is_sacrament_type } from '../models/sacrament';
-import { cannot_create, cannot_disable, cannot_modify, NEW_PRINCIPAL_SQL, role_parish_error } from '../models/user';
-import { read_actor } from '../controllers/users';
+import { actor_in_parish, cannot_create, cannot_disable, cannot_modify, NEW_PRINCIPAL_SQL, role_parish_error, user_in_parish } from '../models/user';
+import { pair_in_parish } from '../controllers/users';
 import type { TokenUser } from '../utils/crypto';
 import { read_record } from './pull';
 import { check_helper_edit, check_helper_new, save_new_history, save_requests, users_named } from './requests';
@@ -92,11 +92,14 @@ function table_of(entity: string): VersionedTable
 
 // Ministers
 
-async function apply_minister(db: D1Database, user: TokenUser, change: SyncChange): Promise<ChangeResult>
+async function apply_minister(db: D1Database, token_user: TokenUser, change: SyncChange): Promise<ChangeResult>
 {
 	const minister = check_minister(change.datos);
 	if (minister.client_id !== change.client_id)
 		throw new RejectedChange('El registro no coincide con el cambio.');
+
+	// El rol que cuenta es el de la parroquia del ministro (la cuenta puede trabajar en varias).
+	const user = await user_in_parish(db, token_user, minister.parroquia_id);
 
 	check_permission(user, minister.parroquia_id, 'ministros');
 
@@ -158,8 +161,6 @@ async function apply_user(db: D1Database, user: TokenUser, change: SyncChange): 
 	if (account.client_id !== change.client_id)
 		throw new RejectedChange('El registro no coincide con el cambio.');
 
-	const actor = await read_actor(db, user);
-
 	const saved = await db
 		.prepare('SELECT id, username, rol, parroquia_id, activo, principal, version, ultimo_cola_id FROM usuarios WHERE client_id = ?')
 		.bind(account.client_id)
@@ -175,11 +176,12 @@ async function apply_user(db: D1Database, user: TokenUser, change: SyncChange): 
 		if (saved.username !== account.username)
 			throw new RejectedChange('El nombre de usuario no se puede cambiar.');
 
-		const reason = cannot_modify(actor, { id: saved.id, rol: account.rol, parroquia_id: account.parroquia_id });
+		const { actor, target } = await pair_in_parish(db, user, saved.id);
+		const reason = cannot_modify(actor, target);
 		if (reason)
 			throw new RejectedChange(reason);
 
-		const disable_reason = saved.activo === 1 && account.activo !== 1 ? cannot_disable({ ...account, principal: saved.principal === 1 }) : null;
+		const disable_reason = saved.activo === 1 && account.activo !== 1 ? cannot_disable(target) : null;
 		if (disable_reason)
 			throw new RejectedChange(disable_reason);
 
@@ -205,6 +207,7 @@ async function apply_user(db: D1Database, user: TokenUser, change: SyncChange): 
 	else
 	{
 		const target = { rol: account.rol, parroquia_id: account.parroquia_id };
+		const actor = await actor_in_parish(db, user, account.parroquia_id);
 		const reason = role_parish_error(target) ?? cannot_create(actor, target);
 		if (reason)
 			throw new RejectedChange(reason);
@@ -422,8 +425,6 @@ function save_detail(db: D1Database, record: RecordData): D1PreparedStatement
 	return save_godparents(db, sacrament_table(record.tipo), record);
 }
 
-// Una corrección no cambia de campo ni de valor; lo que sí cambia es su estado, cuando el
-// administrador de la parroquia la aprueba o la rechaza.
 function save_correction(db: D1Database, record: RecordData, correction: PersonCorrection): D1PreparedStatement
 {
 	return db
@@ -452,11 +453,14 @@ function save_correction(db: D1Database, record: RecordData, correction: PersonC
 		);
 }
 
-async function apply_record(db: D1Database, user: TokenUser, change: SyncChange, type: SacramentType): Promise<ChangeResult>
+async function apply_record(db: D1Database, token_user: TokenUser, change: SyncChange, type: SacramentType): Promise<ChangeResult>
 {
 	const record = check_record(type, change.datos);
 	if (record.client_id !== change.client_id)
 		throw new RejectedChange('El registro no coincide con el cambio.');
+
+	// El rol que cuenta es el de la parroquia de la partida (la cuenta puede trabajar en varias).
+	const user = await user_in_parish(db, token_user, record.parroquia_id);
 
 	check_permission(user, record.parroquia_id, 'partidas');
 
@@ -468,7 +472,21 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 	const reads = await db.batch([
 		db.prepare('SELECT id, tipo, parroquia_id, version, estado, ultimo_cola_id FROM sacramentos WHERE client_id = ?').bind(record.client_id),
 		db.prepare('SELECT client_id FROM personas WHERE client_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(people_ids)),
-		db.prepare('SELECT id, rol, parroquia_id FROM usuarios WHERE id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(user_ids)),
+		db
+			.prepare(
+				`WITH partida AS (SELECT id FROM sacramentos WHERE client_id = ?)
+				 SELECT id FROM usuarios
+				 WHERE id IN (SELECT value FROM json_each(?))
+					AND (rol = 'admin_general'
+						OR id IN (SELECT usuario_id FROM membresias WHERE parroquia_id = ?)
+						OR id IN (SELECT usuario_id FROM historial_partidas WHERE sacramento_id IN (SELECT id FROM partida))
+						OR id IN (SELECT usuario_id FROM solicitudes_cambio WHERE sacramento_id IN (SELECT id FROM partida))
+						OR id IN (SELECT revisado_por_usuario_id FROM solicitudes_cambio WHERE sacramento_id IN (SELECT id FROM partida))
+						OR id IN (SELECT usuario_id FROM cambios_persona WHERE sacramento_id IN (SELECT id FROM partida))
+						OR id IN (SELECT revisado_por_usuario_id FROM cambios_persona WHERE sacramento_id IN (SELECT id FROM partida))
+						OR id IN (SELECT anulado_por_usuario_id FROM sacramentos WHERE id IN (SELECT id FROM partida)))`,
+			)
+			.bind(record.client_id, JSON.stringify(user_ids), record.parroquia_id),
 		db.prepare('SELECT id FROM parroquias WHERE id = ?').bind(record.parroquia_id),
 		db.prepare('SELECT id FROM ministros WHERE client_id = ?').bind(record.ministro_client_id),
 		db.prepare('SELECT client_id FROM historial_partidas WHERE client_id IN (SELECT value FROM json_each(?))').bind(JSON.stringify(history_ids)),
@@ -476,7 +494,7 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 
 	const saved = reads[0].results[0] as SavedRecord | undefined;
 	const people_already_saved = reads[1].results.length > 0;
-	const found_users = reads[2].results as { id: number; rol: string; parroquia_id: number | null }[];
+	const users_of_parish = new Set((reads[2].results as { id: number }[]).map((row) => row.id));
 	const parish_exists = reads[3].results.length > 0;
 	const minister_exists = reads[4].results.length > 0;
 	const known_history = new Set((reads[5].results as { client_id: string }[]).map((row) => row.client_id));
@@ -489,8 +507,7 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 
 	for (const user_id of user_ids)
 	{
-		const found = found_users.find((row) => row.id === user_id);
-		if (!found || (found.rol !== 'admin_general' && found.parroquia_id !== record.parroquia_id))
+		if (!users_of_parish.has(user_id))
 			throw new RejectedChange('La partida indica un usuario que no pertenece a su parroquia.');
 	}
 
@@ -512,8 +529,9 @@ async function apply_record(db: D1Database, user: TokenUser, change: SyncChange,
 		if (saved.parroquia_id !== record.parroquia_id)
 			throw new RejectedChange('La parroquia de una partida no se puede cambiar.');
 
-		if (saved.estado === 'anulado' && record.estado !== 'anulado')
-			throw new RejectedChange('Una partida anulada no se puede reactivar.');
+		// Rehabilitar una partida anulada es cosa de un administrador de su parroquia.
+		if (saved.estado === 'anulado' && record.estado !== 'anulado' && user.rol !== 'admin_parroquia')
+			throw new RejectedChange('Solo un administrador de la parroquia puede rehabilitar una partida anulada.');
 
 		const conflict = find_conflict(change, saved);
 		if (conflict)

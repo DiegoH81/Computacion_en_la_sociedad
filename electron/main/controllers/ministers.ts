@@ -23,13 +23,15 @@ type MinisterColumns = Pick<Minister, 'titulo' | 'nombre' | 'apellido_paterno' |
 function clean_minister(minister: Minister): MinisterColumns
 {
 	const first_name = clean_text(minister?.nombre);
-	const father_last_name = clean_text(minister?.apellido_paterno);
-	const mother_last_name = clean_text(minister?.apellido_materno);
+	if (!first_name)
+		throw new ServiceError('El nombre del ministro es requerido.', 400);
 
-	if (!first_name || !father_last_name || !mother_last_name)
-		throw new ServiceError('Nombre y apellidos son requeridos.', 400);
-
-	return { titulo: clean_text(minister.titulo), nombre: first_name, apellido_paterno: father_last_name, apellido_materno: mother_last_name };
+	return {
+		titulo: clean_text(minister.titulo),
+		nombre: first_name,
+		apellido_paterno: clean_text(minister.apellido_paterno) ?? '',
+		apellido_materno: clean_text(minister.apellido_materno) ?? '',
+	};
 }
 
 function check_can_manage_minister(db: LocalDatabase, session: Session, id: number): void
@@ -67,6 +69,13 @@ export function search_ministers(db: LocalDatabase, filters: SearchFilters): Sea
 	{
 		conditions.push('apellido_materno LIKE ?');
 		values.push(`%${filters.apellido_materno}%`);
+	}
+
+	const words = (clean_text(filters.texto) ?? '').split(/\s+/).filter(Boolean);
+	for (const word of words)
+	{
+		conditions.push(`(COALESCE(titulo, '') || ' ' || nombre || ' ' || apellido_paterno || ' ' || apellido_materno) LIKE ?`);
+		values.push(`%${word}%`);
 	}
 	if (Number.isInteger(filters.parroquia_id))
 	{

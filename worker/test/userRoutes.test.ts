@@ -118,12 +118,12 @@ describe('rutas /api/users (Worker real + D1)', () => {
       const response = await api('/api/users', {
         method: 'POST',
         token: adminToken,
-        body: { ...NEW_USER_BODY, password: 'corta' },
+        body: { ...NEW_USER_BODY, password: 'corta' }, // 5 caracteres
       });
 
       expect(response.status).toBe(400);
       const data = (await response.json()) as { message: string };
-      expect(data.message).toContain('8 caracteres');
+      expect(data.message).toContain('6 caracteres');
     });
 
     it('POST con un username repetido responde 409', async () => {

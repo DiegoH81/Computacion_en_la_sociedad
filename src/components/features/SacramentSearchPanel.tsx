@@ -1,16 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { NameColumn, SacramentRecord } from '../../../shared/models';
 import { MarginalNoteBadge } from './MarginalNoteBadge';
+import { SacramentSearchForm, type SacramentSearchValues, type SearchParish } from './SacramentSearchForm';
+import { loadParishes } from '../../controllers/UserController';
+import { useSessionStore } from '../../store/sessionStore';
 import { StatusBadge } from './ManagementPanel';
-import {
-  NameSearchForm,
-  PageNav,
-  PanelError,
-  PanelTitle,
-  SortPanel,
-  type SearchValues,
-  type SortDirection,
-} from '../ui/SearchPanelParts';
+import { PageNav, PanelError, PanelTitle, SortPanel, type SortDirection } from '../ui/SearchPanelParts';
 import {
   PANEL_ACTION_BUTTON,
   PANEL_CELL,
@@ -42,7 +37,9 @@ interface SacramentSearchPanelProps<T extends SacramentRecord> {
   sortBy: NameColumn;
   sortDirection: SortDirection;
   onSortChange: (sortBy: NameColumn, direction: SortDirection) => void;
-  onSearch: (filters: SearchValues) => void;
+  onSearch: (filters: SacramentSearchValues) => void;
+  /** "Padrino o madrina" o "Testigo", para la búsqueda avanzada. */
+  godparentLabel: string;
   onClear: () => void;
   /** Falso cuando se consulta una parroquia ajena: solo se puede buscar y ver. */
   canWrite: boolean;
@@ -57,6 +54,8 @@ interface SacramentSearchPanelProps<T extends SacramentRecord> {
   onEdit: (id: number) => void;
   onPrint: (id: number) => void;
   onAnnul: (id: number) => void;
+  /** Rehabilitar una partida anulada (el mismo administrador que anula). */
+  onRestore: (id: number) => void;
   onPrintIndex: () => void;
 }
 
@@ -73,6 +72,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
   sortDirection,
   onSortChange,
   onSearch,
+  godparentLabel,
   onClear,
   canWrite,
   canManage,
@@ -83,9 +83,30 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
   onEdit,
   onPrint,
   onAnnul,
+  onRestore,
   onPrintIndex,
 }: SacramentSearchPanelProps<T>) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [parishes, setParishes] = useState<SearchParish[]>([]);
+  const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
+
+  // Las parroquias, para buscar en otras o en varias desde la búsqueda avanzada.
+  useEffect(() => {
+    let cancelled = false;
+    loadParishes().then((result) => {
+      if (!cancelled && result.success && result.parishes) setParishes(result.parishes);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Si la búsqueda trae partidas de otras parroquias, se muestra de cuál es cada una.
+  const showParish = rows.some((row) => row.sacramento.parroquia_id !== parroquiaActivaId);
+
+  function parishName(parishId: number | undefined): string {
+    return parishes.find((parish) => parish.id === parishId)?.nombre ?? '';
+  }
 
   const selectedRow = rows.find((row) => row.sacramento.id === selectedId)?.sacramento ?? null;
 
@@ -95,7 +116,14 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
 
       <PanelError message={errorMessage} />
 
-      <NameSearchForm firstLabel="Nombres completos" isLoading={isLoading} onSearch={onSearch} onClear={onClear} />
+      <SacramentSearchForm
+        isLoading={isLoading}
+        godparentLabel={godparentLabel}
+        parishes={parishes}
+        currentParishId={parroquiaActivaId}
+        onSearch={onSearch}
+        onClear={onClear}
+      />
 
       <SortPanel sortBy={sortBy} sortDirection={sortDirection} onSortChange={onSortChange} />
 
@@ -110,6 +138,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
               <thead>
                 <tr>
                   {canWrite && <th aria-label="Seleccionar" className={`${PANEL_HEADER_CELL} w-11`} />}
+                  {showParish && <th className={PANEL_HEADER_CELL}>Parroquia</th>}
                   <th className={`${PANEL_HEADER_CELL} ${PANEL_NUMBER}`}>Libro</th>
                   <th className={`${PANEL_HEADER_CELL} ${PANEL_NUMBER}`}>Folio</th>
                   <th className={`${PANEL_HEADER_CELL} ${PANEL_NUMBER}`}>Registro</th>
@@ -151,6 +180,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                           )}
                         </td>
                       )}
+                      {showParish && <td className={PANEL_CELL}>{parishName(sacramento.parroquia_id)}</td>}
                       <td className={`${PANEL_CELL} ${PANEL_NUMBER}`}>{sacramento.libro}</td>
                       <td className={`${PANEL_CELL} ${PANEL_NUMBER}`}>{sacramento.folio}</td>
                       <td className={`${PANEL_CELL} ${PANEL_NUMBER}`}>{sacramento.numero}</td>
@@ -211,16 +241,27 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                 Historial
               </button>
             )}
-            {canAnnul && (
+            {/* Anular una partida vigente; con una anulada seleccionada, el botón la rehabilita. */}
+            {canAnnul && selectedRow?.estado === 'anulado' ? (
               <button
                 type="button"
-                disabled={selectedRow?.estado !== 'vigente'}
-                onClick={() => selectedRow && onAnnul(selectedRow.id as number)}
-                title={selectedRow?.estado === 'vigente' ? undefined : 'Seleccione una partida vigente'}
-                className={`${PANEL_ACTION_BUTTON} bg-solid-red`}
+                onClick={() => onRestore(selectedRow.id as number)}
+                className={`${PANEL_ACTION_BUTTON} bg-solid-green`}
               >
-                Anular
+                Rehabilitar
               </button>
+            ) : (
+              canAnnul && (
+                <button
+                  type="button"
+                  disabled={selectedRow?.estado !== 'vigente'}
+                  onClick={() => selectedRow && onAnnul(selectedRow.id as number)}
+                  title={selectedRow?.estado === 'vigente' ? undefined : 'Seleccione una partida vigente'}
+                  className={`${PANEL_ACTION_BUTTON} bg-solid-red`}
+                >
+                  Anular
+                </button>
+              )
             )}
           </div>
 

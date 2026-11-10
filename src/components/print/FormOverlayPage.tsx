@@ -23,6 +23,22 @@ function clampStyle(lines: number): CSSProperties {
 }
 
 function slotStyle(slot: PrintSlot, fontSize: number): CSSProperties {
+  // Un texto largo: empieza arriba con su propia letra y ocupa los renglones que necesite.
+  if (slot.kind === 'area') {
+    return {
+      position: 'absolute',
+      left: `${slot.x}mm`,
+      top: `${slot.top}mm`,
+      width: `${slot.width}mm`,
+      maxHeight: `${slot.height}mm`,
+      fontSize: `${slot.fontSize}pt`,
+      lineHeight: 1.2,
+      overflow: 'hidden',
+      whiteSpace: 'pre-wrap',
+      overflowWrap: 'anywhere',
+    };
+  }
+
   const lines = slot.lines ?? 1;
   const textAlign = slot.align ?? 'left';
 
@@ -69,6 +85,22 @@ function slotStyle(slot: PrintSlot, fontSize: number): CSSProperties {
   };
 }
 
+// Ancho de la raya que tacha un dato vacío: corta, para que no parezca una línea más del formato.
+const EMPTY_MARK_MM = 8;
+
+/** Un dato vacío se tacha con una raya corta: así se ve que no se dejó en blanco por olvido. */
+function EmptyMark({ slotKey, slot, fontSize }: { slotKey: string; slot: PrintSlot; fontSize: number }) {
+  // Las anotaciones vacías se tachan en su primer renglón.
+  const place: PrintSlot = slot.kind === 'area' ? { kind: 'line', x: slot.x, y: slot.top + DEFAULT_LINE_MM, width: slot.width } : slot;
+  const style = { ...slotStyle(place, fontSize), textAlign: 'center' as const };
+
+  return (
+    <div data-slot={slotKey} data-empty="true" style={style}>
+      <span style={{ display: 'inline-block', width: `${EMPTY_MARK_MM}mm`, borderTop: '0.3mm solid black', verticalAlign: 'middle' }} />
+    </div>
+  );
+}
+
 /**
  * Una hoja A4 con solo los datos, cada uno en su lugar del formato impreso (ver printLayouts.ts).
  * En la vista previa se ve el formato de fondo para comprobar que coinciden; al imprimir, el fondo
@@ -83,13 +115,14 @@ export function FormOverlayPage({ layout, values, adjustment, showForm }: FormOv
       <div className="absolute inset-0" style={{ transform: `translate(${adjustment.x}mm, ${-adjustment.y}mm)`, fontSize: `${layout.fontSize}pt` }}>
         {Object.entries(layout.slots).map(([key, slot]) => {
           const value = values[key];
-          if (!value) return null;
-
-          return (
-            <div key={key} data-slot={key} style={slotStyle(slot, layout.fontSize)}>
-              {value}
-            </div>
-          );
+          if (value) {
+            return (
+              <div key={key} data-slot={key} style={slotStyle(slot, layout.fontSize)}>
+                {value}
+              </div>
+            );
+          }
+          return <EmptyMark key={key} slotKey={key} slot={slot} fontSize={layout.fontSize} />;
         })}
       </div>
     </div>

@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:sync": "vitest run --config vitest.sync.config.ts",
     "preview": "vite preview",
     "dist": "npm run build && electron-builder --win"
   },

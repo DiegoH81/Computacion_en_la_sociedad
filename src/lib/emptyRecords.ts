@@ -2,7 +2,6 @@ import type { Baptism, Marriage, Minister, Person, Sacrament } from '../../share
 import type { SacramentType } from '../../shared/sync';
 import { todayIsoDate } from './dates';
 
-/** Los models vacíos con los que empieza un formulario nuevo. */
 
 export function emptyPerson(): Person {
   return {
@@ -26,7 +25,6 @@ export function emptySacrament(tipo: SacramentType): Sacrament {
     libro: '',
     folio: '',
     numero: '',
-    // Casi siempre se registra el mismo día; si no, se corrige en el formulario.
     fecha_emision: todayIsoDate(),
     fecha_evento: null,
     anotaciones: null,

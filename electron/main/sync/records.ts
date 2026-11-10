@@ -306,12 +306,32 @@ function save_downloaded_corrections(db: LocalDatabase, record: RecordData, sacr
 	}
 }
 
+export function username_taken_reason(username: string): string
+{
+	return `El nombre de usuario "${username}" ya lo tiene otra cuenta (creada en otra PC). Póngale otro nombre de usuario a esta cuenta en Configuración > Agregar usuario > Editar: después se sube sola.`;
+}
+
+/** Una cuenta local que perdió su nombre de usuario porque otra del servidor ya lo tenía. */
+export function lost_username(username: string): boolean
+{
+	return username.startsWith('~');
+}
+
 export function save_downloaded_user(db: LocalDatabase, user: UserData & { id: number }, force: boolean = false): void
 {
 	user = { ...user, client_id: user.client_id ?? `servidor-${user.id}` };
 
 	if (!force && is_in_queue(db, 'usuario', user.client_id))
 		return;
+
+	const clash = db
+		.prepare('SELECT id, client_id FROM usuarios WHERE username = ? AND id <> ? AND id < 0')
+		.get(user.username, user.id) as { id: number; client_id: string } | undefined;
+	if (clash && is_in_queue(db, 'usuario', clash.client_id))
+	{
+		db.prepare(`UPDATE sync_cola SET estado = 'rechazado', motivo = ? WHERE entidad = 'usuario' AND client_id = ?`)
+			.run(username_taken_reason(user.username), clash.client_id);
+	}
 
 	db.prepare(`UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?`).run(user.username, user.id);
 	db.prepare(`UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?`).run(user.client_id, user.id);

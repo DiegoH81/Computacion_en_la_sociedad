@@ -1,5 +1,5 @@
 import type { Parish as ParishRow } from '../../shared/models';
-import type { LoginResponse } from '../../shared/sync';
+import type { LoginResponse, Role } from '../../shared/sync';
 import { localRequest } from '../lib/localClient';
 
 
@@ -13,6 +13,11 @@ export const AuthService = {
 
   logout(): Promise<{ success: true }> {
     return localRequest<{ success: true }>('auth.logout');
+  },
+
+  /** Cambia la parroquia de trabajo a otra donde trabaja la cuenta. Devuelve su rol en ella. */
+  selectParish(parishId: number): Promise<{ rol: Role; parroquia_id: number }> {
+    return localRequest('auth.selectParish', { parroquia_id: parishId });
   },
 
   getParishes(): Promise<{ parroquias: Parish[] }> {

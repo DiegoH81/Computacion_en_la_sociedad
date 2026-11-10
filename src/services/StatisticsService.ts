@@ -10,7 +10,8 @@ export interface Statistics {
   totales: Record<SacramentKey, { anio: number; anterior: number; mes: number; historico: number }>;
   mensual: (BySacrament & { mes: number })[];
   tendencia: (BySacrament & { anio: number })[];
-  bandasEdad: string[];
+  /** Los rangos de edad de cada sacramento (matrimonio tiene los suyos). */
+  bandasEdad: Record<SacramentKey, string[]>;
   edades: Record<SacramentKey, { bandas: number[]; sinDato: number; promedio: number | null }>;
   ministros: { nombre: string; total: number }[];
   registro: { anuladas: number; conCorrecciones: number };

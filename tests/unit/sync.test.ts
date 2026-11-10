@@ -120,14 +120,15 @@ describe('subir la cola', () => {
   it('incluye las correcciones, y varias ediciones se envían como una sola', async () => {
     const id = create_person_sacrament(db, 'bautismo', parish1, input());
     update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { cambios: [change('nombres', 'Diego')] } }));
-    update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { nombres: 'Diego', cambios: [change('nombres', 'Diogo')] } }));
+    update_person_sacrament(db, 'bautismo', parish1, input({ sacramento: { id }, persona: { cambios: [change('nombres', 'Diogo')] } }));
     const { request, calls } = fakeRemote(acceptAll());
 
     await push_pending(db, request, 'token');
 
     const cambios = pushBody(calls[0].options);
     expect(cambios).toHaveLength(1);
-    expect(cambios[0].datos.personas[0].nombres).toBe('Diogo');
+    // La persona sube con el nombre de la partida; lo corregido va en las correcciones.
+    expect(cambios[0].datos.personas[0].nombres).toBe('Diago');
     expect(cambios[0].datos.cambios.map((c) => c.valor_nuevo)).toEqual(['Diego', 'Diogo']);
   });
 
@@ -239,7 +240,6 @@ describe('descargar cambios', () => {
     const edited = remotePartida({
       version: 5,
       libro: 'Nuevo',
-      personas: [{ ...remotePartida().personas[0], nombres: 'Anita' }],
       cambios: [
         { client_id: 'c1', persona_client_id: 'persona-remota', usuario_id: 1, campo_cambio: 'nombres', valor_anterior: 'Ana', valor_nuevo: 'Anita', fecha_cambio: '2026-01-01T00:00:00.000Z' },
       ],
@@ -249,7 +249,7 @@ describe('descargar cambios', () => {
 
     expect(db.prepare('SELECT libro, version FROM sacramentos').get()).toEqual({ libro: 'Nuevo', version: 5 });
     expect(queue()).toEqual([]);
-    // La corrección también llega: se encuentra por el nombre anterior.
+    // La corrección también llega: se encuentra por el nombre de la partida y por el corregido.
     expect(search_sacraments(db, 'bautismo', { nombres: 'Ana' }).resultados).toHaveLength(1);
     expect(search_sacraments(db, 'bautismo', { nombres: 'Anita' }).resultados).toHaveLength(1);
   });
@@ -446,7 +446,14 @@ describe('login sin internet', () => {
 
     expect(await verify_offline(db, 'parroco1', 'clave-larga')).toEqual({
       ok: true,
-      usuario: { id: 1, rol: 'admin_parroquia', parroquia_id: 1, parroquia_nombre: 'Parroquia 1', nombre_completo: 'Uno P M' },
+      usuario: {
+        id: 1,
+        rol: 'admin_parroquia',
+        parroquia_id: 1,
+        parroquia_nombre: 'Parroquia 1',
+        nombre_completo: 'Uno P M',
+        parroquias: [{ id: 1, nombre: 'Parroquia 1', rol: 'admin_parroquia' }],
+      },
     });
   });
 

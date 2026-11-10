@@ -71,8 +71,8 @@ function clean_sacrament(sacrament: Sacrament): SacramentColumns
 	const page = clean_text(sacrament.folio);
 	const number = clean_text(sacrament.numero);
 
-	if (!issue_date || !book || !page || !number)
-		throw new ServiceError('La fecha, el libro, el folio y el número de registro son requeridos.', 400);
+	if (!book || !page || !number)
+		throw new ServiceError('El libro, el folio y el número de registro son requeridos.', 400);
 
 	return {
 		fecha_emision: issue_date,
@@ -97,7 +97,6 @@ export function sacrament_parish(db: LocalDatabase, sacrament_id: number, type: 
 
 export const OTHER_PARISH_RECORD = 'No tiene permiso para modificar partidas de otra parroquia.';
 
-// Editar directamente o anular: solo el párroco. Un usuario pide la corrección (ver request_corrections).
 export function check_can_manage(db: LocalDatabase, session: Session, sacrament_id: number, type: SacramentType): void
 {
 	const parish_id = sacrament_parish(db, sacrament_id, type);

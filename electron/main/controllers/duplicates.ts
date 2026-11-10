@@ -249,17 +249,18 @@ export function find_duplicates(db: LocalDatabase, type: SacramentType, exclude_
 	const old_names = new Map<string, string[]>();
 	const corrections = db
 		.prepare(
-			`SELECT persona_id, campo_cambio, valor_anterior FROM cambios_persona
-			 WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_anterior IS NOT NULL
+			`SELECT persona_id, campo_cambio, valor_nuevo FROM cambios_persona
+			 WHERE campo_cambio IN ('nombres', 'apellido_paterno', 'apellido_materno') AND valor_nuevo IS NOT NULL
 			   AND estado = 'aprobado'`,
 		)
-		.all() as { persona_id: number; campo_cambio: string; valor_anterior: string }[];
+		.all() as { persona_id: number; campo_cambio: string; valor_nuevo: string }[];
 
+	// La partida guarda el nombre original; los nombres corregidos también cuentan para encontrar duplicados.
 	for (const correction of corrections)
 	{
 		const key = `${correction.persona_id}:${correction.campo_cambio}`;
 		const list = old_names.get(key) ?? [];
-		list.push(normalize(correction.valor_anterior));
+		list.push(normalize(correction.valor_nuevo));
 		old_names.set(key, list);
 	}
 

@@ -67,7 +67,8 @@ export function MarriageForm({
   isSearchingPriests,
   onlyCorrections = false,
 }: MarriageFormProps) {
-  const [record, setRecord] = useState<Marriage>(initialRecord ?? emptyMarriage());
+  // Una partida nueva trae como lugar del matrimonio la parroquia actual (se puede cambiar).
+  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parroquiaNombre || null });
   const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
   const recorded = [...recordedChanges(record.conyuge_1, 'conyuge_1'), ...recordedChanges(record.conyuge_2, 'conyuge_2')];
   const isEditing = initialRecord !== undefined;

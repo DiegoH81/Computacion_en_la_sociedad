@@ -1,4 +1,4 @@
-import type { Baptism, Marriage, Person, Sacrament, SacramentRecord } from './models';
+import type { Baptism, Marriage, NameColumn, Person, Sacrament, SacramentRecord } from './models';
 import type { SacramentType } from './sync';
 
 export type RecordPart = 'sacramento' | 'persona' | 'conyuge_1' | 'conyuge_2' | 'detalle';
@@ -16,6 +16,8 @@ export interface FieldChange
 	valor_anterior: string | null;
 	valor_nuevo: string | null;
 }
+
+export const NOTES_MAX_LENGTH = 350;
 
 export const SACRAMENT_FIELDS: readonly FieldInfo[] =
 [
@@ -189,4 +191,14 @@ export function changed_fields(in_saved: SacramentRecord, in_new: SacramentRecor
 	}
 
 	return out_changes;
+}
+
+export function corrected_value(in_person: Person, in_column: NameColumn): string
+{
+	const saved = (in_person.cambios ?? []).filter((change) => change.id !== undefined && change.campo_cambio === in_column && (change.estado === undefined || change.estado === 'aprobado'));
+	if (saved.length === 0)
+		return in_person[in_column];
+
+	const latest = saved.reduce((last, change) => ((change.id as number) > (last.id as number) ? change : last));
+	return latest.valor_nuevo ?? in_person[in_column];
 }

@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { NOTES_MAX_LENGTH } from '../../../shared/record_fields';
 import type { CorrectionDraft, CorrectionOption, RecordedChange } from '../../lib/personCorrections';
 import { FORM_CONTROL_CLASS, FormInput } from '../ui/FormInput';
 import { FormPanel } from '../ui/FormPanel';
@@ -51,10 +52,16 @@ export function MarginalNotesSection({
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
             readOnly={correctionsLocked}
+            maxLength={NOTES_MAX_LENGTH}
             rows={4}
             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-teal-600"
           />
         </label>
+        {/* El límite es lo que entra en el espacio de las anotaciones del formato impreso. */}
+        <p className={`mt-1 text-right text-xs ${notes.length > NOTES_MAX_LENGTH ? 'font-bold text-solid-red' : 'text-slate-600'}`}>
+          {notes.length} / {NOTES_MAX_LENGTH} caracteres
+          {notes.length > NOTES_MAX_LENGTH && ' (no entra entera en la impresión: acórtela)'}
+        </p>
       </FormPanel>
 
       <div className="flex flex-col">
@@ -109,7 +116,11 @@ export function MarginalNotesSection({
                     <FormInput value={current?.currentValue ?? ''} readOnly />
                   </StackedFormField>
                   <StackedFormField label="Campo nuevo">
-                    <FormInput value={row.valor_nuevo} onChange={(e) => updateRow(row.id, { valor_nuevo: e.target.value })} />
+                    <FormInput
+                      value={row.valor_nuevo}
+                      maxLength={row.field === 'anotaciones' ? NOTES_MAX_LENGTH : undefined}
+                      onChange={(e) => updateRow(row.id, { valor_nuevo: e.target.value })}
+                    />
                   </StackedFormField>
                 </div>
               </div>

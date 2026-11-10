@@ -14,16 +14,30 @@ const HAS_YEAR = `${EVENT_DATE} GLOB '[0-9][0-9][0-9][0-9]*'`;
 const HAS_MONTH = `${EVENT_DATE} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'`;
 const HAS_FULL_DATE = `${EVENT_DATE} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'`;
 
-export const AGE_BANDS =
+const CHILDHOOD_BANDS =
 [
-	{ label: 'Menos de 1 año', to: 0 },
-	{ label: '1 a 6 años', to: 6 },
-	{ label: '7 a 12 años', to: 12 },
-	{ label: '13 a 17 años', to: 17 },
-	{ label: '18 a 29 años', to: 29 },
-	{ label: '30 a 49 años', to: 49 },
-	{ label: '50 años o más', to: Infinity },
+	{ label: '0 a 1 año', to: 1 },
+	{ label: '2 a 7 años', to: 7 },
+	{ label: '8 a 12 años', to: 12 },
+	{ label: '13 a 25 años', to: 25 },
+	{ label: '26 a 50 años', to: 50 },
+	{ label: 'Más de 50 años', to: Infinity },
 ];
+
+export const AGE_BANDS: Record<SacramentType, { label: string; to: number }[]> =
+{
+	bautismo: CHILDHOOD_BANDS,
+	confirmacion: CHILDHOOD_BANDS,
+	matrimonio:
+	[
+		{ label: '18 años o menos', to: 18 },
+		{ label: '19 a 30 años', to: 30 },
+		{ label: '31 a 40 años', to: 40 },
+		{ label: '41 a 50 años', to: 50 },
+		{ label: '51 a 60 años', to: 60 },
+		{ label: 'Más de 60 años', to: Infinity },
+	],
+};
 
 type BySacrament = Record<SacramentType, number>;
 
@@ -92,7 +106,11 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 		.pluck()
 		.all(parish_id) as number[];
 
-	const years = [...new Set([...years_with_records, current_year])].sort((a, b) => b - a);
+	const oldest_year = Math.min(...years_with_records, current_year);
+	const newest_year = Math.max(...years_with_records, current_year);
+	const years: number[] = [];
+	for (let item = newest_year; item >= oldest_year; item--)
+		years.push(item);
 
 	let year = current_year;
 	if (years.includes(requested_year as number))
@@ -186,7 +204,7 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 
 	for (const type of SACRAMENTS)
 	{
-		const bands = AGE_BANDS.map(() => 0);
+		const bands = AGE_BANDS[type].map(() => 0);
 		let age_sum = 0;
 		let with_age = 0;
 		let without_age = 0;
@@ -203,7 +221,7 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 				continue;
 			}
 
-			const band = AGE_BANDS.findIndex((item) => age <= item.to);
+			const band = AGE_BANDS[type].findIndex((item) => age <= item.to);
 			bands[band] += 1;
 			age_sum += age;
 			with_age += 1;
@@ -245,7 +263,7 @@ export function get_statistics(db: LocalDatabase, parish_id: number, requested_y
 		totales: totals,
 		mensual: monthly,
 		tendencia: trend,
-		bandasEdad: AGE_BANDS.map((band) => band.label),
+		bandasEdad: Object.fromEntries(SACRAMENTS.map((type) => [type, AGE_BANDS[type].map((band) => band.label)])) as Record<SacramentType, string[]>,
 		edades: ages,
 		ministros: ministers,
 		registro: register,

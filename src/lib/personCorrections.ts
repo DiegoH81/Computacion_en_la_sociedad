@@ -1,12 +1,8 @@
 import type { NameColumn, Person, PersonChange, SacramentRecord } from '../../shared/models';
+import { corrected_value } from '../../shared/record_fields';
 
-/** En un matrimonio, a qué cónyuge corresponde una corrección. */
 export type SpouseKey = 'conyuge_1' | 'conyuge_2';
 
-/**
- * Fila del subformulario de notas marginales. `field` es la clave de una CorrectionOption:
- * el nombre de la columna ("nombres") o, en un matrimonio, "conyuge_1.nombres".
- */
 export interface CorrectionDraft {
   id: string;
   field: string;
@@ -19,7 +15,6 @@ export interface CorrectionOption {
   currentValue: string;
 }
 
-/** Una corrección ya registrada, con el texto para mostrarla. */
 export interface RecordedChange {
   label: string;
   change: PersonChange;
@@ -42,16 +37,14 @@ function labelOf(column: NameColumn, spouse?: SpouseKey): string {
   return spouse ? `${FIELD_LABELS[column]} ${SPOUSE_SUFFIX[spouse]}` : FIELD_LABELS[column];
 }
 
-/** Los datos que se pueden corregir de una persona, con su valor actual. */
 export function personOptions(person: Person, spouse?: SpouseKey): CorrectionOption[] {
   return NAME_COLUMNS.map((column) => ({
     key: spouse ? `${spouse}.${column}` : column,
     label: labelOf(column, spouse),
-    currentValue: person[column],
+    currentValue: corrected_value(person, column),
   }));
 }
 
-/** Las correcciones nuevas de una persona, a partir de las filas del subformulario. */
 export function newChanges(drafts: CorrectionDraft[], spouse?: SpouseKey): PersonChange[] {
   const prefix = spouse ? `${spouse}.` : '';
   return drafts
@@ -59,7 +52,6 @@ export function newChanges(drafts: CorrectionDraft[], spouse?: SpouseKey): Perso
     .map((draft) => ({ campo_cambio: draft.field.slice(prefix.length) as NameColumn, valor_nuevo: draft.valor_nuevo }));
 }
 
-/** Las correcciones ya registradas de una persona, para mostrarlas. */
 export function recordedChanges(person: Person, spouse?: SpouseKey): RecordedChange[] {
   return person.cambios
     .filter((change) => change.id !== undefined)

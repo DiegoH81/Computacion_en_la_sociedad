@@ -1,7 +1,7 @@
 import type { Marriage } from '../../../shared/models';
 import { formatLongDate, todayLongDate } from '../../lib/dates';
 import { birthValue, celebrantName, fullName, printText } from '../../lib/printFields';
-import { BlankDateLine, CertificateLogo, DottedField, SerialNumber, SignatureLine } from '../print/CertificateParts';
+import { BlankDateLine, CertificateLogo, DottedField, SerialNumber, SignatureLine, ValueOrMark } from '../print/CertificateParts';
 
 type Spouse = 'conyuge_1' | 'conyuge_2';
 
@@ -29,8 +29,8 @@ export function MarriagePrintView({ record, logo }: { record: Marriage; logo: st
     { label: 'Fecha del Matrimonio:', value: formatLongDate(printText(partida.fecha_evento)) },
     { label: 'Ministro celebrante:', value: celebrantName(partida.ministro) },
     { label: 'Lugar del Matrimonio:', value: printText(record.lugar) },
-    // La partida no registra padrinos de matrimonio: se completa a mano.
-    { label: 'Padrinos:', value: '' },
+    // La partida no registra padrinos de matrimonio: se completa a mano (por eso no se tacha).
+    { label: 'Padrinos:', value: null },
     { label: 'Testigos:', value: testigos.filter(Boolean).join(', ') },
   ];
 
@@ -77,9 +77,13 @@ export function MarriagePrintView({ record, logo }: { record: Marriage; logo: st
         <tbody>
           {ROWS.map(({ label, value }) => (
             <tr key={label}>
-              <td className={`${CELL} font-semibold uppercase`}>{value(record, 'conyuge_1')}</td>
+              <td className={`${CELL} font-semibold uppercase`}>
+                <ValueOrMark value={value(record, 'conyuge_1')} />
+              </td>
               <td className={`${CELL} text-center`}>{label}</td>
-              <td className={`${CELL} font-semibold uppercase`}>{value(record, 'conyuge_2')}</td>
+              <td className={`${CELL} font-semibold uppercase`}>
+                <ValueOrMark value={value(record, 'conyuge_2')} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -97,12 +101,15 @@ export function MarriagePrintView({ record, logo }: { record: Marriage; logo: st
           {celebrationRows.map((row, index) => (
             <tr key={row.label}>
               <td className={`${CELL} h-[10mm] w-1/2`}>
-                <span>{row.label}</span> <span className="font-semibold uppercase">{row.value}</span>
+                <span>{row.label}</span>{' '}
+                <span className="font-semibold uppercase">{row.value !== null && <ValueOrMark value={row.value} />}</span>
               </td>
               {index === 0 && (
                 <td rowSpan={celebrationRows.length} className={`${CELL} align-top`}>
                   <p>Anotaciones marginales</p>
-                  <p className="mt-[1mm] text-[9pt] leading-snug break-words whitespace-pre-wrap">{printText(partida.anotaciones)}</p>
+                  <p className="mt-[1mm] text-[8pt] leading-snug break-words whitespace-pre-wrap">
+                    <ValueOrMark value={printText(partida.anotaciones)} />
+                  </p>
                 </td>
               )}
             </tr>

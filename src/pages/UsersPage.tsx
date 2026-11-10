@@ -5,6 +5,7 @@ import { ManagementPanel, RowBadge, ActiveStatus } from '../components/features/
 import type { NameColumn, SearchFilters, User } from '../../shared/models';
 import { cannot_make_principal, type Actor } from '../../shared/users';
 import { UserFormModal } from '../components/features/UserFormModal';
+import { UserParishesDialog } from '../components/features/UserParishesDialog';
 import { ConfirmActionDialog } from '../components/ui/ConfirmActionDialog';
 import { useSessionStore } from '../store/sessionStore';
 import {
@@ -15,6 +16,8 @@ import {
   loadParishes,
   loadIsPrincipal,
   makePrincipal,
+  setUserParish,
+  removeUserParish,
 } from '../controllers/UserController';
 import type { Parish } from '../services/AuthService';
 import { ROLE_LABELS } from '../lib/permissions';
@@ -49,6 +52,10 @@ export function UsersPage() {
   const actor: Actor = { id: usuarioId ?? 0, rol: rol ?? 'usuario', parroquia_id: parroquiaId ?? null, principal: isPrincipal };
   // El admin al que se le pasaría la marca, mientras se pide confirmar.
   const [newPrincipal, setNewPrincipal] = useState<User | null>(null);
+  // La cuenta cuyas parroquias adicionales se están viendo (solo el admin general). Se busca en la
+  // lista para que la ventana muestre lo que hay después de cada cambio.
+  const [parishesUserId, setParishesUserId] = useState<number | null>(null);
+  const parishesUser = users.find((user) => user.id === parishesUserId) ?? null;
 
   const [parishes, setParishes] = useState<Parish[]>([]);
 
@@ -182,6 +189,13 @@ export function UsersPage() {
     setReloadCounter((count) => count + 1);
   }
 
+  // Las acciones de la ventana de parroquias: devuelven el error a mostrar, o null si salió bien.
+  async function afterParishChange(result: { success: boolean; errorMessage?: string }): Promise<string | null> {
+    if (!result.success) return result.errorMessage ?? 'No se pudo guardar.';
+    setReloadCounter((count) => count + 1);
+    return null;
+  }
+
   async function handleMakePrincipal() {
     if (!newPrincipal) return;
 
@@ -227,8 +241,8 @@ export function UsersPage() {
           // Esta pantalla solo la ven los administradores, y Electron revisa el rol en cada operación:
           // mostrarlo no le da a nadie un permiso que no tenga.
           { header: 'Tipo', render: (user) => ROLE_LABELS[user.rol] },
-          // Un administrador general no es de ninguna parroquia.
-          { header: 'Parroquia', render: (user) => (user.rol === 'admin_general' ? '—' : (user.parroquia_nombre ?? '—')) },
+          // Un administrador general no es de ninguna parroquia. Las demás cuentas pueden tener adicionales.
+          { header: 'Parroquia', render: (user) => (user.rol === 'admin_general' ? '—' : parishText(user, parishes)) },
           { header: 'Estado', render: (user) => <ActiveStatus isActive={user.activo === 1} /> },
         ]}
         emptyText="No se encontraron usuarios."
@@ -265,6 +279,8 @@ export function UsersPage() {
           if (user.id === usuarioId) return true;
           if (isGeneralAdmin) return user.rol !== 'admin_general' || isPrincipal;
           if (user.parroquia_id !== parroquiaId) return false;
+          // A quien también trabaja en otras parroquias lo modifica solo el admin general.
+          if ((user.parroquias_adicionales ?? []).length > 0) return false;
           return user.rol === 'usuario' || (user.rol === 'admin_parroquia' && isPrincipal);
         }}
         actions={[
@@ -281,9 +297,19 @@ export function UsersPage() {
             label: (user) => (user?.activo === 0 ? 'Habilitar' : 'Deshabilitar'),
             color: 'bg-solid-red',
             // Nadie se deshabilita a sí mismo, ni al principal (primero se pasa la marca): siempre queda quien administre.
-            isEnabled: (user) => user.id !== usuarioId && !(user.principal === 1 && user.activo === 1),
+            isEnabled: (user) => user.id !== usuarioId && !(isPrincipalAnywhere(user) && user.activo === 1),
             onClick: (user) => handleToggleActive(user.id as number),
           },
+          ...(isGeneralAdmin
+            ? [
+                {
+                  label: () => 'Parroquias',
+                  color: 'bg-darker-app',
+                  isEnabled: (user: User) => user.rol !== 'admin_general' && (user.id as number) > 0,
+                  onClick: (user: User) => setParishesUserId(user.id as number),
+                },
+              ]
+            : []),
           ...(isPrincipal || isGeneralAdmin
             ? [
                 {
@@ -311,6 +337,17 @@ export function UsersPage() {
         />
       )}
 
+      {parishesUser && (
+        <UserParishesDialog
+          user={parishesUser}
+          parishes={parishes}
+          onSetParish={async (parishId, parishRole) => afterParishChange(await setUserParish(parishesUser.id as number, parishId, parishRole))}
+          onRemoveParish={async (parishId) => afterParishChange(await removeUserParish(parishesUser.id as number, parishId))}
+          onMakePrincipal={async (parishId) => afterParishChange(await makePrincipal(parishesUser.username, parishId))}
+          onClose={() => setParishesUserId(null)}
+        />
+      )}
+
       {modalState.mode !== 'closed' && (
         <UserFormModal
           mode={modalState.mode}
@@ -328,4 +365,25 @@ export function UsersPage() {
       )}
     </MainMenuLayout>
   );
+}
+
+/**
+ * "San Pedro", o "San Pedro (+ San José, Santa Rosa)" si también trabaja en otras. Primero va la
+ * parroquia de la fila (la buscada, o la de origen); entre paréntesis, las demás.
+ */
+function parishText(user: User, parishes: Parish[]): string {
+  const names = (user.parroquias_adicionales ?? []).map((row) => ({ id: row.parroquia_id, nombre: row.parroquia_nombre }));
+  const originId = user.parroquia_origen_id ?? user.parroquia_id;
+  const origin = parishes.find((parish) => parish.id === originId);
+  if (origin) names.unshift({ id: origin.id, nombre: origin.nombre });
+
+  const others = names.filter((parish) => parish.id !== user.parroquia_id);
+  const name = user.parroquia_nombre ?? '—';
+  if (others.length === 0) return name;
+  return `${name} (+ ${others.map((parish) => parish.nombre).join(', ')})`;
+}
+
+/** Principal en la parroquia que se ve o en alguna adicional: no se deshabilita sin pasar la marca. */
+function isPrincipalAnywhere(user: User): boolean {
+  return user.principal === 1 || (user.parroquias_adicionales ?? []).some((row) => row.principal === 1);
 }

@@ -3,7 +3,7 @@ import { request_routes } from './controllers/requests';
 import { backup_public_routes, backup_routes } from './controllers/backup';
 import { duplicate_routes } from './controllers/duplicates';
 import { legacy_import_routes } from './controllers/legacy_import';
-import { login_routes } from './controllers/login';
+import { login_routes, session_routes } from './controllers/login';
 import { minister_routes } from './controllers/ministers';
 import { load_bundled_package, package_public_routes, package_routes } from './controllers/package';
 import { parish_routes } from './controllers/parishes';
@@ -23,6 +23,7 @@ export function register_routes(): void
 {
 	const routes =
 	{
+		...session_routes,
 		...parish_routes,
 		...minister_routes,
 		...sacrament_routes,

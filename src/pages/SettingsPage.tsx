@@ -33,9 +33,14 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
   const rol = useSessionStore((state) => state.rol);
+  const parroquiaId = useSessionStore((state) => state.parroquiaId);
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
   const permissions = usePermissions();
+
+  // Consultando una parroquia que no es la de trabajo, solo se ve su nombre: las opciones son de la
+  // propia. El administrador general no tiene parroquia: sus opciones valen en cualquiera.
+  const isOtherParish = rol !== 'admin_general' && parroquiaActivaId !== parroquiaId;
 
   const [isImporting, setIsImporting] = useState(false);
   const [backupMode, setBackupMode] = useState<BackupMode | null>(null);
@@ -70,15 +75,17 @@ export function SettingsPage() {
     >
       <div className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center gap-8">
         <div className="flex flex-col items-center gap-3">
-          <ParishLogoSettings parroquiaId={parroquiaActivaId} canEdit={permissions.canAdminister} />
+          {!isOtherParish && <ParishLogoSettings parroquiaId={parroquiaActivaId} canEdit={permissions.canAdminister} />}
 
           <span className="rounded-xl bg-darker-app px-8 py-2 font-semibold text-white uppercase">
             {parroquiaActivaNombre}
           </span>
 
-          <span className="text-sm font-medium text-slate-800">
-            Rol: {rol ? ROLE_LABELS[rol] : ''}
-          </span>
+          {!isOtherParish && (
+            <span className="text-sm font-medium text-slate-800">
+              Rol: {rol ? ROLE_LABELS[rol] : ''}
+            </span>
+          )}
         </div>
 
         {packageMessage && (
@@ -87,37 +94,39 @@ export function SettingsPage() {
           </p>
         )}
 
-        <div className="grid w-full max-w-2xl grid-cols-2 gap-6">
-          <div className="flex flex-col gap-2">
-            {permissions.canAdminister && (
-              <SettingsButton label="Importar Excel del sistema anterior" onClick={() => setIsImporting(true)} />
-            )}
-            {permissions.canManageUsers && (
-              <>
-                <SettingsButton label="Exportar respaldo" onClick={() => setBackupMode('export')} />
-                <SettingsButton label="Restaurar respaldo" onClick={() => setBackupMode('restore')} />
-              </>
-            )}
-            {rol === 'admin_general' && (
-              <SettingsButton label="Generar paquete inicial" onClick={handleExportPackage} />
-            )}
-          </div>
+        {!isOtherParish && (
+          <div className="grid w-full max-w-2xl grid-cols-2 gap-6">
+            <div className="flex flex-col gap-2">
+              {/* Importar y exportar datos: solo el administrador de la parroquia, en su propia parroquia
+                  (no el administrador general). */}
+              {permissions.canAdminister && (
+                <>
+                  <SettingsButton label="Importar Excel del sistema anterior" onClick={() => setIsImporting(true)} />
+                  <SettingsButton label="Exportar respaldo" onClick={() => setBackupMode('export')} />
+                  <SettingsButton label="Restaurar respaldo" onClick={() => setBackupMode('restore')} />
+                </>
+              )}
+              {rol === 'admin_general' && (
+                <SettingsButton label="Generar paquete inicial" onClick={handleExportPackage} />
+              )}
+            </div>
 
-          <div className="flex flex-col gap-2">
-            {permissions.canWrite && (
-              <SettingsButton label="Agregar ministro" onClick={() => navigate('/ministros')} />
-            )}
-            {permissions.canManageUsers && (
-              <SettingsButton label="Agregar usuario" onClick={() => navigate('/usuarios')} />
-            )}
-            {permissions.canManageParishes && (
-              <SettingsButton label="Parroquias" onClick={() => navigate('/parroquias')} />
-            )}
-            {permissions.canAdminister && (
-              <SettingsButton label="Cambios por aprobar" onClick={() => navigate('/cambios')} />
-            )}
+            <div className="flex flex-col gap-2">
+              {permissions.canWrite && (
+                <SettingsButton label="Agregar ministro" onClick={() => navigate('/ministros')} />
+              )}
+              {permissions.canManageUsers && (
+                <SettingsButton label="Agregar usuario" onClick={() => navigate('/usuarios')} />
+              )}
+              {permissions.canManageParishes && (
+                <SettingsButton label="Parroquias" onClick={() => navigate('/parroquias')} />
+              )}
+              {permissions.canAdminister && (
+                <SettingsButton label="Cambios por aprobar" onClick={() => navigate('/cambios')} />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {isImporting && <LegacyImportDialog parroquiaNombre={parroquiaActivaNombre ?? ''} onClose={() => setIsImporting(false)} />}

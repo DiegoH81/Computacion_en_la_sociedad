@@ -1,19 +1,20 @@
-// La gestión de cuentas en esta PC, también sin internet. Los cambios se anotan en la cola y se suben
-// al sincronizar (sync/sync.ts); el servidor repite los mismos permisos (shared/users.ts).
-//
-//   users.search        buscar      { nombres, apellido_paterno, apellido_materno, parroquia_id, orden, direccion, pagina }
-//   users.create        crear       el model User con password
-//   users.update        editar      nombre, apellidos y (si se manda) la contraseña
-//   users.toggleActive  habilitar o deshabilitar
-//   users.me            { principal }  si la sesión es la del principal (general o de su parroquia)
-//   users.makePrincipal pasarle la marca de principal a otro administrador (en el servidor: necesita internet)
-//
-// Una cuenta creada aquí recibe un id provisional negativo hasta que el servidor le da el suyo.
-
-import type { NameColumn, SearchFilters, SearchPage, User } from '../../../shared/models';
-import { can_manage_users, cannot_create, cannot_disable, cannot_modify, is_role, role_parish_error, USERNAME_PATTERN, type Actor, type TargetUser } from '../../../shared/users';
+import type { AdditionalParish, NameColumn, SearchFilters, SearchPage, User } from '../../../shared/models';
+import {
+	can_manage_users,
+	cannot_change_parishes,
+	cannot_create,
+	cannot_disable,
+	cannot_modify,
+	is_role,
+	password_error,
+	role_parish_error,
+	USERNAME_PATTERN,
+	type Actor,
+	type TargetUser,
+} from '../../../shared/users';
 import type { LocalDatabase } from '../db/database';
 import { current_session, type Session } from '../models/session';
+import { actor_in_parish, read_target_in_parish, type LocalTarget } from '../models/user';
 import { sync_now } from '../sync/auto_sync';
 import { remote_request } from '../sync/online';
 import { add_to_queue } from '../sync/queue';
@@ -23,9 +24,9 @@ import { ServiceError } from '../utils/errors';
 import { clean_text, page_of, sort_direction } from '../utils/helpers';
 import type { Routes } from '../utils/middleware';
 
-export const PASSWORD_MIN_LENGTH = 8;
-
 const NOT_FOUND = 'Usuario no encontrado.';
+
+const PARISHES_NEED_INTERNET = 'Agregar o quitar parroquias necesita conexión a internet: la cuenta tiene que estar en el servidor.';
 
 const SORT_COLUMNS: Record<NameColumn, string> =
 {
@@ -40,36 +41,26 @@ function check_can_manage(session: Session): void
 		throw new ServiceError('Solo un administrador puede gestionar usuarios.', 403);
 }
 
-function is_principal(db: LocalDatabase, session: Session): boolean
-{
-	const row = db.prepare('SELECT principal FROM usuarios WHERE id = ?').get(session.user_id) as { principal: number } | undefined;
-	return row?.principal === 1;
-}
-
 function actor_of(db: LocalDatabase, session: Session): Actor
 {
-	return { id: session.user_id, rol: session.role, parroquia_id: session.parish_id, principal: is_principal(db, session) };
+	return actor_in_parish(db, session.user_id, session.role, session.parish_id);
 }
 
-function read_target(db: LocalDatabase, user_id: number): TargetUser & { client_id: string; version: number; activo: number }
+function read_target(db: LocalDatabase, session: Session, user_id: number): LocalTarget
 {
-	const row = db.prepare('SELECT id, client_id, rol, parroquia_id, version, activo, principal FROM usuarios WHERE id = ?').get(user_id) as
-		| (Omit<TargetUser, 'principal'> & { client_id: string; version: number; activo: number; principal: number })
-		| undefined;
-
-	if (!row)
+	const target = read_target_in_parish(db, user_id, session.parish_id);
+	if (!target)
 		throw new ServiceError(NOT_FOUND, 404);
 
-	return { ...row, principal: row.principal === 1 };
+	return target;
 }
 
-// El primer administrador de una parroquia queda como su principal (el servidor hace lo mismo al subirlo).
 function becomes_principal(db: LocalDatabase, role: string, parish_id: number | null): number
 {
 	if (role !== 'admin_parroquia')
 		return 0;
 
-	const has_principal = db.prepare('SELECT 1 FROM usuarios WHERE principal = 1 AND parroquia_id = ?').get(parish_id) !== undefined;
+	const has_principal = db.prepare('SELECT 1 FROM membresias WHERE principal = 1 AND parroquia_id = ?').get(parish_id) !== undefined;
 	return has_principal ? 0 : 1;
 }
 
@@ -78,8 +69,9 @@ function check_password(password: string, required: boolean): void
 	if (!password && !required)
 		return;
 
-	if (password.length < PASSWORD_MIN_LENGTH)
-		throw new ServiceError(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`, 400);
+	const reason = password_error(password);
+	if (reason)
+		throw new ServiceError(reason, 400);
 }
 
 function clean_names(user: User): { nombre: string; apellido_paterno: string; apellido_materno: string }
@@ -105,6 +97,19 @@ function save_password(db: LocalDatabase, user_id: number, hash: string): void
 	).run(user_id, hash);
 }
 
+function read_additional_parishes(db: LocalDatabase, user_id: number): AdditionalParish[]
+{
+	return db
+		.prepare(
+			`SELECT up.parroquia_id, p.nombre AS parroquia_nombre, up.rol, up.principal
+			 FROM usuario_parroquias up
+			 JOIN parroquias p ON p.id = up.parroquia_id
+			 WHERE up.usuario_id = ?
+			 ORDER BY p.nombre`,
+		)
+		.all(user_id) as AdditionalParish[];
+}
+
 export function search_users(db: LocalDatabase, session: Session, filters: SearchFilters): SearchPage<User>
 {
 	check_can_manage(session);
@@ -112,14 +117,16 @@ export function search_users(db: LocalDatabase, session: Session, filters: Searc
 	const conditions: string[] = [];
 	const values: (string | number)[] = [];
 
-	// El admin de una parroquia solo ve las cuentas de su parroquia.
 	let parish_filter = filters.parroquia_id;
 	if (session.role === 'admin_parroquia')
 		parish_filter = session.parish_id ?? -1;
 
+	let from = 'FROM usuarios u LEFT JOIN parroquias p ON p.id = u.parroquia_id';
+	let role_columns = 'u.rol, u.parroquia_id, u.principal';
 	if (Number.isInteger(parish_filter))
 	{
-		conditions.push('u.parroquia_id = ?');
+		from = 'FROM usuarios u JOIN membresias m ON m.usuario_id = u.id AND m.parroquia_id = ? LEFT JOIN parroquias p ON p.id = m.parroquia_id';
+		role_columns = 'm.rol, m.parroquia_id, m.principal';
 		values.push(parish_filter as number);
 	}
 
@@ -137,21 +144,23 @@ export function search_users(db: LocalDatabase, session: Session, filters: Searc
 	if (conditions.length > 0)
 		where = 'WHERE ' + conditions.join(' AND ');
 
-	const count = db.prepare(`SELECT COUNT(*) AS total FROM usuarios u ${where}`).get(...values) as { total: number };
+	const count = db.prepare(`SELECT COUNT(*) AS total ${from} ${where}`).get(...values) as { total: number };
 	const page = page_of(filters, count.total);
 	const sort_column = SORT_COLUMNS[filters.orden ?? 'nombres'] ?? SORT_COLUMNS.nombres;
 
 	const rows = db
 		.prepare(
-			`SELECT u.id, u.username, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, u.principal,
-				p.nombre AS parroquia_nombre
-			 FROM usuarios u
-			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
+			`SELECT u.id, u.username, ${role_columns}, u.parroquia_id AS parroquia_origen_id,
+				u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, p.nombre AS parroquia_nombre
+			 ${from}
 			 ${where}
 			 ORDER BY u.${sort_column} ${sort_direction(filters)}, u.id
 			 LIMIT ? OFFSET ?`,
 		)
 		.all(...values, PAGE_SIZE, page.offset) as User[];
+
+	for (const row of rows)
+		row.parroquias_adicionales = read_additional_parishes(db, row.id as number);
 
 	return { resultados: rows, total_paginas: page.total_pages };
 }
@@ -173,7 +182,6 @@ export async function create_user(db: LocalDatabase, session: Session, user: Use
 	if (!is_role(role))
 		throw new ServiceError('El rol no es válido.', 400);
 
-	// El admin de una parroquia crea cuentas de la suya; el admin general elige la parroquia.
 	let parish_id: number | null = null;
 	if (role !== 'admin_general')
 		parish_id = session.role === 'admin_parroquia' ? session.parish_id : (Number.isInteger(user.parroquia_id) ? user.parroquia_id : null);
@@ -215,6 +223,25 @@ export async function create_user(db: LocalDatabase, session: Session, user: Use
 	return create();
 }
 
+function username_change(db: LocalDatabase, id: number, value: unknown): string | null
+{
+	const username = clean_text(value);
+	const current = db.prepare('SELECT username FROM usuarios WHERE id = ?').pluck().get(id) as string;
+	if (!username || username === current)
+		return null;
+
+	if (id > 0)
+		throw new ServiceError('El nombre de usuario no se puede cambiar: la cuenta ya está en el servidor.', 400);
+
+	if (!USERNAME_PATTERN.test(username))
+		throw new ServiceError('El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.', 400);
+
+	if (db.prepare('SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE AND id <> ?').get(username, id))
+		throw new ServiceError('Ese nombre de usuario ya existe.', 409);
+
+	return username;
+}
+
 export async function update_user(db: LocalDatabase, session: Session, user: User): Promise<void>
 {
 	const id = positive_or_provisional_id(user?.id);
@@ -225,12 +252,13 @@ export async function update_user(db: LocalDatabase, session: Session, user: Use
 	const password = typeof user.password === 'string' ? user.password : '';
 	check_password(password, false);
 
-	const target = read_target(db, id);
+	const target = read_target(db, session, id);
 	const reason = cannot_modify(actor_of(db, session), target);
 	if (reason)
 		throw new ServiceError(reason, 403);
 
 	const hash = password ? await create_server_hash(password) : null;
+	const new_username = username_change(db, id, user?.username);
 
 	const update = db.transaction(() =>
 	{
@@ -240,6 +268,13 @@ export async function update_user(db: LocalDatabase, session: Session, user: Use
 
 		if (hash)
 			save_password(db, id, hash);
+
+		if (new_username)
+		{
+			db.prepare('UPDATE usuarios SET username = ? WHERE id = ?').run(new_username, id);
+			db.prepare(`UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE entidad = 'usuario' AND client_id = ? AND estado = 'rechazado'`)
+				.run(target.client_id);
+		}
 	});
 
 	update();
@@ -252,7 +287,7 @@ export function toggle_user_active(db: LocalDatabase, session: Session, user_id:
 	if (user_id === session.user_id)
 		throw new ServiceError('No puede deshabilitar su propia cuenta.', 400);
 
-	const target = read_target(db, user_id);
+	const target = read_target(db, session, user_id);
 	const reason = cannot_modify(actor_of(db, session), target);
 	if (reason)
 		throw new ServiceError(reason, 403);
@@ -266,7 +301,6 @@ export function toggle_user_active(db: LocalDatabase, session: Session, user_id:
 		add_to_queue(db, 'usuario', target.client_id, target.version);
 		db.prepare('UPDATE usuarios SET activo = NOT activo WHERE id = ?').run(user_id);
 
-		// Una cuenta deshabilitada deja de entrar en esta PC de inmediato.
 		if (target.activo === 1)
 			db.prepare('DELETE FROM credenciales_locales WHERE usuario_id = ?').run(user_id);
 	});
@@ -274,14 +308,8 @@ export function toggle_user_active(db: LocalDatabase, session: Session, user_id:
 	toggle();
 }
 
-// La marca de principal se pasa en el servidor, que es quien garantiza que haya uno solo. Antes se sube
-// lo pendiente: una cuenta recién creada aquí todavía tiene su id provisional, que cambia al subirla.
-// Por eso la cuenta se indica con su nombre de usuario (único y fijo). Después se sincroniza otra vez
-// para que esta PC vea la marca en su nuevo dueño.
-export async function make_principal(db: LocalDatabase, session: Session, username: unknown): Promise<void>
+async function on_server(db: LocalDatabase, username: unknown, offline_message: string, action: (server_id: number, token: string) => Promise<void>): Promise<void>
 {
-	check_can_manage(session);
-
 	if (typeof username !== 'string' || !db.prepare('SELECT 1 FROM usuarios WHERE username = ?').get(username))
 		throw new ServiceError(NOT_FOUND, 404);
 
@@ -290,13 +318,60 @@ export async function make_principal(db: LocalDatabase, session: Session, userna
 	const server_id = db.prepare('SELECT id FROM usuarios WHERE username = ?').pluck().get(username) as number;
 	const token = current_session()?.token;
 	if (!token || server_id < 0)
-		throw new ServiceError('Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.', 503);
+		throw new ServiceError(offline_message, 503);
 
-	await remote_request(`/api/users/${server_id}/make-principal`, { method: 'PATCH', token: token });
+	await action(server_id, token);
 	await sync_now();
 }
 
-// Las cuentas creadas aquí tienen un id negativo mientras no se suben.
+export async function make_principal(db: LocalDatabase, session: Session, username: unknown, parish_id: unknown = null): Promise<void>
+{
+	check_can_manage(session);
+
+	let parish: number | null = session.role === 'admin_general' ? null : session.parish_id;
+	if (Number.isInteger(parish_id))
+		parish = parish_id as number;
+
+	await on_server(db, username, 'Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.', async (server_id, token) =>
+	{
+		await remote_request(`/api/users/${server_id}/make-principal`, { method: 'PATCH', token: token, body: { parroquia_id: parish } });
+	});
+}
+
+function check_parish_change(db: LocalDatabase, session: Session, user_id: unknown, parish_id: unknown): { username: string; parish_id: number }
+{
+	const target = read_target(db, session, positive_or_provisional_id(user_id));
+	const reason = cannot_change_parishes(actor_of(db, session), target);
+	if (reason)
+		throw new ServiceError(reason, 403);
+
+	if (!Number.isInteger(parish_id))
+		throw new ServiceError('Debe seleccionar una parroquia.', 400);
+
+	const username = db.prepare('SELECT username FROM usuarios WHERE id = ?').pluck().get(target.id) as string;
+	return { username: username, parish_id: parish_id as number };
+}
+
+export async function set_parish(db: LocalDatabase, session: Session, user_id: unknown, parish_id: unknown, role: unknown): Promise<void>
+{
+	const checked = check_parish_change(db, session, user_id, parish_id);
+
+	await on_server(db, checked.username, PARISHES_NEED_INTERNET, async (server_id, token) =>
+	{
+		await remote_request(`/api/users/${server_id}/parishes/${checked.parish_id}`, { method: 'PUT', token: token, body: { rol: role } });
+	});
+}
+
+export async function remove_parish(db: LocalDatabase, session: Session, user_id: unknown, parish_id: unknown): Promise<void>
+{
+	const checked = check_parish_change(db, session, user_id, parish_id);
+
+	await on_server(db, checked.username, PARISHES_NEED_INTERNET, async (server_id, token) =>
+	{
+		await remote_request(`/api/users/${server_id}/parishes/${checked.parish_id}`, { method: 'DELETE', token: token });
+	});
+}
+
 function positive_or_provisional_id(value: unknown): number
 {
 	if (!Number.isInteger(value) || value === 0)
@@ -314,8 +389,6 @@ export const user_routes: Routes =
 
 	'users.create': async (user: User, { db, session }) =>
 	{
-		// Se sube enseguida (si hay internet): así la cuenta nueva ya puede entrar en otra PC
-		// y sincronizar con su propia contraseña.
 		const id = await create_user(db, session, user);
 		void sync_now();
 		return { id: id };
@@ -335,15 +408,26 @@ export const user_routes: Routes =
 		return { success: true };
 	},
 
-	'users.makePrincipal': async (payload: { username: unknown }, { db, session }) =>
+	'users.makePrincipal': async (payload: { username: unknown; parroquia_id?: unknown }, { db, session }) =>
 	{
-		await make_principal(db, session, payload?.username);
+		await make_principal(db, session, payload?.username, payload?.parroquia_id ?? null);
+		return { success: true };
+	},
+
+	'users.setParish': async (payload: { id: unknown; parroquia_id: unknown; rol: unknown }, { db, session }) =>
+	{
+		await set_parish(db, session, payload?.id, payload?.parroquia_id, payload?.rol);
+		return { success: true };
+	},
+
+	'users.removeParish': async (payload: { id: unknown; parroquia_id: unknown }, { db, session }) =>
+	{
+		await remove_parish(db, session, payload?.id, payload?.parroquia_id);
 		return { success: true };
 	},
 
 	'users.me': (_payload, { db, session }) =>
 	{
-		return { principal: can_manage_users(session.role) && is_principal(db, session) };
+		return { principal: can_manage_users(session.role) && actor_of(db, session).principal };
 	},
 };
-

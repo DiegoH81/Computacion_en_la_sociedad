@@ -25,7 +25,7 @@ export function MonthlyChart({ data, year }: { data: Statistics['mensual']; year
         rows: data.map((row, index) => [MONTH_NAMES[index], ...SACRAMENT_SERIES.map((series) => row[series.key]), totals[index]]),
       }}
     >
-      <div className="flex gap-2">
+      <div className="mt-5 flex gap-2">
         <div className="relative w-8 shrink-0" style={{ height: PLOT_HEIGHT }} aria-hidden="true">
           {ticks.map((tick) => (
             <span
@@ -59,7 +59,7 @@ export function MonthlyChart({ data, year }: { data: Statistics['mensual']; year
                         { label: 'Total', value: totals[index] },
                       ],
                     })}
-                    className="flex h-full flex-col-reverse items-center rounded outline-none hover:bg-slate-100/70 focus-visible:ring-2 focus-visible:ring-teal-600"
+                    className="relative flex h-full flex-col-reverse items-center rounded outline-none hover:bg-slate-100/70 focus-visible:ring-2 focus-visible:ring-teal-600"
                   >
                     {present.map((series, position) => (
                       <div
@@ -72,8 +72,15 @@ export function MonthlyChart({ data, year }: { data: Statistics['mensual']; year
                         }}
                       />
                     ))}
+                    {/* El número va encima de la barra sin ocupar lugar en la columna: si no, con la barra
+                        a toda la altura, el número la empujaba hacia abajo, encima de los meses. */}
                     {index === peakIndex && highest > 0 && (
-                      <span className="mb-0.5 text-xs font-semibold text-slate-900 tabular-nums">{highest}</span>
+                      <span
+                        className="absolute left-0 right-0 text-center text-xs font-semibold text-slate-900 tabular-nums"
+                        style={{ bottom: (highest / top) * PLOT_HEIGHT + 2 }}
+                      >
+                        {highest}
+                      </span>
                     )}
                   </div>
                 );

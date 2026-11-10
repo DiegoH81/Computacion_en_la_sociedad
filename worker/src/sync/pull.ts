@@ -6,7 +6,6 @@
 
 import type { ChangeRequestData, HistoryData, HistoryFieldData, PersonCorrection, PersonData, RecordData } from '../../../shared/sync';
 import { detail_columns } from '../../../shared/record_fields';
-import type { TokenUser } from '../utils/crypto';
 import type { JsonObject } from '../utils/helpers';
 
 
@@ -225,25 +224,19 @@ export async function read_record(db: D1Database, entity: string, client_id: str
 	return rows[0].record;
 }
 
-export async function read_reference(db: D1Database, user: TokenUser)
+export async function read_reference(db: D1Database)
 {
-	const sees_all = user.rol === 'admin_general' ? 1 : 0;
-
-	const [parishes, ministers, users] = await db.batch([
+	const [parishes, ministers, users, memberships] = await db.batch([
 		db.prepare('SELECT id, nombre, ubicacion, activa FROM parroquias'),
 		db.prepare(MINISTER_SELECT),
-		db
-			.prepare(
-				`${USER_SELECT.replace(' FROM usuarios', '')},
-					CASE WHEN ? = 1 OR parroquia_id = ? OR id = ? THEN password_hash END AS password_hash
-				 FROM usuarios`,
-			)
-			.bind(sees_all, user.parroquiaId ?? -1, user.usuarioId),
+		db.prepare(`${USER_SELECT.replace(' FROM usuarios', '')}, password_hash FROM usuarios`),
+		db.prepare('SELECT usuario_id, parroquia_id, rol, principal FROM usuario_parroquias ORDER BY usuario_id, parroquia_id'),
 	]);
 
 	return {
 		parroquias: parishes.results,
 		ministros: ministers.results,
 		usuarios: users.results,
+		usuario_parroquias: memberships.results,
 	};
 }

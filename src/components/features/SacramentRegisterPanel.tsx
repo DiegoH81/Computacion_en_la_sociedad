@@ -31,8 +31,8 @@ export function SacramentRegisterPanel({ sacramento, onChange, parroquiaNombre }
           variant="panelTitle"
           label="Fecha del sacramento"
           type="date"
-          value={sacramento.fecha_emision}
-          onChange={(v) => onChange({ fecha_emision: v })}
+          value={sacramento.fecha_emision ?? ''}
+          onChange={(v) => onChange({ fecha_emision: v || null })}
         />
         <div className="grid grid-cols-3 gap-2">
           <Field variant="panelTitle" label="N° de libro" value={sacramento.libro} onChange={(v) => onChange({ libro: v })} />

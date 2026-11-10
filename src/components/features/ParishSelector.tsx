@@ -8,7 +8,8 @@ interface Parish {
 interface ParishSelectorProps {
   parishes: Parish[];
   currentParishId: number | null;
-  ownParishId?: number | null; // parroquia del usuario: se muestra primero y resaltada
+  /** Las parroquias donde trabaja el usuario: se muestran primero y resaltadas. Las demás solo se consultan. */
+  ownParishIds?: number[];
   onSelect: (parishId: number) => void;
   isLoading: boolean;
 }
@@ -16,14 +17,17 @@ interface ParishSelectorProps {
 export function ParishSelector({
   parishes,
   currentParishId,
-  ownParishId = null,
+  ownParishIds = [],
   onSelect,
   isLoading,
 }: ParishSelectorProps) {
   const [selectedId, setSelectedId] = useState<number | null>(currentParishId);
 
-  const ownParish = parishes.find((parish) => parish.id === ownParishId) ?? null;
-  const otherParishes = parishes.filter((parish) => parish.id !== ownParishId);
+  const ownParishes = ownParishIds
+    .map((id) => parishes.find((parish) => parish.id === id))
+    .filter((parish): parish is Parish => parish !== undefined);
+  const otherParishes = parishes.filter((parish) => !ownParishIds.includes(parish.id));
+  const ownLabel = ownParishes.length > 1 ? '(trabajo aquí)' : '(mi parroquia)';
 
   function handleConfirm() {
     if (selectedId !== null) {
@@ -46,11 +50,11 @@ export function ParishSelector({
         <option value="" disabled>
           Parroquias disponibles
         </option>
-        {ownParish && (
-          <option value={ownParish.id} className="bg-emerald-100 font-semibold text-emerald-900">
-            ★ {ownParish.nombre} (mi parroquia)
+        {ownParishes.map((parish) => (
+          <option key={parish.id} value={parish.id} className="bg-emerald-100 font-semibold text-emerald-900">
+            ★ {parish.nombre} {ownLabel}
           </option>
-        )}
+        ))}
         {otherParishes.map((parish) => (
           <option key={parish.id} value={parish.id}>
             {parish.nombre}
@@ -58,15 +62,20 @@ export function ParishSelector({
         ))}
       </select>
 
-      {ownParish && (
+      {ownParishes.map((parish) => (
         <button
+          key={parish.id}
           type="button"
-          onClick={() => setSelectedId(ownParish.id)}
-          disabled={isLoading || selectedId === ownParish.id}
+          onClick={() => setSelectedId(parish.id)}
+          disabled={isLoading || selectedId === parish.id}
           className="w-fit text-left text-xs font-medium text-emerald-800 hover:underline disabled:no-underline disabled:opacity-70"
         >
-          ★ Mi parroquia: {ownParish.nombre}
+          ★ {ownParishes.length > 1 ? 'Trabajar en' : 'Mi parroquia'}: {parish.nombre}
         </button>
+      ))}
+
+      {ownParishes.length > 0 && (
+        <p className="text-xs text-slate-600">En las parroquias sin ★ solo puede consultar.</p>
       )}
 
       <button

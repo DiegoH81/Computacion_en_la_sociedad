@@ -1,5 +1,5 @@
 import type { Parish } from '../../../shared/models';
-import type { ChangeResult, LoginResponse, MinisterData, PullPage, RecordData, SyncChange, SyncEntity, UserData } from '../../../shared/sync';
+import type { ChangeResult, LoginResponse, MembershipData, MinisterData, PullPage, RecordData, SyncChange, SyncEntity, UserData } from '../../../shared/sync';
 import { LOGIN_TIMEOUT_MS, REQUEST_TIMEOUT_MS } from '../utils/config';
 import { server_url } from '../utils/server_address';
 import { ServiceError } from '../utils/errors';
@@ -11,12 +11,13 @@ export interface ReferenceData
 	parroquias: Parish[];
 	ministros: (MinisterData & { id: number })[];
 	usuarios: (UserData & { id: number })[];
+	usuario_parroquias?: MembershipData[];
 }
 
 
 export interface RemoteOptions
 {
-	method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
+	method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 	body?: unknown;
 	token?: string;
 	timeoutMs?: number;

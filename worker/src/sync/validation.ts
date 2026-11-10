@@ -215,7 +215,7 @@ export function check_record(type: SacramentType, value: unknown): RecordData
 		libro: required_text(record.libro, 'libro'),
 		folio: required_text(record.folio, 'folio'),
 		numero: required_text(record.numero, 'número'),
-		fecha_emision: required_text(record.fecha_emision, 'fecha'),
+		fecha_emision: optional_text(record.fecha_emision, 'fecha'),
 		fecha_evento: optional_text(record.fecha_evento, 'fecha_evento'),
 		anotaciones: optional_text(record.anotaciones, 'anotaciones'),
 		estado: record.estado,

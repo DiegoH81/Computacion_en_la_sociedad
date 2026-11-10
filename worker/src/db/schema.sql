@@ -68,7 +68,7 @@ CREATE TABLE sacramentos (
   libro                   TEXT    NOT NULL,
   folio                   TEXT    NOT NULL,
   numero                  TEXT    NOT NULL,
-  fecha_emision           TEXT    NOT NULL,
+  fecha_emision           TEXT,  -- puede faltar (partidas antiguas sin fecha)
   fecha_evento            TEXT,
   anotaciones             TEXT,
   estado                  TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
@@ -166,7 +166,8 @@ CREATE TABLE historial_partidas (
   sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
   usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
   evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
-                                                   'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada')),
+                                                   'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada',
+                                                   'rehabilitada')),
   motivo        TEXT,
   fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
@@ -197,6 +198,24 @@ CREATE TABLE dispositivos (
   actualizado_en TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
+-- Parroquias adicionales de una cuenta; la de origen sigue en usuarios.parroquia_id (migración 0019).
+CREATE TABLE usuario_parroquias (
+  usuario_id   INTEGER NOT NULL REFERENCES usuarios(id),
+  parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
+  rol          TEXT NOT NULL CHECK (rol IN ('admin_parroquia', 'usuario')),
+  principal    INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (usuario_id, parroquia_id)
+);
+
+CREATE VIEW membresias AS
+  SELECT id AS usuario_id, parroquia_id, rol, principal, 1 AS origen
+  FROM usuarios
+  WHERE parroquia_id IS NOT NULL
+  UNION ALL
+  SELECT usuario_id, parroquia_id, rol, principal, 0 AS origen
+  FROM usuario_parroquias;
+
 
 -- ============ DATOS INICIALES ============
 
@@ -223,6 +242,8 @@ CREATE INDEX idx_usuarios_busqueda ON usuarios (nombre, apellido_paterno, apelli
 
 -- Un principal por parroquia y uno entre los administradores generales (migración 0018).
 CREATE UNIQUE INDEX idx_usuarios_un_principal ON usuarios (IFNULL(parroquia_id, 0)) WHERE principal = 1;
+
+CREATE UNIQUE INDEX idx_usuario_parroquias_un_principal ON usuario_parroquias (parroquia_id) WHERE principal = 1;
 
 CREATE UNIQUE INDEX idx_parroquias_nombre_unico ON parroquias (nombre COLLATE NOCASE);
 
