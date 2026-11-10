@@ -6,8 +6,6 @@ import path from 'node:path';
 import { field, saveRecord } from './form-helpers';
 import { launchApp } from './launch';
 
-// Dos PCs reales contra el Worker de pruebas. Entre ellas y el Worker hay un proxy que permite
-// simular que se va internet, o que la respuesta del servidor nunca llega.
 
 type NetworkMode = 'normal' | 'sin-internet' | 'pierde-respuesta-de-subida';
 
@@ -24,7 +22,6 @@ function forward(req: IncomingMessage, res: ServerResponse): void {
   const target = new URL(req.url ?? '/', process.env.PRELATURA_WORKER_URL);
   const upstream = httpRequest(target, { method: req.method, headers: { ...req.headers, host: target.host } }, (response) => {
     if (dropResponse) {
-      // El servidor ya guardó, pero la PC nunca se entera.
       response.resume();
       response.on('end', () => req.socket.destroy());
       return;
@@ -186,9 +183,9 @@ test('lo creado en una PC llega a otra, y una corrección vuelve a la primera', 
 
   await syncNow(pcA.window);
   await backToBaptisms(pcA.window);
-  // La corrección llega con su historial: se encuentra por el nombre anterior.
-  await searchBaptism(pcA.window, 'Alfonsina');
-  await expect(pcA.window.getByRole('cell', { name: 'Alfonsa', exact: true })).toHaveCount(1);
+  // La corrección llega con su historial: se encuentra por el nombre corregido (la partida sigue con el original).
+  await searchBaptism(pcA.window, 'Alfonsa');
+  await expect(pcA.window.getByRole('cell', { name: 'Alfonsina', exact: true })).toHaveCount(1);
 });
 
 test('login sin internet: una PC que no conoce al usuario lo pide, y después valida localmente', async () => {
@@ -588,11 +585,11 @@ test('el ayudante escribe la nota en blanco y pide una corrección; el párroco 
   await parish.window.getByRole('alertdialog').getByRole('button', { name: 'Aprobar' }).click();
   await expect(card).toBeHidden();
 
-  // Aprobado: llega a la PC del ayudante, y la búsqueda encuentra el nombre anterior.
+  // Aprobado: llega a la PC del ayudante, y la búsqueda encuentra el nombre corregido.
   await syncAndBack(parish.window);
   await syncAndBack(helper.window);
-  await searchBaptism(helper.window, 'Corregina');
-  await expect(helper.window.getByRole('cell', { name: 'Corregida' })).toBeVisible();
+  await searchBaptism(helper.window, 'Corregida');
+  await expect(helper.window.getByRole('cell', { name: 'Corregina' })).toBeVisible();
 });
 
 test('el párroco edita una partida con un cambio pendiente: usa los valores pedidos y queda en el historial', async () => {
@@ -789,4 +786,94 @@ test('el principal de la parroquia crea un administrador, que no puede tocarlo, 
   await principal.window.getByRole('alertdialog').getByRole('button', { name: 'Sí, pasar la marca' }).click();
   await expect(principal.window.getByRole('row', { name: new RegExp(username) })).toContainText('Principal');
   await expect(principal.window.getByRole('checkbox', { name: `Seleccionar usuario ${username}` })).toHaveCount(0);
+});
+
+test('una cuenta en dos parroquias: el general le agrega otra, y al entrar elige en cuál trabajar', async () => {
+  const username = uniqueUsername('multi');
+  // La regla nueva: al menos 6 caracteres, sin espacios.
+  const password = 'clave1';
+  const worker = process.env.PRELATURA_WORKER_URL;
+
+  // La cuenta nueva es usuario de Parroquia 2. El general la crea directo en el servidor.
+  const general = (await (
+    await fetch(`${worker}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    })
+  ).json()) as { token: string };
+  const created = await fetch(`${worker}/api/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${general.token}` },
+    body: JSON.stringify({ username, password, rol: 'usuario', parroquia_id: 2, nombre: 'Mara', apellido_paterno: username, apellido_materno: '' }),
+  });
+  expect(created.status).toBe(201);
+
+  // El general, en su PC, le agrega Parroquia 3 como administradora: como no tiene principal, lo es.
+  const admin = await open(newPc());
+  await submitLogin(admin.window, 'admin', 'admin123');
+  await expect(admin.window.getByText('Seleccionar Parroquia')).toBeVisible({ timeout: 30_000 });
+  await admin.window.getByRole('combobox').selectOption({ label: 'Parroquia 1' });
+  await admin.window.getByRole('button', { name: 'Confirmar' }).click();
+  await admin.window.getByRole('button', { name: 'Configuración' }).click();
+  // El general no importa ni exporta datos: eso es del administrador de cada parroquia.
+  await expect(admin.window.getByRole('button', { name: 'Exportar respaldo' })).toHaveCount(0);
+  await expect(admin.window.getByRole('button', { name: 'Importar Excel del sistema anterior' })).toHaveCount(0);
+  await admin.window.getByRole('button', { name: 'Agregar usuario' }).click();
+  await admin.window.getByLabel('Apellido paterno', { exact: true }).fill(username);
+  await admin.window.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await admin.window.getByRole('checkbox', { name: `Seleccionar usuario ${username}` }).click();
+  await admin.window.getByRole('button', { name: 'Parroquias', exact: true }).click();
+
+  const dialog = admin.window.getByRole('dialog', { name: `Parroquias de ${username}` });
+  await dialog.getByLabel('Agregar parroquia').selectOption({ label: 'Parroquia 3' });
+  await dialog.getByLabel('Rol', { exact: true }).selectOption('admin_parroquia');
+  await dialog.getByRole('button', { name: 'Agregar' }).click();
+  await expect(dialog.getByRole('listitem').filter({ hasText: 'Parroquia 3' })).toContainText('Principal');
+  await dialog.getByRole('button', { name: 'Cerrar' }).click();
+  await expect(admin.window.getByRole('row', { name: new RegExp(username) })).toContainText('Parroquia 2 (+ Parroquia 3)');
+
+  // Ella entra en otra PC: elige con cuál trabajar. En Parroquia 3 es administradora.
+  const multi = await open(newPc());
+  await submitLogin(multi.window, username, password);
+  await expect(multi.window.getByText('Seleccionar Parroquia')).toBeVisible({ timeout: 30_000 });
+  await multi.window.getByRole('button', { name: /Trabajar en: Parroquia 3/ }).click();
+  await multi.window.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(multi.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+
+  // El menú lateral está dentro de cada sección.
+  const menu = multi.window.getByRole('navigation', { name: 'Menú lateral' });
+  await goToBaptisms(multi.window);
+  await multi.window.getByRole('button', { name: 'Abrir menú lateral' }).click();
+  await expect(menu.getByRole('button', { name: 'Cambios por aprobar' })).toBeVisible();
+  await multi.window.getByRole('button', { name: 'Cerrar menú lateral' }).click();
+  await backToDashboard(multi.window);
+  await multi.window.getByRole('button', { name: 'Configuración' }).click();
+  await expect(multi.window.getByRole('button', { name: 'Exportar respaldo' })).toBeVisible();
+
+  // Consultando una parroquia que no es suya, aunque sea administradora en la suya: no importa ni exporta.
+  await multi.window.getByRole('button', { name: 'Volver' }).first().click();
+  await multi.window.getByRole('button', { name: 'Cambiar parroquia' }).click();
+  await multi.window.getByRole('combobox').selectOption({ label: 'Parroquia 1' });
+  await multi.window.getByRole('button', { name: 'Confirmar' }).click();
+  await multi.window.getByRole('button', { name: 'Configuración' }).click();
+  await expect(multi.window.getByRole('button', { name: 'Exportar respaldo' })).toHaveCount(0);
+  await expect(multi.window.getByRole('button', { name: 'Restaurar respaldo' })).toHaveCount(0);
+  await expect(multi.window.getByRole('button', { name: 'Importar Excel del sistema anterior' })).toHaveCount(0);
+  await multi.window.getByRole('button', { name: 'Volver' }).first().click();
+  await multi.window.getByRole('button', { name: 'Cambiar parroquia' }).click();
+  await multi.window.getByRole('combobox').selectOption({ label: '★ Parroquia 3 (trabajo aquí)' });
+  await multi.window.getByRole('button', { name: 'Confirmar' }).click();
+  await goToBaptisms(multi.window);
+  await multi.window.getByRole('button', { name: 'Abrir menú lateral' }).click();
+
+  // En Parroquia 2 es usuario: no aprueba cambios.
+  await menu.getByRole('button', { name: 'Cambiar parroquia' }).click();
+  await multi.window.getByRole('combobox').selectOption({ label: '★ Parroquia 2 (trabajo aquí)' });
+  await multi.window.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(multi.window.getByText(DASHBOARD_TEXT)).toBeVisible();
+  await goToBaptisms(multi.window);
+  await multi.window.getByRole('button', { name: 'Abrir menú lateral' }).click();
+  await expect(menu.getByRole('button', { name: 'Menú principal' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: 'Cambios por aprobar' })).toHaveCount(0);
 });

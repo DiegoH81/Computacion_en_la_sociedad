@@ -19,7 +19,6 @@ function messageOf(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-/** Solo las partidas de la parroquia que se está viendo: las demás no se listan aquí. */
 export async function searchSacraments<T extends SacramentRecord>(tipo: SacramentType, filters: SearchFilters): Promise<SearchResult<T>> {
   try {
     const parroquia_id = useSessionStore.getState().parroquiaActivaId ?? undefined;
@@ -53,5 +52,14 @@ export async function annulSacrament(id: number, motivo: string): Promise<Mutati
     return { success: true };
   } catch (error) {
     return { success: false, errorMessage: messageOf(error, 'Error al anular la partida.') };
+  }
+}
+
+export async function restoreSacrament(id: number, motivo: string): Promise<MutationResult> {
+  try {
+    await SacramentService.restore(id, motivo);
+    return { success: true };
+  } catch (error) {
+    return { success: false, errorMessage: messageOf(error, 'Error al rehabilitar la partida.') };
   }
 }

@@ -7,7 +7,6 @@ import { chooseYear, completeRequired, field, saveRecord } from './form-helpers'
 import { write_legacy_excel, write_xlsx } from './xlsx-fixture';
 import { launchApp } from './launch';
 
-// El primer login y los datos de referencia vienen del Worker de pruebas (global-setup.ts).
 
 let userData: string;
 let app: ElectronApplication | null = null;
@@ -41,7 +40,7 @@ test.afterEach(async () => {
   rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 });
 
-test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras reiniciar', async () => {
+test('bautismo: se crea, se corrige por nota marginal sin cambiar la partida, y se encuentra por los dos nombres', async () => {
   let window = await launchAndLogin();
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
 
@@ -77,16 +76,24 @@ test('bautismo: se crea, se corrige y se encuentra por el nombre anterior tras r
   await expect(window.getByRole('textbox', { name: 'Campo antiguo' })).toHaveValue('Diago');
   await window.getByRole('textbox', { name: 'Campo nuevo' }).fill('Diego');
   await save(window);
-  await expect(window.getByRole('cell', { name: 'Diego' })).toBeVisible();
+  // La partida conserva el nombre con que se registró (el que se imprime); el nuevo queda en la nota.
+  await expect(window.getByRole('cell', { name: 'Diago' })).toBeVisible();
 
   await app?.close();
   window = await launchAndLogin();
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
-  await expect(window.getByRole('cell', { name: 'Diego' })).toBeVisible();
+  await expect(window.getByRole('cell', { name: 'Diago' })).toBeVisible();
+  await window.getByRole('checkbox', { name: 'Seleccionar partida 501' }).click();
+  await window.getByRole('button', { name: 'Editar' }).click();
+  await expect(field(window, 'Nombres')).toHaveValue('Diago');
+  await expect(window.getByRole('region', { name: 'Anotaciones marginales' })).toContainText('Nombres: Diago → Diego');
+  await window.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await window.getByRole('button', { name: 'Sí, cancelar' }).click();
 
-  await window.locator('form').getByRole('textbox').first().fill('Diago');
+  // Se encuentra por el nombre corregido.
+  await window.locator('form').getByRole('textbox').first().fill('Diego');
   await window.getByRole('button', { name: 'Buscar', exact: true }).click();
-  await expect(window.getByRole('cell', { name: 'Diego' })).toBeVisible();
+  await expect(window.getByRole('cell', { name: 'Diago' })).toBeVisible();
 
   await window.locator('form').getByRole('textbox').first().fill('Pablo');
   await window.getByRole('button', { name: 'Buscar', exact: true }).click();
@@ -110,6 +117,13 @@ test('confirmación: conserva fecha aproximada y DNI, y se puede anular con moti
   await window.getByRole('combobox', { name: 'Fecha de confirmación: día' }).selectOption('20');
   await window.getByPlaceholder('Buscar celebrante...').fill('Braulio');
   await window.getByRole('button', { name: /Braulio Guido/ }).click();
+  // Al corregir lo escrito el celebrante se sigue encontrando, y un clic afuera cierra la lista.
+  const celebrant = window.getByPlaceholder('Buscar celebrante...');
+  await celebrant.fill((await celebrant.inputValue()).slice(0, -1));
+  await expect(window.getByRole('button', { name: /Braulio Guido/ })).toBeVisible();
+  await window.mouse.click(5, 5);
+  await expect(window.getByRole('button', { name: /Braulio Guido/ })).toBeHidden();
+  await expect(celebrant).toHaveValue(/Braulio Guido/);
   await field(window, 'Padrino').fill('Mario');
   await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
   await window.getByRole('textbox', { name: 'Anotaciones', exact: true }).fill('Nota de confirmación');
@@ -147,6 +161,27 @@ test('confirmación: conserva fecha aproximada y DNI, y se puede anular con moti
   await window.locator('textarea').fill('Registro duplicado');
   await window.getByRole('button', { name: 'Confirmar anulación' }).click();
   await expect(window.getByRole('cell', { name: 'Anulada', exact: true })).toBeVisible();
+
+  // Búsqueda avanzada: por número de registro y estado.
+  await window.getByRole('button', { name: /Búsqueda avanzada/ }).click();
+  // Solo "de": ese registro exacto. La frase de abajo dice en palabras qué se va a buscar.
+  await window.getByLabel('Registro', { exact: true }).fill('502');
+  await expect(window.getByText(/Se buscarán partidas solo en .*, con registro 502\./)).toBeVisible();
+  await window.getByLabel('Estado', { exact: true }).selectOption('vigente');
+  await window.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await expect(window.getByText('No se encontraron partidas.')).toBeVisible();
+  await window.getByLabel('Estado', { exact: true }).selectOption('anulado');
+  await window.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await expect(window.getByRole('cell', { name: 'Lucia' })).toBeVisible();
+
+  // Una partida anulada se rehabilita, también con motivo.
+  await window.getByRole('button', { name: 'Rehabilitar', exact: true }).click();
+  await window.getByLabel('Motivo para rehabilitar').fill('No era duplicado');
+  await window.getByRole('button', { name: 'Confirmar rehabilitación' }).click();
+  await expect(window.getByText('No se encontraron partidas.')).toBeVisible();
+  await window.getByRole('button', { name: 'Limpiar búsqueda' }).click();
+  await expect(window.getByRole('cell', { name: 'Vigente', exact: true })).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Anular', exact: true })).toBeEnabled();
 });
 
 test('ministros: se crean en la PC y quedan disponibles en las partidas tras reiniciar', async () => {
@@ -218,6 +253,8 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
 
   await window.getByRole('button', { name: '+ Agregar' }).click();
   await expect(window.getByText('DNI padre')).toHaveCount(0);
+  // El lugar del matrimonio viene lleno con la parroquia actual.
+  await expect(window.getByText('Lugar de matrimonio:').locator('..').getByRole('textbox')).toHaveValue('Parroquia 1');
   await fillRegister(window, '503', 'N° de');
   await window.getByRole('textbox', { name: 'Nombres del esposo' }).fill('Carlos');
   await window.getByRole('textbox', { name: 'Nombres de la esposa' }).fill('Elena');
@@ -248,12 +285,12 @@ test('matrimonio: registra a los dos cónyuges sin DNI de los padres', async () 
   await save(window);
 
   await expect(window.getByRole('cell', { name: /Carlos/ })).toBeVisible();
-  await expect(window.getByRole('cell', { name: /Elenita/ })).toBeVisible();
+  await expect(window.getByRole('cell', { name: /Elena/ })).toBeVisible();
 
   await window.getByRole('checkbox', { name: 'Seleccionar partida 503' }).click();
   await window.getByRole('button', { name: 'Editar' }).click();
   const dialog = window.getByRole('dialog', { name: 'Editar partida' });
-  await expect(dialog.getByRole('textbox', { name: 'Nombres de la esposa' })).toHaveValue('Elenita');
+  await expect(dialog.getByRole('textbox', { name: 'Nombres de la esposa' })).toHaveValue('Elena');
   await expect(dialog.getByRole('region', { name: 'Anotaciones marginales' })).toContainText('Nombres de la esposa: Elena → Elenita');
   await expect(dialog.getByRole('textbox', { name: 'Fecha aproximada del esposo' })).toHaveValue('30');
   await expect(dialog.getByRole('combobox', { name: 'Fecha de nacimiento de la esposa: día' })).toHaveValue('29');
@@ -349,7 +386,9 @@ test('constancias: el logo registrado en esta PC sale en las tres, con los datos
     return window.locator('.a4-page');
   };
 
+  // También arriba a la izquierda, en el menú principal.
   await backToDashboard();
+  await expect(window.locator('header').getByTestId('parish-logo')).toHaveAttribute('src', /^data:image\//);
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
   await window.getByRole('button', { name: '+ Agregar' }).click();
   await fillRegister(window, '601', 'N° de');
@@ -667,7 +706,11 @@ test('imprimir sobre el formato: solo los datos, en su lugar, con el ajuste de e
   await field(window, 'Nombres').fill('Formatina');
   await field(window, 'Padrino').fill('Dionisio Quispe');
   await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
-  await window.getByRole('textbox', { name: 'Anotaciones', exact: true }).fill('Nota marginal larga. '.repeat(20));
+  // Una anotación casi del largo máximo (350 caracteres): el formulario no deja escribir más.
+  const notesBox = window.getByRole('textbox', { name: 'Anotaciones', exact: true });
+  await notesBox.fill('Nota marginal larga. '.repeat(16));
+  await expect(window.getByText('336 / 350 caracteres')).toBeVisible();
+  await expect(notesBox).toHaveAttribute('maxlength', '350');
   await save(window);
 
   const openPrint = async () => {
@@ -686,9 +729,15 @@ test('imprimir sobre el formato: solo los datos, en su lugar, con el ajuste de e
   await expect(sheet).not.toContainText('Notario Eclesiástico');
   await expect(sheet.locator('img')).toHaveClass(/print:hidden/);
 
-  // Lo largo se corta: las anotaciones no pasan de sus 4 renglones.
+  // La anotación larga entra entera, con letra más chica, hasta la altura del sello parroquial.
   const notes = sheet.locator('[data-slot="anotaciones"]');
-  expect(await notes.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+  // (1 px de margen por el redondeo)
+  expect(await notes.evaluate((element) => element.scrollHeight <= element.clientHeight + 1)).toBe(true);
+  await expect(notes).toHaveCSS('font-size', /^10\.6/);
+
+  // Lo que está vacío se tacha con una raya; libro, folio y número van al centro de su línea.
+  await expect(sheet.locator('[data-slot="madrina"]')).toHaveAttribute('data-empty', 'true');
+  await expect(sheet.locator('[data-slot="libro"]')).toHaveCSS('text-align', 'center');
 
   // El ajuste mueve todo junto y queda guardado en esta PC.
   // Horizontal: + a la derecha. Vertical: + hacia arriba (en la pantalla, y negativa).

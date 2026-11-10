@@ -29,6 +29,7 @@ describe('ParishController', () => {
       parroquiaId: null,
       parroquiaActivaId: 1,
       parroquiaActivaNombre: 'Parroquia 1',
+      misParroquias: [],
     });
   });
 

@@ -1,10 +1,10 @@
 import type { SearchFilters, User } from '../../shared/models';
+import type { ParishRole } from '../../shared/sync';
 import { UserService } from '../services/UserService';
 import { AuthService, type Parish } from '../services/AuthService';
 import { toErrorResult } from '../lib/workerAccess';
 import { useSessionStore } from '../store/sessionStore';
-
-const PASSWORD_MIN_LENGTH = 8;
+import { password_error } from '../../shared/users';
 
 export interface SearchResult {
   success: boolean;
@@ -39,8 +39,9 @@ function validatePassword(password: string, confirmPassword: string, mode: 'crea
   if (mode === 'edit' && !password) {
     return confirmPassword ? 'Las contraseñas no coinciden.' : null;
   }
-  if (password.length < PASSWORD_MIN_LENGTH) {
-    return `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`;
+  const reason = password_error(password);
+  if (reason) {
+    return reason;
   }
   if (password !== confirmPassword) {
     return 'Las contraseñas no coinciden.';
@@ -122,8 +123,13 @@ export async function updateUser(user: User, confirmPassword: string): Promise<M
   const passwordError = validatePassword(user.password ?? '', confirmPassword, 'edit');
   if (passwordError) return { success: false, errorMessage: passwordError };
 
+  // Una cuenta que todavía no subió puede cambiar su nombre de usuario (y una que lo perdió, debe).
+  if ((user.id ?? 0) < 0 && !user.username.trim()) {
+    return { success: false, errorMessage: 'El nombre de usuario es requerido.' };
+  }
+
   try {
-    const body = trimNames(user);
+    const body = { ...trimNames(user), username: user.username.trim() };
     if (!body.password) delete body.password;
 
     await UserService.update(body);
@@ -144,12 +150,31 @@ export async function loadIsPrincipal(): Promise<boolean> {
 }
 
 /** Pasar la marca de principal se hace en el servidor (Electron lo pide): necesita internet. */
-export async function makePrincipal(username: string): Promise<MutationResult> {
+export async function makePrincipal(username: string, parishId?: number): Promise<MutationResult> {
   try {
-    await UserService.makePrincipal(username);
+    await UserService.makePrincipal(username, parishId);
     return { success: true };
   } catch (error) {
     return toErrorResult(error, 'Error al pasar la marca de administrador principal.');
+  }
+}
+
+/** Parroquias adicionales: solo el admin_general, en el servidor (necesita internet). */
+export async function setUserParish(userId: number, parishId: number, rol: ParishRole): Promise<MutationResult> {
+  try {
+    await UserService.setParish(userId, parishId, rol);
+    return { success: true };
+  } catch (error) {
+    return toErrorResult(error, 'Error al guardar la parroquia de la cuenta.');
+  }
+}
+
+export async function removeUserParish(userId: number, parishId: number): Promise<MutationResult> {
+  try {
+    await UserService.removeParish(userId, parishId);
+    return { success: true };
+  } catch (error) {
+    return toErrorResult(error, 'Error al quitar la parroquia de la cuenta.');
   }
 }
 

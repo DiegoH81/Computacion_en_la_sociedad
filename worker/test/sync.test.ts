@@ -248,7 +248,7 @@ describe('subir cambios', () => {
     expect(await count('personas')).toBe(0);
   });
 
-  it('una partida anulada no se puede reactivar', async () => {
+  it('un administrador de la parroquia rehabilita una partida anulada', async () => {
     const token = await tokenParish1();
     const anulada = bautismo({
       estado: 'anulado',
@@ -260,7 +260,8 @@ describe('subir cambios', () => {
 
     const [r] = await push(token, [cambio(bautismo(), 1, 'otra')]);
 
-    expect(r).toMatchObject({ estado: 'rechazado' });
+    expect(r).toMatchObject({ estado: 'aplicado' });
+    expect(await db().prepare('SELECT estado FROM sacramentos').first('estado')).toBe('vigente');
   });
 
   it('rechaza datos inválidos y deja la base intacta', async () => {
@@ -388,13 +389,19 @@ describe('descargar', () => {
     expect((await api('/api/sync/record?entidad=bautismo&client_id=nada', token)).status).toBe(404);
   });
 
-  it('la referencia trae las contraseñas (hash) solo de la propia parroquia, para entrar sin internet', async () => {
+  it('la referencia trae las contraseñas (hash) de todas las cuentas, para entrar sin internet en cualquier PC', async () => {
     const response = await api('/api/reference', await tokenParish1());
-    const data = (await response.json()) as { parroquias: unknown[]; ministros: unknown[]; usuarios: { id: number; password_hash: string | null }[] };
+    const data = (await response.json()) as {
+      parroquias: unknown[];
+      ministros: unknown[];
+      usuarios: { id: number; password_hash: string | null }[];
+      usuario_parroquias: unknown[];
+    };
 
     expect(data.parroquias).toHaveLength(2);
     expect(data.usuarios).toHaveLength(3);
-    expect(data.usuarios.map((u) => [u.id, u.password_hash])).toEqual([[1, 'hash-secreto'], [2, null], [3, null]]);
+    expect(data.usuarios.every((u) => u.password_hash === 'hash-secreto')).toBe(true);
+    expect(data.usuario_parroquias).toEqual([]);
     expect(data.ministros[0]).toMatchObject({ client_id: 'ministro-1', version: 1 });
 
     const general = (await (await api('/api/reference', await tokenAdmin())).json()) as typeof data;

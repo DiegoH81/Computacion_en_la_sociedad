@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Role } from '../../shared/sync';
+import type { Role, UserParish } from '../../shared/sync';
 
 export type Rol = Role;
 
@@ -9,9 +9,10 @@ interface SessionState {
   usuarioId: number | null;
   usuarioNombre: string | null;
   rol: Rol | null;
-  parroquiaId: number | null; // parroquia de pertenencia del usuario (inmutable en la sesión)
-  parroquiaActivaId: number | null; // parroquia que se está viendo (mutable, solo UI)
+  parroquiaId: number | null;
+  parroquiaActivaId: number | null;
   parroquiaActivaNombre: string | null;
+  misParroquias: UserParish[];
 
   setSession: (data: {
     token: string;
@@ -21,9 +22,12 @@ interface SessionState {
     parroquiaId: number | null;
     parroquiaActivaId: number;
     parroquiaActivaNombre: string;
+    misParroquias: UserParish[];
   }) => void;
 
   setParroquiaActiva: (id: number, nombre: string) => void;
+
+  setParroquiaTrabajo: (id: number, rol: Rol) => void;
 
   setToken: (token: string) => void;
 
@@ -39,6 +43,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   parroquiaId: null,
   parroquiaActivaId: null,
   parroquiaActivaNombre: null,
+  misParroquias: [],
 
   setSession: (data) =>
     set({
@@ -50,10 +55,13 @@ export const useSessionStore = create<SessionState>((set) => ({
       parroquiaId: data.parroquiaId,
       parroquiaActivaId: data.parroquiaActivaId,
       parroquiaActivaNombre: data.parroquiaActivaNombre,
+      misParroquias: data.misParroquias,
     }),
 
   setParroquiaActiva: (id, nombre) =>
     set({ parroquiaActivaId: id, parroquiaActivaNombre: nombre }),
+
+  setParroquiaTrabajo: (id, rol) => set({ parroquiaId: id, rol }),
 
   setToken: (token) => set({ token }),
 
@@ -67,5 +75,6 @@ export const useSessionStore = create<SessionState>((set) => ({
       parroquiaId: null,
       parroquiaActivaId: null,
       parroquiaActivaNombre: null,
+      misParroquias: [],
     }),
 }));

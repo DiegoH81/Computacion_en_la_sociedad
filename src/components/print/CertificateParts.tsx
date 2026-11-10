@@ -20,6 +20,16 @@ export function SerialNumber() {
   );
 }
 
+/** Raya corta que tacha un dato vacío, para que se vea que no se dejó en blanco por olvido. */
+export function EmptyMark() {
+  return <span aria-label="vacío" className="inline-block w-[8mm] border-t-[0.3mm] border-black align-middle" />;
+}
+
+/** El dato, o la raya si está vacío. */
+export function ValueOrMark({ value }: { value?: string | null }) {
+  return value ? <>{value}</> : <EmptyMark />;
+}
+
 interface DottedFieldProps {
   label?: string;
   value?: string;
@@ -32,8 +42,8 @@ export function DottedField({ label, value, labelClassName = '', valueClassName 
   return (
     <div className="flex items-baseline gap-[1mm]">
       {label && <span className={`whitespace-nowrap ${labelClassName}`}>{label}</span>}
-      <span className={`min-h-[5mm] min-w-0 flex-1 border-b border-dotted border-black px-[2mm] ${valueClassName}`}>
-        {value}
+      <span className={`min-h-[5mm] min-w-0 flex-1 border-b border-dotted border-black px-[2mm] ${value ? valueClassName : 'text-center'}`}>
+        <ValueOrMark value={value} />
       </span>
     </div>
   );

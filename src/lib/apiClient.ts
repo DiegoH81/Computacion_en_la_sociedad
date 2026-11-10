@@ -2,10 +2,6 @@ const FALLBACK_URL = import.meta.env.VITE_WORKER_URL ?? 'http://localhost:8787';
 
 let serverUrl: Promise<string> | null = null;
 
-/**
- * La dirección del Worker. Se la pide a Electron, que la lee de configuracion.json (así la pantalla
- * y la sincronización usan la misma); fuera de Electron, como en las pruebas, usa la compilada.
- */
 function workerBaseUrl(): Promise<string> {
   if (!serverUrl) {
     serverUrl = (async () => {
@@ -37,11 +33,6 @@ interface RequestOptions {
   token?: string | null;
 }
 
-/**
- * Wrapper delgado sobre fetch: centraliza la URL base del Worker,
- * el manejo de errores HTTP, y la inyección del header Authorization.
- * No contiene lógica de negocio — eso vive en los Services que lo usan.
- */
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, token } = options;
 

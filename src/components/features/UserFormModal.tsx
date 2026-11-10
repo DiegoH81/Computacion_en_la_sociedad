@@ -59,7 +59,11 @@ export function UserFormModal({
   isLoading,
   errorMessage,
 }: UserFormModalProps) {
-  const [user, setUser] = useState<User>(initialValues ?? EMPTY_USER);
+  // Una cuenta que perdió su nombre de usuario (otra PC subió antes una con el mismo) empieza sin nombre.
+  const [user, setUser] = useState<User>(() => {
+    const values = initialValues ?? EMPTY_USER;
+    return values.username.startsWith('~') ? { ...values, username: '' } : values;
+  });
   const update = (changes: Partial<User>) => setUser((prev) => ({ ...prev, ...changes }));
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -70,6 +74,10 @@ export function UserFormModal({
   const isGeneralAdminAccount = user.rol === 'admin_general';
   const isGeneralActor = actorRole === 'admin_general';
   const choosesRole = mode === 'create' && (isGeneralActor || canCreateParishAdmin);
+  // El nombre de usuario se elige al crear. Después solo se cambia mientras la cuenta no subió al servidor
+  // (id provisional, negativo): así se arregla un nombre que otra PC ya usó.
+  const isNotUploaded = (initialValues?.id ?? 0) < 0;
+  const editsUsername = mode === 'create' || isNotUploaded;
 
   const roles: Role[] = isGeneralActor && canCreateGeneralAdmin ? ['usuario', 'admin_parroquia', 'admin_general'] : ['usuario', 'admin_parroquia'];
 
@@ -111,8 +119,13 @@ export function UserFormModal({
         </FormPanel>
 
         <FormPanel title="Cuenta">
-          {mode === 'create' ? (
-            <Field variant="panel" label="Nombre de usuario" value={user.username} onChange={(v) => update({ username: v })} />
+          {editsUsername ? (
+            <div>
+              <Field variant="panel" label="Nombre de usuario" value={user.username} onChange={(v) => update({ username: v })} />
+              {mode === 'edit' && (
+                <p className="mt-1 text-xs text-slate-600">La cuenta todavía no se subió al servidor: puede cambiarle el nombre de usuario.</p>
+              )}
+            </div>
           ) : (
             <ReadOnlyField label="Nombre de usuario" value={user.username} />
           )}
@@ -176,6 +189,8 @@ export function UserFormModal({
             onChange={setPassword}
           />
           <PasswordField label="Repetir contraseña" value={confirmPassword} onChange={setConfirmPassword} />
+
+          <p className="text-xs text-slate-600">La contraseña lleva al menos 6 caracteres, sin espacios.</p>
 
           {mode === 'edit' && (
             <p className="text-xs text-slate-600">Si deja la contraseña vacía, se conserva la actual.</p>

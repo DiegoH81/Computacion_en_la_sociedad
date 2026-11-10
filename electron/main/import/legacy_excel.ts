@@ -99,7 +99,7 @@ export interface ImportedRecord
 	libro: string;
 	folio: string;
 	numero: string;
-	fecha_emision: string;
+	fecha_emision: string | null;
 	fecha_evento: string | null;
 	anotaciones: string | null;
 	celebrante: ImportedMinister | null;
@@ -346,7 +346,7 @@ function notes_of(row: unknown[], extra: string[]): string | null
 	return notes.join('\n');
 }
 
-export function read_row(row: unknown[], file_row: number, books: BookNames, today: string): ImportedRecord | RowError
+export function read_row(row: unknown[], file_row: number, books: BookNames): ImportedRecord | RowError
 {
 	const type_letter = String(row[COLUMNS.tipo_libro] ?? '').trim().toUpperCase();
 	const type = TYPES[type_letter];
@@ -418,7 +418,9 @@ export function read_row(row: unknown[], file_row: number, books: BookNames, tod
 		libro: book_name,
 		folio: page,
 		numero: number,
-		fecha_emision: date_cell(row[COLUMNS.fecha_ingreso]) ?? event.date ?? today,
+		// La fecha de la partida es la del sacramento, o ninguna. "FECHA INGRESO DATOS" es cuándo se
+		// escribió en el sistema anterior, no la fecha de la partida.
+		fecha_emision: event.date,
 		fecha_evento: event.date,
 		anotaciones: notes_of(row, extra),
 		celebrante: split_minister(row[COLUMNS.celebrante]),
@@ -432,7 +434,7 @@ export function register_key(record: Pick<ImportedRecord, 'tipo' | 'libro' | 'fo
 	return [record.tipo, record.libro, record.folio, record.numero].map((part) => part.trim().toUpperCase()).join('|');
 }
 
-export function read_rows(rows: unknown[][], books: { codigo_parroquia: string | null; libros: BookNames }, today: string): { partidas: ImportedRecord[]; errores: RowError[] }
+export function read_rows(rows: unknown[][], books: { codigo_parroquia: string | null; libros: BookNames }): { partidas: ImportedRecord[]; errores: RowError[] }
 {
 	const records: ImportedRecord[] = [];
 	const errors: RowError[] = [];
@@ -448,7 +450,7 @@ export function read_rows(rows: unknown[][], books: { codigo_parroquia: string |
 
 	for (const { row, fila } of rows_with_data)
 	{
-		const result = read_row(row, fila, books.libros, today);
+		const result = read_row(row, fila, books.libros);
 		if ('motivo' in result)
 		{
 			errors.push(result);
@@ -479,8 +481,8 @@ function find_sheet(sheets: { sheet: string; data: unknown[][] }[], name: string
 	return found.data;
 }
 
-export function read_workbook(sheets: { sheet: string; data: unknown[][] }[], today: string): { partidas: ImportedRecord[]; errores: RowError[] }
+export function read_workbook(sheets: { sheet: string; data: unknown[][] }[]): { partidas: ImportedRecord[]; errores: RowError[] }
 {
 	const books = read_books(find_sheet(sheets, BOOKS_SHEET));
-	return read_rows(find_sheet(sheets, RECORDS_SHEET), books, today);
+	return read_rows(find_sheet(sheets, RECORDS_SHEET), books);
 }

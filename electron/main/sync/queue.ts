@@ -1,9 +1,3 @@
-// La cola de cambios por subir (tabla sync_cola) y los valores sueltos de la sincronización
-// (tabla sync_estado; sus claves están en utils/config.ts).
-//
-// Cada vez que se crea o edita una partida o un ministro, se anota en la cola en la misma
-// transacción. Hay una sola fila por registro: al subir se manda su estado final.
-
 import type { SyncEntity } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
 
@@ -12,15 +6,13 @@ export interface QueueRow
 	id: number;
 	entidad: SyncEntity;
 	client_id: string;
-	version_base: number | null; // la última versión que conoce el servidor; null si todavía no lo tiene
-	cola_id: string;             // identifica esta fila ante el servidor, para reconocer un reenvío
-	revision: number;            // sube con cada edición; sirve para saber si se editó mientras se subía
+	version_base: number | null;
+	cola_id: string;            
+	revision: number;           
 	estado: 'pendiente' | 'conflicto' | 'rechazado';
 	motivo: string | null;
 }
 
-// Hay que llamarla en la misma transacción que guarda el cambio, y antes de modificar el registro.
-// Si el registro ya estaba en la cola, se conserva su version_base: es la que conoce el servidor.
 export function add_to_queue(db: LocalDatabase, entity: SyncEntity, client_id: string, version_base: number | null): void
 {
 	db.prepare(

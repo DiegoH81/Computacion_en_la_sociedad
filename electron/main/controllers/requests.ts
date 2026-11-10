@@ -1,15 +1,3 @@
-// Los cambios que pide un usuario (ayudante) en una partida ya guardada, y su revisión.
-//
-//   requests.pending   las partidas de la parroquia con cambios por aprobar, la más antigua primero
-//   requests.review    aprobar o rechazar todo lo que pidieron en una partida
-//
-// Un usuario no modifica una partida guardada (request_changes):
-//   - si la nota marginal está en blanco, la escribe y se guarda en el momento (después ya no la edita);
-//   - todo lo demás (incluida una nota que ya tiene texto) queda como solicitud hasta que un
-//     administrador de la parroquia la apruebe o la rechace. Mientras tanto, la partida no admite otra.
-// Si un administrador edita la partida con una solicitud pendiente, esta queda aprobada si usó los
-// valores pedidos, o descartada si no (resolve_on_edit).
-
 import type { SacramentRecord } from '../../../shared/models';
 import { changed_fields, get_field, person_at, person_parts, set_field, type FieldChange } from '../../../shared/record_fields';
 import type { LocalDatabase } from '../db/database';
@@ -38,16 +26,13 @@ export interface PendingChanges
 	solicitado_por: string;
 }
 
-// ---------------------------------------------------------------------------
-// Pedir
-// ---------------------------------------------------------------------------
+
 
 function as_requests(changes: FieldChange[], type: NewRequest['tipo']): NewRequest[]
 {
 	return changes.map((change) => ({ ...change, tipo: type }));
 }
 
-// Las correcciones por nota marginal nuevas, validadas contra la persona guardada.
 function requested_corrections(saved: SacramentRecord, record: SacramentRecord): FieldChange[]
 {
 	const out_changes: FieldChange[] = [];
@@ -56,7 +41,8 @@ function requested_corrections(saved: SacramentRecord, record: SacramentRecord):
 	{
 		const incoming = person_at(record, part);
 		const new_changes = Array.isArray(incoming?.cambios) ? incoming.cambios.filter((change) => change.id === undefined) : [];
-		const corrections = apply_corrections({ ...person_at(saved, part), cambios: new_changes }).corrections;
+		const saved_person = person_at(saved, part);
+		const corrections = apply_corrections({ ...saved_person, cambios: [...saved_person.cambios, ...new_changes] }).corrections;
 
 		for (const correction of corrections)
 			out_changes.push({ parte: part, campo: correction.campo_cambio, valor_anterior: correction.valor_anterior ?? null, valor_nuevo: correction.valor_nuevo });
@@ -78,7 +64,6 @@ export function request_changes(db: LocalDatabase, session: Session, record: Sac
 	if (has_pending_request(db, sacrament_id))
 		throw new ServiceError(PENDING_REQUEST, 409);
 
-	// La nota en blanco se escribe directo; una que ya tiene texto se pide como cualquier otro dato.
 	const new_note = clean_text(record.sacramento?.anotaciones);
 	const writes_blank_note = clean_text(saved.sacramento.anotaciones) === null && new_note !== null;
 
@@ -114,11 +99,7 @@ export function request_changes(db: LocalDatabase, session: Session, record: Sac
 	save();
 }
 
-// ---------------------------------------------------------------------------
-// Revisar
-// ---------------------------------------------------------------------------
 
-// La partida con lo que se pidió: los datos escritos y las correcciones por nota marginal.
 function with_requests(saved: SacramentRecord, requests: PendingRequest[]): SacramentRecord
 {
 	let record = saved;
@@ -133,7 +114,6 @@ function with_requests(saved: SacramentRecord, requests: PendingRequest[]): Sacr
 	return record;
 }
 
-// Si la edición del administrador trae todo lo que se pidió.
 function uses_requests(record: SacramentRecord, requests: PendingRequest[]): boolean
 {
 	return requests.every((request) =>
@@ -178,13 +158,11 @@ export function review_requests(db: LocalDatabase, session: Session, sacrament_i
 		}
 
 		close_requests(db, sacrament_id, decision, session.user_id);
-		// La partida cambió (al menos sus solicitudes): se le sube la versión para que las demás PCs la bajen.
 		db.prepare('UPDATE sacramentos SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), sacrament_id);
 	});
 	review();
 }
 
-// Lo llama la edición del administrador, dentro de su transacción.
 export function resolve_on_edit(db: LocalDatabase, session: Session, sacrament_id: number, record: SacramentRecord): void
 {
 	const requests = pending_requests(db, sacrament_id);
@@ -201,10 +179,6 @@ export function resolve_on_edit(db: LocalDatabase, session: Session, sacrament_i
 	close_requests(db, sacrament_id, 'descartado', session.user_id, DISCARDED_ON_EDIT);
 	add_history(db, sacrament_id, session.user_id, 'cambio_descartado', requests, DISCARDED_ON_EDIT);
 }
-
-// ---------------------------------------------------------------------------
-// Listar
-// ---------------------------------------------------------------------------
 
 export function list_pending(db: LocalDatabase, session: Session): PendingChanges[]
 {

@@ -15,6 +15,7 @@ const EVENT_LABELS: Record<HistoryEvent, string> = {
   cambio_rechazado: 'Rechazó el cambio',
   cambio_descartado: 'Descartó el cambio',
   anulada: 'Anuló la partida',
+  rehabilitada: 'Rehabilitó la partida',
 };
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });

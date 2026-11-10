@@ -3,6 +3,19 @@ import { ROLES } from './sync';
 
 export const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
 
+export const PASSWORD_MIN_LENGTH = 6;
+
+export function password_error(password: string): string | null
+{
+	if (password.length < PASSWORD_MIN_LENGTH)
+		return `La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`;
+
+	if (/\s/.test(password))
+		return 'La contraseña no puede tener espacios.';
+
+	return null;
+}
+
 export function is_role(value: unknown): value is Role
 {
 	return ROLES.includes(value as Role);
@@ -22,6 +35,8 @@ export interface TargetUser
 	rol: Role;
 	parroquia_id: number | null;
 	principal?: boolean;
+	otras_parroquias?: boolean;
+	principal_en_otra?: boolean;
 }
 
 export function role_parish_error(target: TargetUser): string | null
@@ -39,6 +54,9 @@ function parish_admin_reason(actor: Actor, target: TargetUser, action: 'crear' |
 {
 	if (target.parroquia_id !== actor.parroquia_id)
 		return `Solo puede ${action} cuentas de su propia parroquia.`;
+
+	if (target.otras_parroquias)
+		return `Esta cuenta también trabaja en otras parroquias: solo el administrador general puede ${action}la.`;
 
 	if (target.rol === 'usuario')
 		return null;
@@ -89,7 +107,7 @@ export function cannot_modify(actor: Actor, target: TargetUser): string | null
 
 export function cannot_disable(target: TargetUser): string | null
 {
-	if (target.principal)
+	if (target.principal || target.principal_en_otra)
 		return 'No se puede deshabilitar al administrador principal: primero pase la marca de principal a otro administrador.';
 
 	return null;
@@ -118,6 +136,17 @@ export function cannot_make_principal(actor: Actor, target: TargetUser): string 
 		return null;
 
 	return 'Solo el administrador principal de la parroquia, o un administrador general, puede pasar la marca.';
+}
+
+export function cannot_change_parishes(actor: Actor, target: TargetUser): string | null
+{
+	if (actor.rol !== 'admin_general')
+		return 'Solo el administrador general puede agregar o quitar parroquias de una cuenta.';
+
+	if (target.rol === 'admin_general')
+		return 'Un administrador general no pertenece a ninguna parroquia.';
+
+	return null;
 }
 
 export function can_manage_users(role: Role): boolean

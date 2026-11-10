@@ -2,7 +2,6 @@ import { dialog } from 'electron';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { can_manage_users } from '../../../shared/users';
 import { close_database, database_paths, get_database, KEY_STORE, use_database } from '../db/app_database';
 import { create_temp_database, install_temp_database, open_local_database, type KeyStore, type LocalDatabase, type LocalPaths } from '../db/database';
 import { LOCAL_MIGRATIONS } from '../db/migrations';
@@ -188,10 +187,12 @@ async function replace_database(content: BackupContent): Promise<void>
 	write_logos(paths.directory, content.logos);
 }
 
+// Exportar o importar datos es cosa del administrador de una parroquia (pedido del padre, 2026-11-08):
+// el administrador general solo consulta. La pantalla además lo ofrece solo en la parroquia propia.
 function check_admin(session: Session): void
 {
-	if (!can_manage_users(session.role))
-		throw new ServiceError('Solo un administrador puede hacer o restaurar respaldos.', 403);
+	if (session.role !== 'admin_parroquia')
+		throw new ServiceError('Solo el administrador de una parroquia puede hacer o restaurar respaldos.', 403);
 }
 
 function read_password(value: unknown, is_new: boolean): string

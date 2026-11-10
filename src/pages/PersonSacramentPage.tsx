@@ -1,17 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Baptism, Minister, NameColumn, SearchFilters } from '../../shared/models';
+import type { Baptism, Minister, NameColumn } from '../../shared/models';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { SacramentSearchPanel } from '../components/features/SacramentSearchPanel';
 import { PersonSacramentForm, type PersonSacramentType } from '../components/features/PersonSacramentForm';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
+import type { SacramentSearchValues } from '../components/features/SacramentSearchForm';
 import { HistoryDialog } from '../components/features/HistoryDialog';
 import { SinglePersonPrintView } from '../components/features/SinglePersonPrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { CertificatePrintPreview } from '../components/print/CertificatePrintPreview';
 import { useSessionStore } from '../store/sessionStore';
 import { usePermissions } from '../lib/permissions';
-import { annulSacrament, saveSacrament, searchSacraments } from '../controllers/SacramentController';
+import { annulSacrament, restoreSacrament, saveSacrament, searchSacraments } from '../controllers/SacramentController';
 import { searchPriests } from '../controllers/PriestController';
 import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
@@ -39,18 +40,20 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
   const [totalPages, setTotalPages] = useState(1);
   const [sortBy, setSortBy] = useState<NameColumn>('nombres');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [filters, setFilters] = useState<Pick<SearchFilters, NameColumn>>({});
+  const [filters, setFilters] = useState<SacramentSearchValues>({});
   // Se incrementa tras guardar o anular para volver a pedir la lista.
   const [reloadCounter, setReloadCounter] = useState(0);
 
   const [formState, setFormState] = useState<{ mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: Baptism }>({ mode: 'closed' });
   const [formError, setFormError] = useState<string | null>(null);
-  const [annulmentTargetId, setAnnulmentTargetId] = useState<number | null>(null);
+  // La partida a anular o a rehabilitar, y cuál de las dos cosas.
+  const [annulment, setAnnulment] = useState<{ id: number; mode: 'anular' | 'rehabilitar' } | null>(null);
   const [historyTargetId, setHistoryTargetId] = useState<number | null>(null);
   const [printing, setPrinting] = useState<{ record: Baptism; logo: string | null } | null>(null);
   const [isIndexOpen, setIsIndexOpen] = useState(false);
   const [priestOptions, setPriestOptions] = useState<Minister[]>([]);
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
+  const lastPriestSearch = useRef(0);
 
   // Una sola fuente de carga: cualquier cambio de filtros, página, orden o el contador de recarga
   // vuelve a pedir la lista. Así paginar u ordenar no pierde los filtros activos.
@@ -90,7 +93,7 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
     return canWrite && recordParroquiaId === parroquiaId;
   }
 
-  function handleSearch(newFilters: Pick<SearchFilters, NameColumn>) {
+  function handleSearch(newFilters: SacramentSearchValues) {
     setFilters(newFilters);
     setCurrentPage(1);
   }
@@ -105,7 +108,10 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
     setIsSearchingPriests(true);
     // El celebrante es de la parroquia de la partida: la que se edita o la que se está viendo.
     const parroquia_id = formState.mode === 'edit' ? formState.record.sacramento.parroquia_id : (parroquiaActivaId ?? undefined);
-    const result = await searchPriests({ nombres: query, orden: 'nombres', direccion: 'asc', pagina: 1, parroquia_id });
+    // Se escribe letra por letra: solo cuenta la respuesta de la última búsqueda.
+    const searchId = ++lastPriestSearch.current;
+    const result = await searchPriests({ texto: query, orden: 'nombres', direccion: 'asc', pagina: 1, parroquia_id });
+    if (searchId !== lastPriestSearch.current) return;
     setIsSearchingPriests(false);
 
     if (result.success) setPriestOptions(result.priests ?? []);
@@ -148,13 +154,13 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
   }
 
   async function handleConfirmAnnulment(motivo: string) {
-    if (annulmentTargetId === null) return;
-    const result = await annulSacrament(annulmentTargetId, motivo);
+    if (annulment === null) return;
+    const result = annulment.mode === 'anular' ? await annulSacrament(annulment.id, motivo) : await restoreSacrament(annulment.id, motivo);
     if (!result.success) {
-      setErrorMessage(result.errorMessage ?? 'Error al anular.');
+      setErrorMessage(result.errorMessage ?? (annulment.mode === 'anular' ? 'Error al anular.' : 'Error al rehabilitar.'));
       return;
     }
-    setAnnulmentTargetId(null);
+    setAnnulment(null);
     setReloadCounter((count) => count + 1);
   }
 
@@ -192,6 +198,7 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
           setSortDirection(direction);
         }}
         onSearch={handleSearch}
+        godparentLabel={'Padrino o madrina'}
         onClear={handleClear}
         canWrite={canWrite}
         canManage={canManage}
@@ -201,7 +208,8 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
         onAdd={() => setFormState({ mode: 'create' })}
         onEdit={handleOpenEdit}
         onPrint={handlePrint}
-        onAnnul={(id) => setAnnulmentTargetId(id)}
+        onAnnul={(id) => setAnnulment({ id, mode: 'anular' })}
+        onRestore={(id) => setAnnulment({ id, mode: 'rehabilitar' })}
         onPrintIndex={() => setIsIndexOpen(true)}
       />
 
@@ -223,10 +231,11 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
 
       {historyTargetId !== null && <HistoryDialog sacramentoId={historyTargetId} onClose={() => setHistoryTargetId(null)} />}
 
-      {annulmentTargetId !== null && (
+      {annulment !== null && (
         <AnnulmentModal
+          mode={annulment.mode}
           onConfirm={handleConfirmAnnulment}
-          onCancel={() => setAnnulmentTargetId(null)}
+          onCancel={() => setAnnulment(null)}
           isLoading={isLoading}
         />
       )}

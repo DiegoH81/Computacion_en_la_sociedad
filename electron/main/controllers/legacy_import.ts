@@ -221,11 +221,6 @@ export function save_import(db: LocalDatabase, session: Session, records: Import
 // Lo leído en la vista previa, hasta que se confirme. Solo hay una importación a la vez.
 let pending: { token: string; parish_id: number; records: ImportedRecord[] } | null = null;
 
-export function today(): string
-{
-	return new Date().toISOString().slice(0, 10);
-}
-
 export async function read_legacy_file(file_path: string): Promise<{ partidas: ImportedRecord[]; errores: RowError[] }>
 {
 	let sheets: { sheet: string; data: unknown[][] }[];
@@ -240,7 +235,7 @@ export async function read_legacy_file(file_path: string): Promise<{ partidas: I
 
 	try
 	{
-		return read_workbook(sheets, today());
+		return read_workbook(sheets);
 	}
 	catch (error)
 	{

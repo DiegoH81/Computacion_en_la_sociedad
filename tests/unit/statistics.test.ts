@@ -150,7 +150,8 @@ describe('estadísticas', () => {
     create_person_sacrament(db, 'bautismo', parish1, partida('2026-01-01'));
 
     expect(stats(2026).edades.bautismo).toEqual({
-      bandas: [1, 0, 1, 0, 0, 0, 1],
+      // 0, 8 y 50 años: rangos 0-1, 8-12 y 26-50 (los de bautismo y confirmación).
+      bandas: [1, 0, 1, 0, 1, 0],
       sinDato: 2,
       promedio: 19.3,
     });
@@ -166,7 +167,8 @@ describe('estadísticas', () => {
     const { totales, edades } = stats(2026);
 
     expect(totales.matrimonio.anio).toBe(1);
-    expect(edades.matrimonio.bandas).toEqual([0, 0, 0, 0, 1, 1, 0]);
+    // 30 y 28 años: los dos en 19-30 (los rangos de matrimonio).
+    expect(edades.matrimonio.bandas).toEqual([0, 2, 0, 0, 0, 0]);
     expect(edades.matrimonio.promedio).toBe(29);
   });
 
@@ -185,15 +187,24 @@ describe('estadísticas', () => {
     expect(registro).toEqual({ anuladas: 0, conCorrecciones: 1 });
   });
 
-  it('ofrece los años con datos y el actual, y arma la tendencia hasta el año elegido', () => {
+  it('ofrece todos los años seguidos, del primero con datos al actual, y arma la tendencia hasta el año elegido', () => {
     create_person_sacrament(db, 'bautismo', parish1, partida('2023-05-01'));
     create_person_sacrament(db, 'bautismo', parish1, partida('2025-05-01'));
 
     const result = stats(2025);
 
-    expect(result.anios).toEqual([2026, 2025, 2023]);
+    expect(result.anios).toEqual([2026, 2025, 2024, 2023]);
     expect(result.esAnioActual).toBe(false);
     expect(result.tendencia.map((row) => [row.anio, row.bautismo])).toEqual([[2023, 1], [2024, 0], [2025, 1]]);
+  });
+
+  it('una partida sin ninguna fecha (como las antiguas) no cuenta en ningún año', () => {
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-03-01', { sacramento: { fecha_emision: null, fecha_evento: null } }));
+    create_person_sacrament(db, 'bautismo', parish1, partida('2026-03-01', { sacramento: { fecha_evento: null, numero: '9' } }));
+
+    // Solo cuenta la que tiene fecha de partida.
+    expect(stats(2026).totales.bautismo.anio).toBe(1);
+    expect(stats(2026).totales.bautismo.historico).toBe(1);
   });
 
   it('con un año inválido o sin datos usa el actual', () => {

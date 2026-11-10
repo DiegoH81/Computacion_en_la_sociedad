@@ -408,4 +408,162 @@ export const LOCAL_MIGRATIONS: readonly string[] = [
     GROUP BY a.parroquia_id
   );
   `,
+
+  `
+  CREATE TABLE usuario_parroquias (
+    usuario_id   INTEGER NOT NULL REFERENCES usuarios(id),
+    parroquia_id INTEGER NOT NULL REFERENCES parroquias(id),
+    rol          TEXT    NOT NULL CHECK (rol IN ('admin_parroquia', 'usuario')),
+    principal    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (usuario_id, parroquia_id)
+  );
+
+  CREATE VIEW membresias AS
+    SELECT id AS usuario_id, parroquia_id, rol, principal, 1 AS origen
+    FROM usuarios
+    WHERE parroquia_id IS NOT NULL
+    UNION ALL
+    SELECT usuario_id, parroquia_id, rol, principal, 0 AS origen
+    FROM usuario_parroquias;
+  `,
+
+  `
+  CREATE TABLE historial_partidas_respaldo AS SELECT * FROM historial_partidas;
+
+  DROP TABLE historial_partidas;
+
+  CREATE TABLE historial_partidas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id     TEXT    NOT NULL UNIQUE,
+    sacramento_id INTEGER NOT NULL REFERENCES sacramentos(id),
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id),
+    evento        TEXT    NOT NULL CHECK (evento IN ('registrada', 'importada', 'editada', 'correccion', 'cambio_pedido',
+                                                     'cambio_aprobado', 'cambio_rechazado', 'cambio_descartado', 'anulada',
+                                                     'rehabilitada')),
+    motivo        TEXT,
+    fecha         TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  );
+
+  INSERT INTO historial_partidas (id, client_id, sacramento_id, usuario_id, evento, motivo, fecha)
+  SELECT id, client_id, sacramento_id, usuario_id, evento, motivo, fecha FROM historial_partidas_respaldo;
+
+  DROP TABLE historial_partidas_respaldo;
+
+  CREATE INDEX idx_historial_sacramento ON historial_partidas (sacramento_id);
+  `,
+
+  `
+  UPDATE personas
+  SET nombres = (
+    SELECT c.valor_anterior FROM cambios_persona c
+    WHERE c.persona_id = personas.id AND c.campo_cambio = 'nombres' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL
+    ORDER BY c.fecha_cambio, c.id LIMIT 1
+  )
+  WHERE EXISTS (
+    SELECT 1 FROM cambios_persona c
+    WHERE c.persona_id = personas.id AND c.campo_cambio = 'nombres' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL
+  );
+
+  UPDATE personas
+  SET apellido_paterno = (
+    SELECT c.valor_anterior FROM cambios_persona c
+    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_paterno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL
+    ORDER BY c.fecha_cambio, c.id LIMIT 1
+  )
+  WHERE EXISTS (
+    SELECT 1 FROM cambios_persona c
+    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_paterno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL
+  );
+
+  UPDATE personas
+  SET apellido_materno = (
+    SELECT c.valor_anterior FROM cambios_persona c
+    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_materno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL
+    ORDER BY c.fecha_cambio, c.id LIMIT 1
+  )
+  WHERE EXISTS (
+    SELECT 1 FROM cambios_persona c
+    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_materno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL
+  );
+  `,
+  `
+  UPDATE sync_cola SET version_base = version_base + 1
+  WHERE version_base IS NOT NULL AND client_id IN (
+    SELECT client_id FROM sacramentos
+    WHERE fecha_evento IS NOT NULL AND fecha_emision <> fecha_evento
+    AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada')
+  );
+
+  UPDATE sacramentos
+  SET fecha_emision = fecha_evento, version = version + 1
+  WHERE fecha_evento IS NOT NULL AND fecha_emision <> fecha_evento
+    AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada');
+  `,
+  `
+  CREATE TABLE sacramentos_respaldo AS SELECT * FROM sacramentos;
+
+  DROP TABLE sacramentos;
+
+  CREATE TABLE sacramentos (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id              TEXT    NOT NULL UNIQUE,
+    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),
+    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),
+    ministro_id            INTEGER REFERENCES ministros(id),
+    libro                  TEXT    NOT NULL,
+    folio                  TEXT    NOT NULL,
+    numero                 TEXT    NOT NULL,
+    fecha_emision          TEXT,
+    fecha_evento           TEXT,
+    anotaciones            TEXT,
+    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),
+    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),
+    anulado_en             TEXT,
+    motivo_anulacion       TEXT,
+    version                INTEGER NOT NULL DEFAULT 1,
+    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (id, tipo),
+    CHECK (
+      estado = 'vigente'
+      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL
+          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')
+    )
+  );
+
+  INSERT INTO sacramentos
+    (id, client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,
+     estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, created_at, updated_at)
+  SELECT
+    id, client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,
+    estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, created_at, updated_at
+  FROM sacramentos_respaldo;
+
+  DROP TABLE sacramentos_respaldo;
+
+  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);
+
+  CREATE TRIGGER trg_sacramentos_touch
+  AFTER UPDATE ON sacramentos
+  FOR EACH ROW
+  WHEN NEW.version = OLD.version
+  BEGIN
+    UPDATE sacramentos
+       SET version = OLD.version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE id = NEW.id;
+  END;
+
+  UPDATE sync_cola SET version_base = version_base + 1
+  WHERE version_base IS NOT NULL AND client_id IN (
+    SELECT client_id FROM sacramentos
+    WHERE fecha_evento IS NULL AND fecha_emision IS NOT NULL
+      AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada')
+  );
+
+  UPDATE sacramentos
+  SET fecha_emision = NULL, version = version + 1
+  WHERE fecha_evento IS NULL AND fecha_emision IS NOT NULL
+    AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada');
+  `,
 ];

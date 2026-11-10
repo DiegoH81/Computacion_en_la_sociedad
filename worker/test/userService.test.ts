@@ -252,7 +252,8 @@ describe('userService (integración con D1)', () => {
         ['username con espacios', { username: 'ana quispe' }],
         ['username demasiado corto', { username: 'ab' }],
         ['username con caracteres no permitidos', { username: 'ana@quispe' }],
-        ['contraseña de 7 caracteres', { password: '1234567' }],
+        ['contraseña de 5 caracteres', { password: '12345' }],
+        ['contraseña con espacios', { password: 'clave con espacio' }],
         ['contraseña que no es texto', { password: 12345678 }],
         ['sin parroquia', { parroquia_id: undefined }],
         ['parroquia que no es un id', { parroquia_id: 'otra' }],
@@ -388,7 +389,7 @@ describe('userService (integración con D1)', () => {
       await expect(update_user(env.prelatura_db, ADMIN, 2, {
         nombre: 'Otro',
         apellido_paterno: 'Nombre',
-        password: '1234567',
+        password: '12345',
       })).rejects.toMatchObject({ status: 400 });
       expect(await getUser(2)).toEqual(before);
     });

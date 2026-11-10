@@ -38,7 +38,7 @@ export function PriestFormModal({
       <FormPanel title="Datos del ministro">
         <div className="grid grid-cols-2 gap-3">
           <Field variant="panel" label="Título" value={minister.titulo ?? ''} onChange={(v) => update({ titulo: v })} />
-          <Field variant="panel" label="Nombre" value={minister.nombre} onChange={(v) => update({ nombre: v })} />
+          <Field variant="panel" label="Nombre" required value={minister.nombre} onChange={(v) => update({ nombre: v })} />
           <Field
             variant="panel"
             label="Apellido paterno"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Minister } from '../../../shared/models';
 import { createPriest, ministerName } from '../../controllers/PriestController';
@@ -26,7 +26,24 @@ export function PriestSelector({
   const [isSaving, setIsSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const boxRef = useRef<HTMLDivElement>(null);
+
   const selectedOption = options.find((option) => option.id === value);
+
+  function close() {
+    setIsOpen(false);
+    if (selectedOption) setQuery(ministerName(selectedOption));
+  }
+
+  // Un clic fuera del selector cierra la lista (y el campo vuelve a mostrar el celebrante elegido).
+  useEffect(() => {
+    if (!isOpen || isCreating) return;
+    function handleOutside(event: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(event.target as Node)) close();
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  });
 
   function handleQueryChange(newQuery: string) {
     setQuery(newQuery);
@@ -58,7 +75,7 @@ export function PriestSelector({
   }
 
   return (
-    <div className="relative">
+    <div ref={boxRef} className="relative">
       <input
         type="text"
         value={isOpen ? query : (selectedOption ? ministerName(selectedOption) : query)}
@@ -66,6 +83,9 @@ export function PriestSelector({
         onFocus={() => {
           setIsOpen(true);
           onSearch(query);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') close();
         }}
         placeholder="Buscar celebrante..."
         className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-teal-600"
@@ -86,10 +106,9 @@ export function PriestSelector({
                   key={option.id}
                   type="button"
                   onClick={() => handleSelect(option)}
-                  className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  className="flex w-full items-start px-3 py-2 text-left text-sm hover:bg-slate-50"
                 >
                   <span className="font-medium text-slate-800">{ministerName(option)}</span>
-                  <span className="text-xs text-slate-500">{option.parroquia?.nombre}</span>
                 </button>
               ))}
           </div>

@@ -2,8 +2,8 @@ import type { LoginResponse } from '../../../shared/sync';
 import { OFFLINE_TOKEN } from '../../shared';
 import { database_needs_recovery, database_paths, get_database, KEY_STORE, use_database } from '../db/app_database';
 import type { LocalDatabase } from '../db/database';
-import { end_session, start_session } from '../models/session';
-import type { User } from '../models/user';
+import { end_session, select_working_parish, start_session } from '../models/session';
+import { read_user_parishes, type User } from '../models/user';
 import { reset_sync_status, start_auto_sync, stop_auto_sync, sync_now } from '../sync/auto_sync';
 import { is_connection_error, remote_request, request_login } from '../sync/online';
 import { recover_local_database } from '../sync/recovery';
@@ -11,7 +11,7 @@ import { refresh_reference } from '../sync/sync';
 import { create_verifier, matches_verifier } from '../utils/crypto';
 import { ServiceError } from '../utils/errors';
 import { full_name } from '../utils/helpers';
-import type { PublicRoutes } from '../utils/middleware';
+import type { PublicRoutes, Routes } from '../utils/middleware';
 
 
 // Without internet, verifier
@@ -62,6 +62,7 @@ export async function verify_offline(db: LocalDatabase, username: string, passwo
 		parroquia_id: row.parroquia_id,
 		parroquia_nombre: row.parroquia_nombre,
 		nombre_completo: full_name(row.nombre, row.apellido_paterno, row.apellido_materno),
+		parroquias: read_user_parishes(db, row.id),
 	};
 
 	return { ok: true, usuario: user };
@@ -97,11 +98,10 @@ async function login_online(response: LoginResponse, username: string, password:
 	start_auto_sync('en-linea');
 
 	await sync_now();
-	return response;
+
+	return { ...response, usuario: { ...user, parroquias: read_user_parishes(db, user.id) } };
 }
 
-// La sesión empieza con los datos de esta PC. La sincronización queda corriendo en segundo plano:
-// si hay internet, pide el token con la misma contraseña (auto_sync.ts) y sube y baja lo pendiente.
 function start_local_session(user: LoginResponse['usuario'], username: string, password: string): LoginResponse
 {
 	start_session({ user_id: user.id, role: user.rol, parish_id: user.parroquia_id, token: '' }, username, password);
@@ -155,6 +155,23 @@ export function logout(): void
 	end_session();
 	reset_sync_status();
 }
+
+export function select_parish(db: LocalDatabase, parish_id: unknown): { rol: User['rol']; parroquia_id: number | null }
+{
+	if (!Number.isInteger(parish_id))
+		throw new ServiceError('Parroquia no válida.', 400);
+
+	const session = select_working_parish(db, parish_id as number);
+	return { rol: session.role, parroquia_id: session.parish_id };
+}
+
+export const session_routes: Routes =
+{
+	'auth.selectParish': (payload: { parroquia_id: unknown }, { db }) =>
+	{
+		return select_parish(db, payload?.parroquia_id);
+	},
+};
 
 export const login_routes: PublicRoutes =
 {

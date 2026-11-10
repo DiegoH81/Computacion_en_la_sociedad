@@ -208,7 +208,7 @@ function register_for(index)
 const statements = [];
 
 // 1. Borrar todo, de las tablas hijas a las padres (D1 revisa las claves foráneas).
-const TABLES_TO_EMPTY = ['cambios_persona', 'historial_campos', 'historial_partidas', 'solicitudes_cambio', 'bautismos', 'confirmaciones', 'matrimonios', 'sync_feed', 'sacramentos', 'personas', 'ministros', 'dispositivos', 'usuarios', 'parroquias'];
+const TABLES_TO_EMPTY = ['cambios_persona', 'historial_campos', 'historial_partidas', 'solicitudes_cambio', 'bautismos', 'confirmaciones', 'matrimonios', 'sync_feed', 'sacramentos', 'personas', 'ministros', 'dispositivos', 'usuario_parroquias', 'usuarios', 'parroquias'];
 for (const table of TABLES_TO_EMPTY)
 	statements.push(`DELETE FROM ${table};`);
 
@@ -250,6 +250,26 @@ for (const user of users)
 		`INSERT INTO usuarios (id, client_id, username, password_hash, rol, parroquia_id, activo, principal, nombre, apellido_paterno, apellido_materno)
 		 VALUES (${user.id}, ${sql_value(seed_uuid(`demo-usuario-${user.username}`))}, ${sql_value(user.username)}, ${sql_value(await hash_password(PASSWORD))},
 		         ${sql_value(user.rol)}, ${sql_value(user.parroquia_id)}, 1, ${user.principal}, ${sql_value(nombre)}, ${sql_value(user.apellido_paterno)}, ${sql_value(user.apellido_materno)});`,
+	);
+}
+
+// Cuentas que trabajan en varias parroquias (migración 0019). Santa Cruz no tiene partidas: está para
+// que admin4 sea principal de dos parroquias.
+//   admin1    principal de San Pedro Mártir y administrador común en Santiago Apóstol
+//   admin4    principal de San Juan Bautista y de Santa Cruz
+//   usuario1  usuario de San Pedro Mártir y de Nuestra Señora del Rosario
+statements.push(`INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (5, 'Santa Cruz', 'Juli, Chucuito', 1);`);
+const extra_parishes = [
+	{ username: 'admin1', parroquia_id: 3, rol: 'admin_parroquia', principal: 0 },
+	{ username: 'admin4', parroquia_id: 5, rol: 'admin_parroquia', principal: 1 },
+	{ username: 'usuario1', parroquia_id: 2, rol: 'usuario', principal: 0 },
+];
+for (const extra of extra_parishes)
+{
+	const account = users.find((user) => user.username === extra.username);
+	statements.push(
+		`INSERT INTO usuario_parroquias (usuario_id, parroquia_id, rol, principal)
+		 VALUES (${account.id}, ${extra.parroquia_id}, ${sql_value(extra.rol)}, ${extra.principal});`,
 	);
 }
 
@@ -503,4 +523,5 @@ if (result.status !== 0)
 
 console.log(`Base local vaciada y cargada con los datos de demostración (${statements.length} sentencias).`);
 console.log(`Cuentas: adminG, admin1..admin${PARISHES.length} (principales), admin1b..admin${PARISHES.length}b, usuario1..usuario${helper_number}. Contraseña: ${PASSWORD}.`);
+console.log('En varias parroquias: admin1 (también admin de la 3), admin4 (principal de la 4 y de Santa Cruz), usuario1 (también de la 2).');
 console.log('Borre la base local de la app (prelatura-local.db y .key) para que baje los datos nuevos.');

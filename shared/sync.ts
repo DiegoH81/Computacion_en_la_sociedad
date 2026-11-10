@@ -2,6 +2,9 @@ export type Role = 'admin_general' | 'admin_parroquia' | 'usuario';
 
 export const ROLES: readonly Role[] = ['admin_general', 'admin_parroquia', 'usuario'];
 
+/** El rol de una cuenta dentro de una parroquia (el admin_general no pertenece a ninguna). */
+export type ParishRole = Exclude<Role, 'admin_general'>;
+
 export type SacramentType = 'bautismo' | 'confirmacion' | 'matrimonio';
 
 export type SyncEntity = SacramentType | 'ministro' | 'usuario';
@@ -22,6 +25,7 @@ export const HISTORY_EVENTS = [
 	'cambio_rechazado',
 	'cambio_descartado',
 	'anulada',
+	'rehabilitada',
 ] as const;
 
 export type HistoryEvent = (typeof HISTORY_EVENTS)[number];
@@ -63,7 +67,7 @@ export interface RecordData
 	libro: string;
 	folio: string;
 	numero: string;
-	fecha_emision: string;
+	fecha_emision: string | null;
 	fecha_evento: string | null;
 	anotaciones: string | null;
 	estado: 'vigente' | 'anulado';
@@ -169,9 +173,32 @@ export interface PullPage
 	hayMas: boolean;
 }
 
+export interface MembershipData
+{
+	usuario_id: number;
+	parroquia_id: number;
+	rol: ParishRole;
+	principal: number;
+}
+
+export interface UserParish
+{
+	id: number;
+	nombre: string;
+	rol: ParishRole;
+}
+
 // POST /api/auth/login
+// rol y parroquia_id
 export interface LoginResponse
 {
 	token: string;
-	usuario: { id: number; nombre_completo: string; rol: Role; parroquia_id: number | null; parroquia_nombre: string | null };
+	usuario: {
+		id: number;
+		nombre_completo: string;
+		rol: Role;
+		parroquia_id: number | null;
+		parroquia_nombre: string | null;
+		parroquias: UserParish[];
+	};
 }

@@ -13,10 +13,6 @@ const MONTHS = [
   'diciembre',
 ];
 
-/**
- * Las fechas de las partidas pueden estar incompletas, porque el libro no siempre trae el día:
- * "1979" (solo el año), "1979-02" (año y mes) o "1979-02-25" (completa).
- */
 export const PARTIAL_DATE_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 
 /**

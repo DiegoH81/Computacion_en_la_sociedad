@@ -94,10 +94,11 @@ describe('búsqueda de duplicados', () => {
     expect(find({ nombres: 'Nestar', apellido_paterno: 'Quispi', apellido_materno: 'Machaca' })).toHaveLength(1);
   });
 
-  it('reconoce a la persona por el nombre que tenía antes de una nota marginal', () => {
+  it('reconoce a la persona por el nombre de la partida y por el corregido en una nota marginal', () => {
     create_person_sacrament(db, 'bautismo', parish1, partida({ persona: { nombres: 'Diago', cambios: [change('nombres', 'Diego')] } }));
 
-    expect(find({ ...person, nombres: 'Diago' })[0]).toMatchObject({ nombre_completo: 'Diego Quispe Machaca', porcentaje: 100 });
+    expect(find({ ...person, nombres: 'Diago' })[0]).toMatchObject({ nombre_completo: 'Diago Quispe Machaca', porcentaje: 100 });
+    expect(find({ ...person, nombres: 'Diego' })[0]).toMatchObject({ nombre_completo: 'Diago Quispe Machaca', porcentaje: 100 });
   });
 
   it('no avisa por otra persona, ni por un DNI distinto con nivel alto', () => {

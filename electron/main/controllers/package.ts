@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Parish } from '../../../shared/models';
-import type { MinisterData, RecordData, UserData } from '../../../shared/sync';
+import type { MembershipData, MinisterData, RecordData, UserData } from '../../../shared/sync';
 import { get_database } from '../db/app_database';
 import type { LocalDatabase } from '../db/database';
 import type { Session } from '../models/session';
@@ -26,6 +26,7 @@ export interface InitialPackage
 	cursor: string | null;
 	parroquias: Parish[];
 	usuarios: (UserData & { id: number })[];
+	usuario_parroquias?: MembershipData[];
 	ministros: (MinisterData & { id: number })[];
 	partidas: RecordData[];
 }
@@ -80,6 +81,7 @@ export function build_package(db: LocalDatabase, session: Session): InitialPacka
 		cursor: get_sync_value(db, SYNC_KEYS.cursor),
 		parroquias: db.prepare('SELECT id, nombre, ubicacion, activa FROM parroquias ORDER BY id').all() as Parish[],
 		usuarios: users,
+		usuario_parroquias: db.prepare('SELECT usuario_id, parroquia_id, rol, principal FROM usuario_parroquias WHERE usuario_id > 0 ORDER BY usuario_id, parroquia_id').all() as MembershipData[],
 		ministros: ministers,
 		partidas: records.map((row) => ({ ...read_local_record(db, row.client_id), version: row.version, created_at: row.created_at, updated_at: row.updated_at })),
 	};
@@ -113,7 +115,7 @@ export function load_package(db: LocalDatabase, data: unknown): PackageSummary
 
 	const load = db.transaction(() =>
 	{
-		save_reference_data(db, { parroquias: content.parroquias, ministros: content.ministros, usuarios: content.usuarios });
+		save_reference_data(db, { parroquias: content.parroquias, ministros: content.ministros, usuarios: content.usuarios, usuario_parroquias: content.usuario_parroquias });
 
 		for (const record of content.partidas)
 			save_downloaded_record(db, record);
@@ -139,7 +141,6 @@ function read_package_file(file_path: string): unknown
 	}
 }
 
-// Dónde busca la app el paquete que viene con el instalador.
 export function bundled_package_path(): string
 {
 	if (app.isPackaged)
@@ -148,10 +149,8 @@ export function bundled_package_path(): string
 	return path.join(app.getAppPath(), 'resources', 'instalador', PACKAGE_FILE);
 }
 
-// Al abrir la app: si la base está vacía y el instalador trae un paquete, se carga.
 export function load_bundled_package(): void
 {
-	// Las pruebas E2E empiezan con una PC vacía y no deben cargar el paquete de demostración.
 	if (process.env.PRELATURA_SIN_PAQUETE === '1')
 		return;
 
@@ -163,7 +162,7 @@ export function load_bundled_package(): void
 	}
 	catch
 	{
-		return; // la base no abrió: el login se encarga
+		return;
 	}
 
 	if (!existsSync(file) || !needs_package(db))
@@ -187,7 +186,6 @@ export function parent_window(): BrowserWindow | undefined
 
 export const package_public_routes: PublicRoutes =
 {
-	// El login ofrece restaurar un respaldo solo si la PC todavía no tiene usuarios.
 	'package.status': () =>
 	{
 		try
