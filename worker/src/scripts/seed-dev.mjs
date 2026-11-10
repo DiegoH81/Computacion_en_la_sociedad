@@ -396,6 +396,18 @@ for (const plan of RECORDS_PER_PARISH)
 	}
 }
 
+// --- Cuentas en varias parroquias (migración 0019) ---
+// parroco1 también trabaja en Parroquia 2 (administrador común) y es el principal de Parroquia 3,
+// que hasta aquí no tenía administrador principal.
+statements.push(
+	`INSERT OR IGNORE INTO usuario_parroquias (usuario_id, parroquia_id, rol, principal)
+	 SELECT u.id, p.id, 'admin_parroquia', 0 FROM usuarios u, parroquias p WHERE u.username = 'parroco1' AND p.nombre = 'Parroquia 2';`,
+	`INSERT OR IGNORE INTO usuario_parroquias (usuario_id, parroquia_id, rol, principal)
+	 SELECT u.id, p.id, 'admin_parroquia',
+	        CASE WHEN EXISTS (SELECT 1 FROM membresias m WHERE m.parroquia_id = p.id AND m.principal = 1) THEN 0 ELSE 1 END
+	 FROM usuarios u, parroquias p WHERE u.username = 'parroco1' AND p.nombre = 'Parroquia 3';`,
+);
+
 // ---------------------------------------------------------------------------
 // Ejecutar en la base local
 // ---------------------------------------------------------------------------
@@ -421,4 +433,5 @@ if (result.status !== 0)
 
 console.log(`Datos de prueba cargados en la base local (${statements.length} sentencias).`);
 console.log('Las cuentas nuevas entran con la contraseña de parroco1: parroco123.');
+console.log('parroco1 también trabaja en Parroquia 2 y Parroquia 3 (en la 3 es el principal si no había otro).');
 console.log('Las PCs reciben las partidas nuevas en su próxima sincronización.');

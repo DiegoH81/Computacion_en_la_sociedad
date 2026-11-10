@@ -1,7 +1,7 @@
 // POST /api/auth/login   { username, password }  ->  { token, usuario }
 
 import { Hono } from 'hono';
-import type { LoginResponse } from '../../../shared/sync';
+import type { LoginResponse, UserParish } from '../../../shared/sync';
 import type { UserRecord } from '../models/user';
 import { sign_jwt, verify_password } from '../utils/crypto';
 import { require_json_body } from '../utils/helpers';
@@ -24,6 +24,16 @@ export async function login(db: D1Database, jwt_secret: string, username: string
 		throw new ServiceError('Usuario o contraseña incorrectos.', 401);
 
 	const token = await sign_jwt({ usuarioId: user.id, rol: user.rol, parroquiaId: user.parroquia_id }, jwt_secret);
+	const parishes = await db
+		.prepare(
+			`SELECT m.parroquia_id AS id, p.nombre, m.rol
+			 FROM membresias m
+			 JOIN parroquias p ON p.id = m.parroquia_id
+			 WHERE m.usuario_id = ?
+			 ORDER BY m.origen DESC, p.nombre`,
+		)
+		.bind(user.id)
+		.all<UserParish>();
 	const full_name = [user.nombre, user.apellido_paterno, user.apellido_materno].filter((part) => part).join(' ');
 
 	return {
@@ -34,6 +44,7 @@ export async function login(db: D1Database, jwt_secret: string, username: string
 			rol: user.rol,
 			parroquia_id: user.parroquia_id,
 			parroquia_nombre: user.parroquia_nombre,
+			parroquias: parishes.results,
 		},
 	};
 }

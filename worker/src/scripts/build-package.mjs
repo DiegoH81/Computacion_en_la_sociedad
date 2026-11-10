@@ -40,11 +40,11 @@ async function request(in_path, in_token, in_body)
 	return out_data;
 }
 
-// 1. Entrar. Solo el admin_general recibe el hash de todas las cuentas.
+// 1. Entrar. Solo el admin_general puede armar el paquete inicial.
 const login = await request('/api/auth/login', null, { username: options.user, password: options.password });
 if (login.usuario?.rol !== 'admin_general')
 {
-	console.error('La cuenta debe ser de administrador general: las demás no reciben las contraseñas de todos.');
+	console.error('La cuenta debe ser de administrador general.');
 	process.exit(1);
 }
 
@@ -71,6 +71,7 @@ const content = {
 	cursor: String(cursor),
 	parroquias: reference.parroquias,
 	usuarios: reference.usuarios,
+	usuario_parroquias: reference.usuario_parroquias,
 	ministros: reference.ministros,
 	partidas: records,
 };

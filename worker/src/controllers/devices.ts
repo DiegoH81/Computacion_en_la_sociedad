@@ -5,7 +5,7 @@
 // Security copy of DEVICE key
 
 import { Hono, type Context } from 'hono';
-import { decrypt_device_key, encrypt_device_key } from '../utils/crypto';
+import { decrypt_device_key, encrypt_device_key, type TokenUser } from '../utils/crypto';
 import { read_json_body } from '../utils/helpers';
 import { ServiceError, type AppEnv } from '../utils/middleware';
 
@@ -45,6 +45,18 @@ function read_device(db: D1Database, device_id: string): Promise<Pick<Device, 'p
 
 const OTHER_PARISH = 'Esta PC pertenece a otra parroquia.';
 
+async function works_in(db: D1Database, user: TokenUser, parish_id: number | null): Promise<boolean>
+{
+	if (user.rol === 'admin_general')
+		return true;
+
+	if (parish_id === null)
+		return false;
+
+	const row = await db.prepare('SELECT 1 FROM membresias WHERE usuario_id = ? AND parroquia_id = ?').bind(user.usuarioId, parish_id).first();
+	return row !== null;
+}
+
 export const devices_router = new Hono<AppEnv>();
 
 devices_router.put('/:id/key', async (c) =>
@@ -62,15 +74,13 @@ devices_router.put('/:id/key', async (c) =>
 
 	const db = c.env.prelatura_db;
 	const device = await read_device(db, device_id);
-	if (device && user.rol !== 'admin_general' && device.parroquia_id !== null && device.parroquia_id !== user.parroquiaId)
+	if (device && device.parroquia_id !== null && !(await works_in(db, user, device.parroquia_id)))
 		throw new ServiceError(OTHER_PARISH, 403);
 
-	
-	let parish_id: number | null = null;
-	if (user.parroquiaId !== null)
+	// La PC se queda con la parroquia que ya tenía; si no tenía, toma la de origen de la cuenta.
+	let parish_id: number | null = device?.parroquia_id ?? null;
+	if (parish_id === null)
 		parish_id = user.parroquiaId;
-	else if (device)
-		parish_id = device.parroquia_id;
 
 	await db
 		.prepare(
@@ -98,7 +108,7 @@ devices_router.get('/:id/key', async (c) =>
 	if (!device)
 		throw new ServiceError('No hay copia de la clave de esta PC.', 404);
 
-	if (user.rol !== 'admin_general' && device.parroquia_id !== user.parroquiaId)
+	if (!(await works_in(c.env.prelatura_db, user, device.parroquia_id)))
 		throw new ServiceError(OTHER_PARISH, 403);
 
 	return c.json({ clave: await decrypt_device_key(device.clave_cifrada, secret) });

@@ -66,7 +66,14 @@ describe('POST /api/auth/login', () => {
 		const body = (await response.json()) as { token: string; usuario: Record<string, unknown> };
 		expect(body.token.split('.')).toHaveLength(3);
 		// Sin apellido materno no queda un espacio al final.
-		expect(body.usuario).toEqual({ id: 1, nombre_completo: 'Ana Rojas', rol: 'admin_parroquia', parroquia_id: 1, parroquia_nombre: 'San Pedro' });
+		expect(body.usuario).toEqual({
+			id: 1,
+			nombre_completo: 'Ana Rojas',
+			rol: 'admin_parroquia',
+			parroquia_id: 1,
+			parroquia_nombre: 'San Pedro',
+			parroquias: [{ id: 1, nombre: 'San Pedro', rol: 'admin_parroquia' }],
+		});
 	});
 
 	it('el token sirve para las rutas protegidas', async () => {

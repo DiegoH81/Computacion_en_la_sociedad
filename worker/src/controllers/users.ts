@@ -8,28 +8,37 @@
 //   PUT    /api/users/:id                  editar nombre, apellidos y (si se manda) la contraseña
 //   PATCH  /api/users/:id/toggle-active    habilitar o deshabilitar
 //   PATCH  /api/users/:id/make-principal   pasarle la marca de principal a otro administrador (general o de una parroquia)
+//                                          { parroquia_id }  la parroquia (si no se manda, la de origen de la cuenta)
+//   PUT    /api/users/:id/parishes/:pid    agregar una parroquia adicional o cambiarle el rol   { rol }   (solo admin_general)
+//   DELETE /api/users/:id/parishes/:pid    quitar una parroquia adicional                             (solo admin_general)
 //   GET    /api/users/me                   ->  { principal }   si quien pregunta es el principal (general o de su parroquia)
-
-
 import { Hono } from 'hono';
 import type { NameColumn, SearchFilters, SearchPage, User } from '../../../shared/models';
 import {
+	actor_in_parish,
 	can_manage_users,
+	cannot_change_parishes,
 	cannot_create,
 	cannot_disable,
 	cannot_make_principal,
 	cannot_modify,
 	is_role,
 	NEW_PRINCIPAL_SQL,
+	password_error,
+	read_memberships,
+	read_target_in_parish,
 	role_parish_error,
 	USERNAME_PATTERN,
 	type Actor,
+	type SavedTarget,
 	type TargetUser,
 } from '../models/user';
-import { PASSWORD_MIN_LENGTH, USERS_MAX_PAGE, USERS_MAX_PAGE_SIZE, USERS_PAGE_SIZE } from '../utils/config';
+import { USERS_MAX_PAGE, USERS_MAX_PAGE_SIZE, USERS_PAGE_SIZE } from '../utils/config';
 import { hash_password, type TokenUser } from '../utils/crypto';
-import { clean_text, read_int, require_json_body } from '../utils/helpers';
+import { clean_text, read_int, read_json_body, require_json_body } from '../utils/helpers';
 import { ServiceError, type AppEnv } from '../utils/middleware';
+
+const NOT_FOUND = 'Usuario no encontrado.';
 
 const SORT_COLUMNS: Record<NameColumn, string> =
 {
@@ -38,21 +47,36 @@ const SORT_COLUMNS: Record<NameColumn, string> =
 	apellido_materno: 'apellido_materno',
 };
 
-function check_can_manage(user: TokenUser): void
+async function check_can_manage(db: D1Database, user: TokenUser): Promise<void>
 {
-	if (!can_manage_users(user.rol))
+	if (can_manage_users(user.rol))
+		return;
+
+	const memberships = await read_memberships(db, user.usuarioId);
+	if (!memberships.some((row) => can_manage_users(row.rol)))
 		throw new ServiceError('Solo un administrador puede gestionar usuarios.', 403);
 }
 
 export async function is_principal(db: D1Database, user: TokenUser): Promise<boolean>
 {
-	const row = await db.prepare('SELECT principal FROM usuarios WHERE id = ?').bind(user.usuarioId).first<{ principal: number }>();
-	return row?.principal === 1;
+	return (await actor_in_parish(db, user, user.parroquiaId)).principal;
 }
 
-export async function read_actor(db: D1Database, user: TokenUser): Promise<Actor>
+export async function pair_in_parish(db: D1Database, user: TokenUser, user_id: number): Promise<{ actor: Actor; target: SavedTarget }>
 {
-	return { id: user.usuarioId, rol: user.rol, parroquia_id: user.parroquiaId, principal: await is_principal(db, user) };
+	let parish_id: number | null = null;
+	if (user.rol !== 'admin_general')
+	{
+		const own = new Set((await read_memberships(db, user.usuarioId)).map((row) => row.parroquia_id));
+		const shared = (await read_memberships(db, user_id)).find((row) => own.has(row.parroquia_id));
+		parish_id = shared?.parroquia_id ?? null;
+	}
+
+	const target = await read_target_in_parish(db, user_id, parish_id);
+	if (!target)
+		throw new ServiceError(NOT_FOUND, 404);
+
+	return { actor: await actor_in_parish(db, user, parish_id ?? target.parroquia_id), target: target };
 }
 
 function is_duplicate_error(error: unknown, column: string): boolean
@@ -63,27 +87,19 @@ function is_duplicate_error(error: unknown, column: string): boolean
 	return error.message.includes('UNIQUE constraint failed') && error.message.includes(column);
 }
 
-async function read_target(db: D1Database, user_id: number): Promise<TargetUser>
+async function check_can_modify(db: D1Database, user: TokenUser, user_id: number): Promise<SavedTarget>
 {
-	const row = await db.prepare('SELECT id, rol, parroquia_id, principal FROM usuarios WHERE id = ?').bind(user_id).first<Omit<TargetUser, 'principal'> & { principal: number }>();
-	const target = row ? { ...row, principal: row.principal === 1 } : null;
-	if (!target)
-		throw new ServiceError('Usuario no encontrado.', 404);
+	const { actor, target } = await pair_in_parish(db, user, user_id);
+	const reason = cannot_modify(actor, target);
+	if (reason)
+		throw new ServiceError(reason, 403);
 
 	return target;
 }
 
-async function check_can_modify(db: D1Database, user: TokenUser, user_id: number): Promise<void>
-{
-	const target = await read_target(db, user_id);
-	const reason = cannot_modify(await read_actor(db, user), target);
-	if (reason)
-		throw new ServiceError(reason, 403);
-}
-
 export async function search_users(db: D1Database, user: TokenUser, filters: SearchFilters, page_size: number): Promise<SearchPage<User>>
 {
-	check_can_manage(user);
+	await check_can_manage(db, user);
 
 	let sort_column = SORT_COLUMNS.nombres;
 	if (filters.orden && Object.hasOwn(SORT_COLUMNS, filters.orden))
@@ -93,20 +109,27 @@ export async function search_users(db: D1Database, user: TokenUser, filters: Sea
 	if (filters.direccion === 'desc')
 		sort_direction = 'DESC';
 
-	const conditions: string[] = [];
 	const values: (string | number)[] = [];
 
-	// El admin de una parroquia solo ve las cuentas de su parroquia.
+	// El admin de una parroquia solo ve las cuentas de una parroquia donde es administrador: la pedida,
+	// o su parroquia de origen. Con parroquia, el rol y la marca son los que la cuenta tiene en ella.
 	let parish_filter = filters.parroquia_id;
-	if (user.rol === 'admin_parroquia')
-		parish_filter = user.parroquiaId ?? -1;
+	if (user.rol !== 'admin_general')
+	{
+		const actor = await actor_in_parish(db, user, filters.parroquia_id ?? user.parroquiaId);
+		parish_filter = actor.rol === 'admin_parroquia' && actor.parroquia_id !== null ? actor.parroquia_id : -1;
+	}
 
+	let from = 'FROM usuarios u LEFT JOIN parroquias p ON p.id = u.parroquia_id';
+	let role_columns = 'u.rol, u.parroquia_id, u.principal';
 	if (Number.isInteger(parish_filter))
 	{
-		conditions.push('u.parroquia_id = ?');
+		from = 'FROM usuarios u JOIN membresias m ON m.usuario_id = u.id AND m.parroquia_id = ? LEFT JOIN parroquias p ON p.id = m.parroquia_id';
+		role_columns = 'm.rol, m.parroquia_id, m.principal';
 		values.push(parish_filter as number);
 	}
 
+	const conditions: string[] = [];
 	if (filters.nombres)
 	{
 		conditions.push('u.nombre LIKE ?');
@@ -128,17 +151,16 @@ export async function search_users(db: D1Database, user: TokenUser, filters: Sea
 		where = 'WHERE ' + conditions.join(' AND ');
 
 	const page = filters.pagina ?? 1;
-	const count = await db.prepare(`SELECT COUNT(*) AS total FROM usuarios u ${where}`).bind(...values).first<{ total: number }>();
+	const count = await db.prepare(`SELECT COUNT(*) AS total ${from} ${where}`).bind(...values).first<{ total: number }>();
 	const total = count ? count.total : 0;
 	const total_pages = Math.max(1, Math.ceil(total / page_size));
 	const offset = (page - 1) * page_size;
 
 	const rows = await db
 		.prepare(
-			`SELECT u.id, u.username, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, u.principal,
+			`SELECT u.id, u.username, ${role_columns}, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,
 				p.nombre AS parroquia_nombre
-			 FROM usuarios u
-			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
+			 ${from}
 			 ${where}
 			 ORDER BY u.${sort_column} ${sort_direction}
 			 LIMIT ? OFFSET ?`,
@@ -152,7 +174,7 @@ export async function search_users(db: D1Database, user: TokenUser, filters: Sea
 
 export async function create_user(db: D1Database, user: TokenUser, body: User): Promise<number>
 {
-	check_can_manage(user);
+	await check_can_manage(db, user);
 
 	const first_name = clean_text(body.nombre);
 	const father_last_name = clean_text(body.apellido_paterno);
@@ -167,13 +189,16 @@ export async function create_user(db: D1Database, user: TokenUser, body: User): 
 	if (!USERNAME_PATTERN.test(username))
 		throw new ServiceError('El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.', 400);
 
-	if (password.length < PASSWORD_MIN_LENGTH)
-		throw new ServiceError(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`, 400);
+	const bad_password = password_error(password);
+	if (bad_password)
+		throw new ServiceError(bad_password, 400);
 
 	if (!is_role(role))
 		throw new ServiceError('El rol no es válido.', 400);
 
-	const actor = await read_actor(db, user);
+	// El admin de una parroquia crea cuentas en una parroquia suya: la pedida, o su parroquia de origen.
+	const asked_parish = typeof body.parroquia_id === 'number' ? body.parroquia_id : user.parroquiaId;
+	const actor = await actor_in_parish(db, user, asked_parish);
 
 	// La parroquia es una existente o (solo el admin_general) una nueva que se crea con la cuenta.
 	let existing_parish_id: number | null = null;
@@ -181,8 +206,8 @@ export async function create_user(db: D1Database, user: TokenUser, body: User): 
 
 	if (role === 'admin_general')
 		existing_parish_id = null;
-	else if (user.rol === 'admin_parroquia')
-		existing_parish_id = user.parroquiaId;
+	else if (user.rol !== 'admin_general')
+		existing_parish_id = actor.parroquia_id;
 	else if (body.parroquia_nueva !== undefined)
 	{
 		new_parish_name = clean_text(body.parroquia_nueva);
@@ -268,7 +293,7 @@ export async function create_user(db: D1Database, user: TokenUser, body: User): 
 
 export async function update_user(db: D1Database, user: TokenUser, user_id: number, body: User): Promise<void>
 {
-	check_can_manage_or_self(user, user_id);
+	await check_can_manage_or_self(db, user, user_id);
 
 	const first_name = clean_text(body.nombre);
 	const father_last_name = clean_text(body.apellido_paterno);
@@ -278,8 +303,9 @@ export async function update_user(db: D1Database, user: TokenUser, user_id: numb
 	if (!first_name || !father_last_name)
 		throw new ServiceError('Nombre y apellido paterno son requeridos.', 400);
 
-	if (password && password.length < PASSWORD_MIN_LENGTH)
-		throw new ServiceError(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`, 400);
+	const bad_password = password ? password_error(password) : null;
+	if (bad_password)
+		throw new ServiceError(bad_password, 400);
 
 	await check_can_modify(db, user, user_id);
 
@@ -301,38 +327,44 @@ export async function update_user(db: D1Database, user: TokenUser, user_id: numb
 }
 
 // Cada uno puede editar su propia cuenta; las demás, solo un administrador.
-function check_can_manage_or_self(user: TokenUser, user_id: number): void
+async function check_can_manage_or_self(db: D1Database, user: TokenUser, user_id: number): Promise<void>
 {
 	if (user_id !== user.usuarioId)
-		check_can_manage(user);
+		await check_can_manage(db, user);
 }
 
 export async function toggle_user_active(db: D1Database, user: TokenUser, user_id: number): Promise<void>
 {
-	check_can_manage(user);
+	await check_can_manage(db, user);
 
 	if (user_id === user.usuarioId)
 		throw new ServiceError('No puede deshabilitar su propia cuenta.', 400);
 
-	await check_can_modify(db, user, user_id);
-
-	const target = await read_target(db, user_id);
-	const is_active = await db.prepare('SELECT activo FROM usuarios WHERE id = ?').bind(user_id).first<number>('activo');
-	const disable_reason = is_active === 1 ? cannot_disable(target) : null;
+	const target = await check_can_modify(db, user, user_id);
+	const disable_reason = target.activo === 1 ? cannot_disable(target) : null;
 	if (disable_reason)
 		throw new ServiceError(disable_reason, 400);
 
 	await db.prepare('UPDATE usuarios SET activo = NOT activo WHERE id = ?').bind(user_id).run();
 }
 
-// Pasa la marca de principal a otro administrador: entre los generales, o dentro de una parroquia
-// (quién puede, en shared/users.ts). El que la tenía queda como administrador común.
-export async function make_principal(db: D1Database, user: TokenUser, user_id: number): Promise<void>
+export async function make_principal(db: D1Database, user: TokenUser, user_id: number, parish_id: number | null = null): Promise<void>
 {
-	check_can_manage(user);
+	await check_can_manage(db, user);
 
-	const target = await read_target(db, user_id);
-	const is_active = await db.prepare('SELECT activo FROM usuarios WHERE id = ?').bind(user_id).first<number>('activo');
+	const origin = await read_target_in_parish(db, user_id, null);
+	if (!origin)
+		throw new ServiceError(NOT_FOUND, 404);
+
+	let target = origin;
+	if (origin.rol !== 'admin_general' && parish_id !== null)
+	{
+		const in_parish = await read_target_in_parish(db, user_id, parish_id);
+		if (!in_parish || in_parish.parroquia_id !== parish_id)
+			throw new ServiceError('La cuenta no trabaja en esa parroquia.', 400);
+
+		target = in_parish;
+	}
 
 	if (target.principal)
 		throw new ServiceError('Esta cuenta ya es la principal.', 400);
@@ -340,27 +372,97 @@ export async function make_principal(db: D1Database, user: TokenUser, user_id: n
 	if (target.rol === 'usuario')
 		throw new ServiceError('La marca de principal solo se pasa a un administrador.', 400);
 
-	const reason = cannot_make_principal(await read_actor(db, user), target);
+	const reason = cannot_make_principal(await actor_in_parish(db, user, target.parroquia_id), target);
 	if (reason)
 		throw new ServiceError(reason, 403);
 
-	if (is_active !== 1)
+	if (target.activo !== 1)
 		throw new ServiceError('La marca de principal solo se puede pasar a un administrador activo.', 400);
 
-	// Primero se le quita al anterior, por el índice que permite un solo principal en cada parroquia.
+	if (target.rol === 'admin_general')
+	{
+		await db.batch([
+			db.prepare('UPDATE usuarios SET principal = 0 WHERE principal = 1 AND parroquia_id IS NULL'),
+			db.prepare('UPDATE usuarios SET principal = 1 WHERE id = ?').bind(user_id),
+		]);
+		return;
+	}
+
+	// Primero se le quita al anterior, por los índices que permiten un solo principal en cada parroquia.
+	const is_origin = target.parroquias.some((row) => row.parroquia_id === target.parroquia_id && row.origen === 1);
+	const give_mark = is_origin
+		? db.prepare('UPDATE usuarios SET principal = 1 WHERE id = ?').bind(user_id)
+		: db.prepare('UPDATE usuario_parroquias SET principal = 1 WHERE usuario_id = ? AND parroquia_id = ?').bind(user_id, target.parroquia_id);
+
 	await db.batch([
-		db.prepare('UPDATE usuarios SET principal = 0 WHERE principal = 1 AND IFNULL(parroquia_id, 0) = IFNULL(?, 0)').bind(target.parroquia_id),
-		db.prepare('UPDATE usuarios SET principal = 1 WHERE id = ?').bind(user_id),
+		db.prepare('UPDATE usuarios SET principal = 0 WHERE principal = 1 AND parroquia_id = ?').bind(target.parroquia_id),
+		db.prepare('UPDATE usuario_parroquias SET principal = 0 WHERE principal = 1 AND parroquia_id = ?').bind(target.parroquia_id),
+		give_mark,
 	]);
+}
+
+// Agrega una parroquia adicional a la cuenta, o le cambia el rol en ella. Si entra como administrador
+// a una parroquia sin principal, queda como su principal (igual que el primer administrador).
+export async function set_parish(db: D1Database, user: TokenUser, user_id: number, parish_id: number, role: unknown): Promise<void>
+{
+	if (role !== 'admin_parroquia' && role !== 'usuario')
+		throw new ServiceError('El rol en la parroquia debe ser administrador o usuario.', 400);
+
+	const target = await read_target_in_parish(db, user_id, null);
+	if (!target)
+		throw new ServiceError(NOT_FOUND, 404);
+
+	const reason = cannot_change_parishes(await actor_in_parish(db, user, null), target);
+	if (reason)
+		throw new ServiceError(reason, 403);
+
+	if (target.parroquia_id === parish_id)
+		throw new ServiceError('Esa es la parroquia de origen de la cuenta: no se cambia.', 400);
+
+	const parish = await db.prepare('SELECT 1 FROM parroquias WHERE id = ? AND activa = 1').bind(parish_id).first();
+	if (!parish)
+		throw new ServiceError('La parroquia seleccionada no existe.', 400);
+
+	const current = target.parroquias.find((row) => row.parroquia_id === parish_id);
+	if (current?.principal === 1 && role !== 'admin_parroquia')
+		throw new ServiceError('Es el administrador principal de esa parroquia: primero pase la marca a otro administrador.', 400);
+
+	await db
+		.prepare(
+			`INSERT INTO usuario_parroquias (usuario_id, parroquia_id, rol, principal)
+			 VALUES (?, ?, ?, ${NEW_PRINCIPAL_SQL})
+			 ON CONFLICT (usuario_id, parroquia_id) DO UPDATE SET rol = excluded.rol`,
+		)
+		.bind(user_id, parish_id, role, role, parish_id)
+		.run();
+}
+
+export async function remove_parish(db: D1Database, user: TokenUser, user_id: number, parish_id: number): Promise<void>
+{
+	const target = await read_target_in_parish(db, user_id, null);
+	if (!target)
+		throw new ServiceError(NOT_FOUND, 404);
+
+	const reason = cannot_change_parishes(await actor_in_parish(db, user, null), target);
+	if (reason)
+		throw new ServiceError(reason, 403);
+
+	const current = target.parroquias.find((row) => row.parroquia_id === parish_id && row.origen === 0);
+	if (!current)
+		throw new ServiceError('La cuenta no tiene esa parroquia adicional.', 404);
+
+	if (current.principal === 1)
+		throw new ServiceError('Es el administrador principal de esa parroquia: primero pase la marca a otro administrador.', 400);
+
+	await db.prepare('DELETE FROM usuario_parroquias WHERE usuario_id = ? AND parroquia_id = ?').bind(user_id, parish_id).run();
 }
 
 
 export const users_router = new Hono<AppEnv>();
 
-// El principal (general o de una parroquia) es el único que gestiona a los demás administradores.
 users_router.get('/me', async (c) =>
 {
-	check_can_manage(c.get('user'));
+	await check_can_manage(c.env.prelatura_db, c.get('user'));
 	return c.json({ principal: await is_principal(c.env.prelatura_db, c.get('user')) });
 });
 
@@ -406,6 +508,21 @@ users_router.patch('/:id{[0-9]+}/toggle-active', async (c) =>
 
 users_router.patch('/:id{[0-9]+}/make-principal', async (c) =>
 {
-	await make_principal(c.env.prelatura_db, c.get('user'), Number(c.req.param('id')));
+	const body = await read_json_body(c);
+	const parish_id = Number.isInteger(body?.parroquia_id) ? (body?.parroquia_id as number) : null;
+	await make_principal(c.env.prelatura_db, c.get('user'), Number(c.req.param('id')), parish_id);
+	return c.json({ success: true });
+});
+
+users_router.put('/:id{[0-9]+}/parishes/:parish_id{[0-9]+}', async (c) =>
+{
+	const body = await require_json_body(c);
+	await set_parish(c.env.prelatura_db, c.get('user'), Number(c.req.param('id')), Number(c.req.param('parish_id')), body.rol);
+	return c.json({ success: true });
+});
+
+users_router.delete('/:id{[0-9]+}/parishes/:parish_id{[0-9]+}', async (c) =>
+{
+	await remove_parish(c.env.prelatura_db, c.get('user'), Number(c.req.param('id')), Number(c.req.param('parish_id')));
 	return c.json({ success: true });
 });

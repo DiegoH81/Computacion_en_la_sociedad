@@ -12,6 +12,7 @@
 //   matrimonios, bautismos, confirmaciones   -> sacramentos, personas
 //   sacramentos                              -> parroquias, ministros, usuarios
 //   personas                                 -> parroquias
+//   usuario_parroquias                       -> usuarios, parroquias
 //   ministros, usuarios                      -> parroquias
 //   parroquias                               -> raíz
 const TABLES_IN_DELETE_ORDER = [
@@ -27,6 +28,7 @@ const TABLES_IN_DELETE_ORDER = [
   'sacramentos',
   'personas',
   'ministros',
+  'usuario_parroquias',
   'usuarios',
   'parroquias',
 ] as const;
