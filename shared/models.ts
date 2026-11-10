@@ -1,5 +1,5 @@
 import type { RecordPart } from './record_fields';
-import type { CorrectionState, HistoryEvent, RequestState, RequestType, Role, SacramentType } from './sync';
+import type { CorrectionState, HistoryEvent, ParishRole, RequestState, RequestType, Role, SacramentType } from './sync';
 
 export interface User
 {
@@ -13,8 +13,18 @@ export interface User
 	activo?: number;
 	principal?: number;
 	parroquia_nombre?: string | null;
+	parroquia_origen_id?: number | null;
+	parroquias_adicionales?: AdditionalParish[];
 	password?: string;
 	parroquia_nueva?: string;
+}
+
+export interface AdditionalParish
+{
+	parroquia_id: number;
+	parroquia_nombre: string;
+	rol: ParishRole;
+	principal: number;
 }
 
 export interface Parish
@@ -88,7 +98,7 @@ export interface Sacrament
 	libro: string;
 	folio: string;
 	numero: string;
-	fecha_emision: string;
+	fecha_emision: string | null; // la fecha de la partida: puede faltar en las partidas antiguas
 	fecha_evento: string | null;
 	anotaciones: string | null;
 	estado?: 'vigente' | 'anulado';
@@ -164,11 +174,37 @@ export type SacramentRecord = Baptism | Marriage;
 
 export type NameColumn = 'nombres' | 'apellido_paterno' | 'apellido_materno';
 
+// Un filtro con operador, como en el sistema anterior: "=" el valor exacto, "desde" y "hasta" incluyen
+// el valor, y "entre" usa los dos (valor y hasta).
+export type RangeOperator = '=' | 'desde' | 'hasta' | 'entre';
+
+export interface RangeFilter
+{
+	operador: RangeOperator;
+	valor: string;
+	hasta?: string;
+}
+
 export interface SearchFilters
 {
 	nombres?: string;
 	apellido_paterno?: string;
 	apellido_materno?: string;
+	texto?: string;
+	parroquias?: number[];
+	libro?: RangeFilter;
+	folio?: RangeFilter;
+	numero?: RangeFilter;
+	fecha_evento?: RangeFilter;
+	fecha_nacimiento?: RangeFilter;
+	fecha_cambio?: RangeFilter;
+	celebrante?: string;
+	padre?: string;
+	madre?: string;
+	dni?: string;
+	padrino?: string;
+	estado?: 'vigente' | 'anulado';
+	con_anotaciones?: boolean;
 	orden?: NameColumn;
 	direccion?: 'asc' | 'desc';
 	pagina?: number;
@@ -181,7 +217,6 @@ export interface SearchPage<T>
 	total_paginas: number;
 }
 
-// Duplicates in search
 export type DuplicateQuery = Pick<Person, 'dni' | 'nombres' | 'apellido_paterno' | 'apellido_materno' | 'fecha_nacimiento' | 'padre' | 'madre'> & { para: string };
 
 export interface DuplicateMatch
