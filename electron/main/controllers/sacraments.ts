@@ -4,11 +4,13 @@
 //   sacraments.create                    registrar, en la parroquia de la sesión
 //   sacraments.update                    un administrador edita; un usuario pide el cambio (controllers/requests.ts)
 //   sacraments.annul                     anular, con motivo (solo un administrador)
+//   sacraments.restore                   rehabilitar una partida anulada, con motivo (solo un administrador)
 //   sacraments.history                   el historial de la partida (solo administradores)
 //
 // Cada cambio queda en el historial de la partida (models/history.ts) y en la cola para subirse.
 
-import type { Baptism, HistoryEntry, Marriage, NameColumn, SacramentRecord, SearchFilters, SearchPage } from '../../../shared/models';
+import type { Baptism, HistoryEntry, Marriage, NameColumn, RangeFilter, SacramentRecord, SearchFilters, SearchPage } from '../../../shared/models';
+import { NOTES_MAX_LENGTH } from '../../../shared/record_fields';
 import type { SacramentType } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
 import { insert_requests } from '../models/change_request';
@@ -43,12 +45,149 @@ function check_type(value: unknown): SacramentType
 // Buscar
 // ---------------------------------------------------------------------------
 
-function name_filters(filters: SearchFilters, aliases: string[]): { where: string; values: (string | number)[] }
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const NUMBER_PATTERN = /^\d+$/;
+
+// Lo que se busca por parte del texto (LIKE): la condición recibe el patrón una vez por cada "?".
+function contains(conditions: string[], values: (string | number)[], text: unknown, sql: string): void
+{
+	const clean = clean_text(text);
+	if (!clean)
+		return;
+
+	conditions.push(`(${sql})`);
+	const count = sql.split('?').length - 1;
+	for (let i = 0; i < count; i++)
+		values.push(`%${clean}%`);
+}
+
+// Un filtro con operador ("=", desde, hasta o entre) sobre una expresión SQL: devuelve la condición y
+// sus valores, o null si no se llenó bien. Las fechas se comparan como texto AAAA-MM-DD; libro, folio y
+// número, como número cuando lo escrito es un número (así el folio 9 queda antes que el 10).
+type RangeKind = 'registro' | 'fecha';
+
+function range_condition(filter: unknown, sql: string, kind: RangeKind): { sql: string; values: (string | number)[] } | null
+{
+	if (!filter || typeof filter !== 'object')
+		return null;
+
+	const { operador, valor, hasta } = filter as RangeFilter;
+	const first = clean_text(valor);
+	const second = clean_text(hasta);
+	if (!first || (kind === 'fecha' && !DATE_PATTERN.test(first)))
+		return null;
+
+	if (operador === '=')
+	{
+		if (kind === 'fecha')
+			return { sql: `${sql} = ?`, values: [first] };
+
+		return { sql: `${sql} = ? COLLATE NOCASE`, values: [first] };
+	}
+
+	const bounds: [string, string][] = [];
+	if (operador === 'desde')
+		bounds.push(['>=', first]);
+	else if (operador === 'hasta')
+		bounds.push(['<=', first]);
+	else if (operador === 'entre')
+	{
+		bounds.push(['>=', first]);
+		if (second && (kind === 'registro' || DATE_PATTERN.test(second)))
+			bounds.push(['<=', second]);
+	}
+	else
+		return null;
+
+	const signs = bounds.map(([sign]) => sign);
+	const limits = bounds.map(([, value]) => value);
+
+	if (kind === 'fecha')
+		return { sql: signs.map((sign) => `${sql} ${sign} ?`).join(' AND '), values: limits };
+
+	if (!limits.every((value) => NUMBER_PATTERN.test(value)))
+		return { sql: signs.map((sign) => `${sql} ${sign} ? COLLATE NOCASE`).join(' AND '), values: limits };
+
+	// Solo las partidas cuyo valor es un número entero (un libro "B" no está "entre 1 y 5").
+	const numeric = signs.map((sign) => `CAST(${sql} AS INTEGER) ${sign} ?`);
+	return {
+		sql: `${sql} <> '' AND ${sql} NOT GLOB '*[^0-9]*' AND ${numeric.join(' AND ')}`,
+		values: limits.map((value) => Number(value)),
+	};
+}
+
+// La misma condición sobre varias expresiones: basta con que una la cumpla (por ejemplo, la fecha de
+// nacimiento de cualquiera de los dos cónyuges).
+function add_range(conditions: string[], values: (string | number)[], filter: unknown, sqls: string[], kind: RangeKind): void
+{
+	const parts: { sql: string; values: (string | number)[] }[] = [];
+	for (const sql of sqls)
+	{
+		const part = range_condition(filter, sql, kind);
+		if (!part)
+			return;
+
+		parts.push(part);
+	}
+
+	conditions.push(`(${parts.map((part) => `(${part.sql})`).join(' OR ')})`);
+	for (const part of parts)
+		values.push(...part.values);
+}
+
+// La búsqueda avanzada: libro, folio y número, fechas, celebrante, padres, DNI, padrinos, estado y
+// anotaciones. En matrimonio, lo de la persona vale para cualquiera de los dos cónyuges.
+function advanced_filters(filters: SearchFilters, type: SacramentType, aliases: string[], conditions: string[], values: (string | number)[]): void
+{
+	for (const column of ['libro', 'folio', 'numero'] as const)
+		add_range(conditions, values, filters[column], [`TRIM(s.${column})`], 'registro');
+
+	add_range(conditions, values, filters.fecha_evento, ['s.fecha_evento'], 'fecha');
+	add_range(conditions, values, filters.fecha_nacimiento, aliases.map((alias) => `${alias}.fecha_nacimiento`), 'fecha');
+
+	// Registrada o modificada en esas fechas: el día según la hora de esta PC (la base guarda en UTC).
+	add_range(conditions, values, filters.fecha_cambio, [`date(s.created_at, 'localtime')`, `date(s.updated_at, 'localtime')`], 'fecha');
+
+	contains(conditions, values, filters.celebrante,
+		`EXISTS (SELECT 1 FROM ministros mi WHERE mi.id = s.ministro_id
+			AND (COALESCE(mi.titulo, '') || ' ' || mi.nombre || ' ' || mi.apellido_paterno || ' ' || mi.apellido_materno) LIKE ?)`);
+
+	for (const column of ['padre', 'madre', 'dni'] as const)
+		contains(conditions, values, filters[column], aliases.map((alias) => `${alias}.${column} LIKE ?`).join(' OR '));
+
+	if (type === 'matrimonio')
+		contains(conditions, values, filters.padrino, 'm.testigo_1 LIKE ? OR m.testigo_2 LIKE ? OR m.testigo_3 LIKE ? OR m.testigo_4 LIKE ?');
+	else
+		contains(conditions, values, filters.padrino, 'sub.padrino_1 LIKE ? OR sub.padrino_2 LIKE ?');
+
+	if (filters.estado === 'vigente' || filters.estado === 'anulado')
+	{
+		conditions.push('s.estado = ?');
+		values.push(filters.estado);
+	}
+
+	if (filters.con_anotaciones === true)
+		conditions.push(`TRIM(COALESCE(s.anotaciones, '')) <> ''`);
+	else if (filters.con_anotaciones === false)
+		conditions.push(`TRIM(COALESCE(s.anotaciones, '')) = ''`);
+}
+
+function name_filters(filters: SearchFilters, type: SacramentType, aliases: string[]): { where: string; values: (string | number)[] }
 {
 	const conditions: string[] = [];
 	const values: (string | number)[] = [];
 
-	if (Number.isInteger(filters.parroquia_id))
+	// Varias parroquias a la vez (búsqueda avanzada), o solo la que se está viendo.
+	let parishes: number[] = [];
+	if (Array.isArray(filters.parroquias))
+		parishes = filters.parroquias.filter((id) => Number.isInteger(id));
+
+	if (parishes.length > 0)
+	{
+		conditions.push(`s.parroquia_id IN (${parishes.map(() => '?').join(', ')})`);
+		values.push(...parishes);
+	}
+	else if (Number.isInteger(filters.parroquia_id))
 	{
 		conditions.push('s.parroquia_id = ?');
 		values.push(filters.parroquia_id as number);
@@ -65,6 +204,8 @@ function name_filters(filters: SearchFilters, aliases: string[]): { where: strin
 		for (let i = 0; i < aliases.length; i++)
 			values.push(`%${text}%`, `%${text}%`);
 	}
+
+	advanced_filters(filters, type, aliases, conditions, values);
 
 	let where = '';
 	if (conditions.length > 0)
@@ -89,7 +230,7 @@ export function search_sacraments(db: LocalDatabase, type: SacramentType, filter
 		aliases = ['c1', 'c2'];
 	}
 
-	const { where, values } = name_filters(filters, aliases);
+	const { where, values } = name_filters(filters, type, aliases);
 
 	const count = db.prepare(`SELECT COUNT(*) AS total ${from} ${where}`).get(...values) as { total: number };
 	const page = page_of(filters, count.total);
@@ -110,17 +251,22 @@ export function search_sacraments(db: LocalDatabase, type: SacramentType, filter
 	return { resultados: ids.map((id) => read_record(db, id)), total_paginas: page.total_pages };
 }
 
-// ---------------------------------------------------------------------------
-// Registrar
-// ---------------------------------------------------------------------------
+function check_notes(record: SacramentRecord, saved_notes: string | null): void
+{
+	const notes = clean_text(record?.sacramento?.anotaciones);
+	if (notes === null || notes === saved_notes)
+		return;
 
-// Un administrador registra la partida con sus correcciones por nota marginal ya aplicadas. Un usuario
-// la registra tal como la escribió, y las correcciones quedan pedidas hasta que un administrador las apruebe.
+	if (notes.length > NOTES_MAX_LENGTH)
+		throw new ServiceError(`La anotación marginal puede tener hasta ${NOTES_MAX_LENGTH} caracteres, para que entre en la impresión.`, 400);
+}
+
 export function create_record(db: LocalDatabase, session: Session, record: SacramentRecord): number
 {
 	const type = check_type(record?.sacramento?.tipo);
 	const parish_id = parish_for_new(session);
 	check_required(record, null);
+	check_notes(record, null);
 
 	const is_helper = session.role === 'usuario';
 
@@ -198,6 +344,9 @@ function update_as_admin(db: LocalDatabase, session: Session, record: SacramentR
 export function update_record(db: LocalDatabase, session: Session, record: SacramentRecord): void
 {
 	check_type(record?.sacramento?.tipo);
+	const sacrament_id = positive_id(record.sacramento?.id);
+	const saved_notes = db.prepare('SELECT anotaciones FROM sacramentos WHERE id = ?').pluck().get(sacrament_id) as string | null | undefined;
+	check_notes(record, saved_notes ?? null);
 
 	if (session.role === 'usuario')
 		request_changes(db, session, record);
@@ -216,17 +365,19 @@ export function update_marriage(db: LocalDatabase, session: Session, record: Mar
 	update_record(db, session, record);
 }
 
-// ---------------------------------------------------------------------------
-// Anular e historial
-// ---------------------------------------------------------------------------
+
+type SacramentState = { tipo: SacramentType; estado: 'vigente' | 'anulado' };
 
 export function annul_sacrament(db: LocalDatabase, session: Session, sacrament_id: number, reason: unknown): void
 {
-	const row = db.prepare('SELECT tipo FROM sacramentos WHERE id = ?').get(sacrament_id) as { tipo: SacramentType } | undefined;
+	const row = db.prepare('SELECT tipo, estado FROM sacramentos WHERE id = ?').get(sacrament_id) as SacramentState | undefined;
 	if (!row)
 		throw new ServiceError(NOT_FOUND, 404);
 
 	check_can_manage(db, session, sacrament_id, row.tipo);
+
+	if (row.estado === 'anulado')
+		throw new ServiceError('La partida ya está anulada.', 400);
 
 	const clean_reason = clean_text(reason);
 	if (!clean_reason)
@@ -245,7 +396,34 @@ export function annul_sacrament(db: LocalDatabase, session: Session, sacrament_i
 	annul();
 }
 
-// Solo los administradores ven el historial: el general, de cualquier parroquia; los de parroquia, de la suya.
+export function restore_sacrament(db: LocalDatabase, session: Session, sacrament_id: number, reason: unknown): void
+{
+	const row = db.prepare('SELECT tipo, estado FROM sacramentos WHERE id = ?').get(sacrament_id) as SacramentState | undefined;
+	if (!row)
+		throw new ServiceError(NOT_FOUND, 404);
+
+	check_can_manage(db, session, sacrament_id, row.tipo);
+
+	if (row.estado !== 'anulado')
+		throw new ServiceError('La partida no está anulada.', 400);
+
+	const clean_reason = clean_text(reason);
+	if (!clean_reason)
+		throw new ServiceError('El motivo para rehabilitar la partida es requerido.', 400);
+
+	const restore = db.transaction(() =>
+	{
+		queue_sacrament(db, sacrament_id);
+		db.prepare(
+			`UPDATE sacramentos
+			 SET estado = 'vigente', anulado_por_usuario_id = NULL, anulado_en = NULL, motivo_anulacion = NULL
+			 WHERE id = ?`,
+		).run(sacrament_id);
+		add_history(db, sacrament_id, session.user_id, 'rehabilitada', [], clean_reason);
+	});
+	restore();
+}
+
 export function sacrament_history(db: LocalDatabase, session: Session, sacrament_id: number): HistoryEntry[]
 {
 	if (session.role === 'usuario')
@@ -283,6 +461,12 @@ export const sacrament_routes: Routes =
 	'sacraments.annul': (payload: { id: unknown; motivo_anulacion: unknown }, { db, session }) =>
 	{
 		annul_sacrament(db, session, positive_id(payload.id), payload.motivo_anulacion);
+		return { success: true };
+	},
+
+	'sacraments.restore': (payload: { id: unknown; motivo: unknown }, { db, session }) =>
+	{
+		restore_sacrament(db, session, positive_id(payload.id), payload.motivo);
 		return { success: true };
 	},
 
