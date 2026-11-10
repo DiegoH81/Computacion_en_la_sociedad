@@ -3,6 +3,7 @@ import { ApiError } from '../../lib/apiClient';
 import { fileToLogoDataUrl } from '../../lib/logoImage';
 import { ParishService } from '../../services/ParishService';
 import { CrestIcon } from '../ui/MenuIcons';
+import { LOGO_CHANGED_EVENT } from './ParishLogo';
 
 interface ParishLogoSettingsProps {
   parroquiaId: number | null;
@@ -39,6 +40,7 @@ export function ParishLogoSettings({ parroquiaId, canEdit }: ParishLogoSettingsP
       const value = await next();
       await ParishService.saveLogo(parroquiaId, value);
       setLogo(value);
+      window.dispatchEvent(new Event(LOGO_CHANGED_EVENT));
     } catch (error) {
       setErrorMessage(error instanceof ApiError || error instanceof Error ? error.message : 'No se pudo guardar el logo.');
     } finally {

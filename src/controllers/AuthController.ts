@@ -9,14 +9,6 @@ export interface LoginControllerResult {
   redirectTo?: '/dashboard' | '/parroquias/seleccionar';
 }
 
-/**
- * Orquesta el flujo de login: valida entrada, invoca el Service,
- * actualiza el store de sesión con el resultado, y decide a qué
- * ruta debe navegar la View según el rol del usuario.
- *
- * No sabe cómo se hace el fetch (eso es AuthService/apiClient).
- * No sabe cómo se renderiza nada (eso es LoginPage).
- */
 export async function handleLogin(
   username: string,
   password: string,
@@ -35,12 +27,15 @@ export async function handleLogin(
       rol: response.usuario.rol,
       parroquiaId: response.usuario.parroquia_id,
       // El administrador general no es de ninguna parroquia: elige cuál consultar en SelectParishPage.
+      // Los demás empiezan trabajando en su parroquia de origen.
       parroquiaActivaId: response.usuario.parroquia_id ?? 0,
       parroquiaActivaNombre: response.usuario.parroquia_nombre ?? '',
+      misParroquias: response.usuario.parroquias ?? [],
     });
 
-    const redirectTo =
-      response.usuario.rol === 'admin_general' ? '/parroquias/seleccionar' : '/dashboard';
+    // Quien trabaja en varias parroquias elige con cuál empieza.
+    const choosesParish = response.usuario.rol === 'admin_general' || (response.usuario.parroquias ?? []).length > 1;
+    const redirectTo = choosesParish ? '/parroquias/seleccionar' : '/dashboard';
 
     return { success: true, redirectTo };
   } catch (error) {

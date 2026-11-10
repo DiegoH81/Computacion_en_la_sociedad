@@ -4,9 +4,31 @@ interface AnnulmentModalProps {
   onConfirm: (motivo: string) => void;
   onCancel: () => void;
   isLoading: boolean;
+  /** "anular" una partida vigente o "rehabilitar" una anulada. Las dos piden el motivo. */
+  mode?: 'anular' | 'rehabilitar';
 }
 
-export function AnnulmentModal({ onConfirm, onCancel, isLoading }: AnnulmentModalProps) {
+const TEXTS = {
+  anular: {
+    title: 'Anular documento',
+    help: 'Esta acción marcará el documento como anulado. No se elimina, pero dejará de considerarse vigente.',
+    reason: 'Motivo de anulación',
+    busy: 'Anulando...',
+    confirm: 'Confirmar anulación',
+    button: 'bg-red-700 hover:bg-red-600',
+  },
+  rehabilitar: {
+    title: 'Rehabilitar documento',
+    help: 'El documento vuelve a estar vigente. La anulación y este motivo quedan en el historial.',
+    reason: 'Motivo para rehabilitar',
+    busy: 'Rehabilitando...',
+    confirm: 'Confirmar rehabilitación',
+    button: 'bg-green-700 hover:bg-green-600',
+  },
+};
+
+export function AnnulmentModal({ onConfirm, onCancel, isLoading, mode = 'anular' }: AnnulmentModalProps) {
+  const text = TEXTS[mode];
   const [motivo, setMotivo] = useState('');
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -17,18 +39,16 @@ export function AnnulmentModal({ onConfirm, onCancel, isLoading }: AnnulmentModa
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
-        <h2 className="mb-2 text-lg font-semibold text-slate-800">Anular documento</h2>
-        <p className="mb-4 text-sm text-slate-600">
-          Esta acción marcará el documento como anulado. No se elimina, pero dejará de
-          considerarse vigente.
-        </p>
+        <h2 className="mb-2 text-lg font-semibold text-slate-800">{text.title}</h2>
+        <p className="mb-4 text-sm text-slate-600">{text.help}</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Motivo de anulación
+              {text.reason}
             </label>
             <textarea
+              aria-label={text.reason}
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
               required
@@ -49,9 +69,9 @@ export function AnnulmentModal({ onConfirm, onCancel, isLoading }: AnnulmentModa
             <button
               type="submit"
               disabled={isLoading}
-              className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+              className={`rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${text.button}`}
             >
-              {isLoading ? 'Anulando...' : 'Confirmar anulación'}
+              {isLoading ? text.busy : text.confirm}
             </button>
           </div>
         </form>

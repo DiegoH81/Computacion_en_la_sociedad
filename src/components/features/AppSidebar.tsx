@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LogoutButton } from './LogoutButton';
+import { ParishLogo } from './ParishLogo';
 import { usePermissions } from '../../lib/permissions';
 import { useCanSeeStatistics } from '../../lib/statisticsAccess';
 import {
   BaptismIcon,
   ConfirmationIcon,
-  CrestIcon,
   MarriageIcon,
   ParishIcon,
   StatisticsIcon,
@@ -100,8 +100,8 @@ export function AppSidebar() {
           inert={!isOpen}
           className="flex h-full flex-col items-center px-4 py-8"
         >
-          <div className="mb-6 flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-white p-3 text-icon-button">
-            <CrestIcon className="h-full w-full" />
+          <div className="mb-6 flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-3 text-icon-button">
+            <ParishLogo className="h-full w-full" />
           </div>
 
           <ul className="min-h-0 w-full flex-1 divide-y divide-white/70 overflow-y-auto">

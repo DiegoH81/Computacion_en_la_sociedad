@@ -26,7 +26,7 @@ function BarRow({ label, value, max, color, labelClassName }: BarRowProps) {
   );
 }
 
-export function AgeCharts({ bands, ages }: { bands: string[]; ages: Statistics['edades'] }) {
+export function AgeCharts({ bands, ages }: { bands: Statistics['bandasEdad']; ages: Statistics['edades'] }) {
   // La misma escala en los tres, para que las barras se puedan comparar entre sacramentos.
   const max = Math.max(1, ...SACRAMENT_SERIES.flatMap((series) => ages[series.key].bandas));
   const notes = SACRAMENT_SERIES.filter((series) => ages[series.key].sinDato > 0).map(
@@ -37,9 +37,10 @@ export function AgeCharts({ bands, ages }: { bands: string[]; ages: Statistics['
     <ChartCard
       title="Edad al recibir el sacramento"
       subtitle={`Según la fecha de nacimiento (las fechas aproximadas no se cuentan). En matrimonio cuenta a los dos cónyuges.${notes.length > 0 ? ` Sin dato de edad: ${notes.join(', ')}.` : ''}`}
+      // Cada sacramento tiene sus rangos: la tabla los lista uno debajo del otro.
       table={{
-        headers: ['Edad', ...SACRAMENT_SERIES.map((series) => series.label)],
-        rows: bands.map((band, index) => [band, ...SACRAMENT_SERIES.map((series) => ages[series.key].bandas[index])]),
+        headers: ['Sacramento', 'Edad', 'Personas'],
+        rows: SACRAMENT_SERIES.flatMap((series) => bands[series.key].map((band, index) => [series.label, band, ages[series.key].bandas[index]])),
       }}
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -55,7 +56,7 @@ export function AgeCharts({ bands, ages }: { bands: string[]; ages: Statistics['
                 {promedio === null ? 'Sin edades registradas' : `Promedio: ${promedio.toLocaleString('es-PE')} años`}
               </p>
               <ul className="flex flex-col gap-1.5">
-                {bands.map((band, index) => (
+                {bands[series.key].map((band, index) => (
                   <BarRow key={band} label={band} value={bandas[index]} max={max} color={series.color} labelClassName="w-[6.5rem]" />
                 ))}
               </ul>

@@ -1,7 +1,7 @@
 import type { Baptism } from '../../../shared/models';
 import { formatLongDate, todayLongDate } from '../../lib/dates';
 import { birthValue, celebrantName, fullName, printText } from '../../lib/printFields';
-import { BlankDateLine, CertificateLogo, DottedField, SerialNumber, SignatureLine } from '../print/CertificateParts';
+import { BlankDateLine, CertificateLogo, DottedField, SerialNumber, SignatureLine, ValueOrMark } from '../print/CertificateParts';
 
 const TITLES = {
   bautismo: { sacramento: 'Bautismo', libroDe: 'bautismos' },
@@ -66,7 +66,9 @@ export function SinglePersonPrintView({ record, logo }: SinglePersonPrintViewPro
           <DottedField label="Número:" value={partida.numero} valueClassName="text-center font-bold" />
 
           <h3 className="mt-[10mm] text-[11pt] font-bold">Anotaciones marginales</h3>
-          <p className="whitespace-pre-wrap break-words text-[9.5pt] leading-snug">{printText(partida.anotaciones)}</p>
+          <p className="whitespace-pre-wrap break-words text-[8pt] leading-snug">
+            <ValueOrMark value={printText(partida.anotaciones)} />
+          </p>
         </aside>
 
         <section className="flex flex-col gap-[2.2mm]">

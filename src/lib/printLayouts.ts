@@ -1,34 +1,21 @@
-/**
- * Dónde va cada dato en los formatos impresos de la Prelatura de Ayaviri (constancias de bautismo,
- * confirmación y matrimonio), para imprimir solo los datos sobre la hoja ya impresa.
- *
- * Todo en milímetros desde la esquina superior izquierda de la hoja A4. Las medidas salen del
- * escaneo de los formatos (FORMATOS DE CONSTANCIAS.pdf, a 300 ppp). Cada impresora corre la hoja un
- * poco: eso se corrige con el ajuste de la PC (printAdjustment.ts), no aquí.
- *
- * Dos clases de lugar:
- *   line   sobre una línea punteada: y es la altura de esa línea. Con varias líneas (anotaciones),
- *          la siguiente está "gap" mm más abajo.
- *   box    dentro de una casilla de la tabla: top y height son los bordes de la casilla; el texto
- *          va centrado en su altura.
- * El texto que no cabe se corta con "…" (se puede seguir a mano).
- */
-
 export type FormKind = 'bautismo' | 'confirmacion' | 'matrimonio';
 
 export type PrintSlot =
   | { kind: 'line'; x: number; y: number; width: number; lines?: number; gap?: number; align?: 'left' | 'center' }
-  | { kind: 'box'; x: number; top: number; height: number; width: number; lines?: number; align?: 'left' | 'center' };
+  | { kind: 'box'; x: number; top: number; height: number; width: number; lines?: number; align?: 'left' | 'center' }
+  | { kind: 'area'; x: number; top: number; height: number; width: number; fontSize: number };
 
 export interface FormLayout {
-  /** El escaneo del formato, que se ve de fondo en la vista previa (no se imprime). */
   background: string;
-  /** Tamaño de la letra de los datos, en puntos. */
   fontSize: number;
   slots: Record<string, PrintSlot>;
 }
 
 const line = (x: number, y: number, width: number, extra: Partial<Extract<PrintSlot, { kind: 'line' }>> = {}): PrintSlot => ({ kind: 'line', x, y, width, ...extra });
+
+const NOTES_FONT_SIZE = 8;
+
+const area = (x: number, top: number, bottom: number, width: number): PrintSlot => ({ kind: 'area', x, top, height: bottom - top, width, fontSize: NOTES_FONT_SIZE });
 
 const box = (x: number, top: number, bottom: number, width: number, extra: Partial<Extract<PrintSlot, { kind: 'box' }>> = {}): PrintSlot => ({
   kind: 'box',
@@ -39,7 +26,6 @@ const box = (x: number, top: number, bottom: number, width: number, extra: Parti
   ...extra,
 });
 
-// La fecha del párroco: "____ de ________ de 20__". El año lleva solo sus dos últimas cifras.
 const BAPTISM_DATE_Y = 175.3;
 const CONFIRMATION_DATE_Y = 173.3;
 const MARRIAGE_DATE_Y = 244.1;
@@ -50,10 +36,10 @@ export const FORM_LAYOUTS: Record<FormKind, FormLayout> = {
     fontSize: 10,
     slots: {
       parroquia: line(96, 53.2, 75),
-      libro: line(24.5, 75.2, 45),
-      folio: line(25, 83.7, 44),
-      numero: line(30.5, 91.8, 38.5),
-      anotaciones: line(16.3, 127.0, 53, { lines: 4, gap: 7.97 }),
+      libro: line(24.5, 75.2, 45, { align: 'center' }),
+      folio: line(25, 83.7, 44, { align: 'center' }),
+      numero: line(30.5, 91.8, 38.5, { align: 'center' }),
+      anotaciones: area(16.3, 122.5, 211, 53),
       nombres: line(92.5, 86.6, 100.5),
       apellidos: line(92.5, 94.3, 100.5),
       padre: line(87.5, 102.0, 105.5),
@@ -75,10 +61,10 @@ export const FORM_LAYOUTS: Record<FormKind, FormLayout> = {
     fontSize: 10,
     slots: {
       parroquia: line(93, 56.8, 98),
-      libro: line(22, 79.4, 43.5),
-      folio: line(22, 87.1, 44.5),
-      numero: line(27, 94.9, 39.5),
-      anotaciones: line(12.3, 131.7, 53.5, { lines: 2, gap: 10.6 }),
+      libro: line(22, 79.4, 43.5, { align: 'center' }),
+      folio: line(22, 87.1, 44.5, { align: 'center' }),
+      numero: line(27, 94.9, 39.5, { align: 'center' }),
+      anotaciones: area(12.3, 126.5, 211, 53.5),
       nombres: line(90, 93.9, 98),
       apellidos: line(90, 101.6, 98),
       padre: line(84.5, 109.2, 103.5),
@@ -93,7 +79,7 @@ export const FORM_LAYOUTS: Record<FormKind, FormLayout> = {
     },
   },
 
-  // La tabla está un poco girada en el escaneo: por eso cada columna tiene sus propias alturas.
+
   matrimonio: {
     background: './formatos/matrimonio.jpg',
     fontSize: 9,
@@ -128,7 +114,8 @@ export const FORM_LAYOUTS: Record<FormKind, FormLayout> = {
       lugar: line(47.5, 198.5, 54.5, { lines: 2, gap: 5 }),
       // Padrinos queda vacío: los cuatro testigos van en "Testigos".
       testigos: line(27, 225.6, 75, { lines: 2, gap: 5.2 }),
-      anotaciones: box(105.5, 183.5, 230.5, 89, { lines: 10 }),
+      // Toda la casilla de las anotaciones, debajo de su rótulo.
+      anotaciones: area(105.5, 182, 232, 89),
 
       dia: line(128, MARRIAGE_DATE_Y, 15.5, { align: 'center' }),
       mes: line(148, MARRIAGE_DATE_Y, 29, { align: 'center' }),
