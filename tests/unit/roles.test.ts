@@ -117,7 +117,7 @@ describe('solicitudes de cambio', () => {
     expect(() => update_person_sacrament(db, 'bautismo', ayudante, { ...read(id), persona: { ...read(id).persona, madre: '' } })).toThrow('Faltan datos: madre.');
   });
 
-  it('la corrección por nota marginal, al aprobarse, conserva el nombre anterior para la búsqueda', () => {
+  it('la corrección por nota marginal, al aprobarse, queda en la nota sin cambiar la partida, y se busca por los dos nombres', () => {
     const id = create_person_sacrament(db, 'bautismo', parroco, input());
     update_person_sacrament(db, 'bautismo', ayudante, withCorrection(read(id), 'Diego'));
 
@@ -129,9 +129,10 @@ describe('solicitudes de cambio', () => {
     review_requests(db, parroco, id, 'aprobado');
 
     const record = read(id);
-    expect(record.persona.nombres).toBe('Diego');
-    expect(record.persona.cambios[0]).toMatchObject({ estado: 'aprobado', valor_anterior: 'Diago', revisado_por_usuario_id: 1 });
+    expect(record.persona.nombres).toBe('Diago');
+    expect(record.persona.cambios[0]).toMatchObject({ estado: 'aprobado', valor_anterior: 'Diago', valor_nuevo: 'Diego', revisado_por_usuario_id: 1 });
     expect(search_sacraments(db, 'bautismo', { nombres: 'Diago' }).resultados).toHaveLength(1);
+    expect(search_sacraments(db, 'bautismo', { nombres: 'Diego' }).resultados).toHaveLength(1);
     expect(record.sacramento.solicitudes).toMatchObject([{ estado: 'aprobado', revisado_por: 'U P M' }]);
   });
 
@@ -171,13 +172,13 @@ describe('solicitudes de cambio', () => {
     expect(read(id).persona.nombres).toBe('Diago');
   });
 
-  it('al registrar, la corrección del ayudante queda pedida; la del párroco se aplica', () => {
+  it('al registrar, la corrección del ayudante queda pedida; la del párroco queda aprobada', () => {
     const helperId = create_person_sacrament(db, 'bautismo', ayudante, input({ persona: { cambios: [change('nombres', 'Diego')] } }));
     const parishId = create_person_sacrament(db, 'bautismo', parroco, input({ sacramento: { numero: '4' }, persona: { cambios: [change('nombres', 'Diego')] } }));
 
     expect(read(helperId).persona).toMatchObject({ nombres: 'Diago', cambios: [] });
     expect(pending(helperId)).toMatchObject([{ tipo: 'nota_marginal', valor_nuevo: 'Diego' }]);
-    expect(read(parishId).persona).toMatchObject({ nombres: 'Diego', cambios: [{ estado: 'aprobado', revisado_por_usuario_id: 1 }] });
+    expect(read(parishId).persona).toMatchObject({ nombres: 'Diago', cambios: [{ estado: 'aprobado', valor_nuevo: 'Diego', revisado_por_usuario_id: 1 }] });
   });
 
   it('el ayudante no anula partidas, ni pide cambios en una anulada', () => {

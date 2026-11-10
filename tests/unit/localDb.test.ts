@@ -159,6 +159,49 @@ describe('migraciones', () => {
     expect(migrated.pragma('foreign_key_check')).toEqual([]);
   });
 
+  it('una persona corregida por nota marginal vuelve al nombre con que se registró', () => {
+    // La base justo antes de la migración: la corrección había reemplazado el dato (Diago → Diogo → Diego).
+    const conn = open(KEY, LOCAL_MIGRATIONS.slice(0, LOCAL_MIGRATIONS.findIndex((sql) => sql.includes('SET nombres = ('))));
+    seed(conn);
+    conn.exec(`INSERT INTO usuarios (id, client_id, username, rol, parroquia_id, nombre, apellido_paterno, apellido_materno) VALUES (1, 'servidor-1', 'parroco', 'admin_parroquia', 1, 'J', 'P', 'M')`);
+    const corrected = insertPersona(conn, 'Diego');
+    const untouched = insertPersona(conn, 'Rosa');
+    conn.exec(`
+      INSERT INTO cambios_persona (client_id, persona_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, estado, fecha_cambio) VALUES
+        ('c-2', ${corrected}, 1, 'nombres', 'Diogo', 'Diego', 'aprobado', '2026-11-02T00:00:00.000Z'),
+        ('c-1', ${corrected}, 1, 'nombres', 'Diago', 'Diogo', 'aprobado', '2026-11-01T00:00:00.000Z');
+    `);
+    conn.close();
+
+    const migrated = open();
+    expect(migrated.prepare('SELECT nombres FROM personas ORDER BY id').pluck().all()).toEqual(['Diago', 'Rosa']);
+    expect(untouched).toBeGreaterThan(corrected);
+    expect(migrated.prepare('SELECT count(*) FROM cambios_persona').pluck().get()).toBe(2);
+  });
+
+  it('una partida importada del Excel toma como fecha la del sacramento, o ninguna; no la de ingreso al sistema anterior', () => {
+    const conn = open(KEY, LOCAL_MIGRATIONS.slice(0, LOCAL_MIGRATIONS.findIndex((sql) => sql.includes('SET fecha_emision = fecha_evento'))));
+    seed(conn);
+    conn.exec(`INSERT INTO usuarios (id, client_id, username, rol, parroquia_id, nombre, apellido_paterno, apellido_materno) VALUES (1, 'servidor-1', 'parroco', 'admin_parroquia', 1, 'J', 'P', 'M')`);
+    conn.exec(`
+      INSERT INTO sacramentos (id, client_id, tipo, parroquia_id, libro, folio, numero, fecha_emision, fecha_evento, version) VALUES
+        (1, 'importada', 'bautismo', 1, '13', '1', '1', '2024-09-26', '1959-10-11', 3),
+        (2, 'sin-fecha', 'bautismo', 1, '13', '1', '2', '2024-09-26', NULL, 3),
+        (3, 'de-la-app', 'bautismo', 1, '13', '1', '3', '2026-01-02', '2025-12-25', 3);
+      INSERT INTO historial_partidas (client_id, sacramento_id, usuario_id, evento) VALUES ('h1', 1, 1, 'importada'), ('h2', 2, 1, 'importada'), ('h3', 3, 1, 'registrada');
+      INSERT INTO sync_cola (entidad, client_id, version_base, cola_id) VALUES ('bautismo', 'importada', 3, 'cola-1');
+    `);
+    conn.close();
+
+    const migrated = open();
+    expect(migrated.prepare('SELECT client_id, fecha_emision, version FROM sacramentos ORDER BY id').all()).toEqual([
+      { client_id: 'importada', fecha_emision: '1959-10-11', version: 4 },
+      { client_id: 'sin-fecha', fecha_emision: null, version: 4 },
+      { client_id: 'de-la-app', fecha_emision: '2026-01-02', version: 3 },
+    ]);
+    expect(migrated.prepare('SELECT version_base FROM sync_cola').pluck().get()).toBe(4);
+  });
+
   it('no abre una base creada por una versión más nueva de la app', () => {
     open(KEY, ['CREATE TABLE a (id INTEGER)', 'CREATE TABLE b (id INTEGER)']).close();
     db = null;

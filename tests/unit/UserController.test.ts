@@ -42,6 +42,7 @@ function login(rol: Rol, parroquiaId: number | null) {
     parroquiaId,
     parroquiaActivaId: parroquiaId ?? 1,
     parroquiaActivaNombre: 'Parroquia 1',
+    misParroquias: [],
   });
 }
 
@@ -74,7 +75,8 @@ describe('UserController', () => {
         ['sin nombre', { ...VALID, nombre: '  ' }, PASSWORD, 'Nombre y apellido paterno son requeridos.'],
         ['sin usuario', { ...VALID, username: ' ' }, PASSWORD, 'El nombre de usuario es requerido.'],
         ['sin parroquia elegida', { ...VALID, parroquia_id: null }, PASSWORD, 'Debe seleccionar una parroquia.'],
-        ['contraseña corta', { ...VALID, password: 'corta' }, 'corta', 'La contraseña debe tener al menos 8 caracteres.'],
+        ['contraseña corta', { ...VALID, password: 'corta' }, 'corta', 'La contraseña debe tener al menos 6 caracteres.'],
+        ['contraseña con espacios', { ...VALID, password: 'mi clave' }, 'mi clave', 'La contraseña no puede tener espacios.'],
         ['contraseñas distintas', VALID, 'otraCosa123', 'Las contraseñas no coinciden.'],
       ])('%s', async (_name, user, confirm, message) => {
         const electron = mockElectron();

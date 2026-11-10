@@ -20,7 +20,6 @@ const parroco: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, to
 const general: Session = { user_id: 3, role: 'admin_general', parish_id: null, token: 't' };
 
 const DASHES = '--------------------------------------------------';
-const TODAY = '2026-11-06';
 
 // Una fila del Excel: todo vacío (como lo deja el sistema anterior) salvo lo que se indique.
 function row(values: Partial<Record<keyof typeof COLUMNS, unknown>>): unknown[] {
@@ -86,7 +85,7 @@ const BOOK_ROWS = [
 ];
 const BOOKS = read_books(BOOK_ROWS);
 
-const read = (rows: unknown[][]) => read_rows(rows, BOOKS, TODAY);
+const read = (rows: unknown[][]) => read_rows(rows, BOOKS);
 
 let dir: string;
 let db: LocalDatabase;
@@ -138,13 +137,20 @@ describe('leer el Excel del sistema anterior', () => {
       libro: '13',
       folio: '0.1',
       numero: '1',
-      fecha_emision: '2026-09-21',
+      // La fecha de la partida es la del sacramento, no la de ingreso al sistema anterior.
+      fecha_emision: '1959-10-11',
       fecha_evento: '1959-10-11',
       anotaciones: null,
       celebrante: { titulo: 'Pbro.', nombre: 'PEDRO', apellido_paterno: 'RAMOS', apellido_materno: 'DIAZ' },
       personas: [{ nombres: 'JUAN', dni: null, fecha_nacimiento: '1959-01-15', fecha_aproximada: null }],
       detalle: { padrino_1: 'DIONISIO QUISPE', padrino_2: null },
     });
+  });
+
+  it('una partida sin fecha del sacramento queda sin fecha (la de ingreso al sistema anterior no se usa)', () => {
+    const [record] = read([bautismo(1, { fecha_sacramento: null })]).partidas;
+
+    expect(record).toMatchObject({ fecha_emision: null, fecha_evento: null });
   });
 
   it('lee un matrimonio con el novio, la novia, sus testigos y las fechas aproximadas', () => {
@@ -180,16 +186,16 @@ describe('leer el Excel del sistema anterior', () => {
       { sheet: 'parroquialibros', data: libros },
     ];
 
-    expect(read_workbook(sheets([bautismo(1)]), TODAY).partidas).toHaveLength(1);
-    expect(() => read_workbook([{ sheet: 'Hoja1', data: [bautismo(1)] }], TODAY)).toThrow(/no tiene la hoja "parroquialibros"/);
-    expect(() => read_workbook([{ sheet: 'parroquialibros', data: BOOK_ROWS }], TODAY)).toThrow(/no tiene la hoja "feligres"/);
-    expect(() => read_workbook(sheets([bautismo(1).slice(0, 40)]), TODAY)).toThrow(/45 columnas/);
-    expect(() => read_workbook(sheets([['COD', ...RECORDS_HEADER.slice(1)], bautismo(1)]), TODAY)).toThrow(/columna 1 dice "COD"/);
-    expect(() => read_workbook(sheets([bautismo(1), bautismo(2, { tipo_libro: 'X' })]), TODAY)).toThrow(/fila 2 .* no es B, C ni M/);
-    expect(() => read_workbook(sheets([bautismo(1), bautismo(2, { codigo_parroquia: 40 })]), TODAY)).toThrow(/más de una parroquia/);
-    expect(() => read_workbook(sheets([bautismo(1)], [[40, 'B', 13, '13', null]]), TODAY)).toThrow(/más de una parroquia/);
+    expect(read_workbook(sheets([bautismo(1)])).partidas).toHaveLength(1);
+    expect(() => read_workbook([{ sheet: 'Hoja1', data: [bautismo(1)] }])).toThrow(/no tiene la hoja "parroquialibros"/);
+    expect(() => read_workbook([{ sheet: 'parroquialibros', data: BOOK_ROWS }])).toThrow(/no tiene la hoja "feligres"/);
+    expect(() => read_workbook(sheets([bautismo(1).slice(0, 40)]))).toThrow(/45 columnas/);
+    expect(() => read_workbook(sheets([['COD', ...RECORDS_HEADER.slice(1)], bautismo(1)]))).toThrow(/columna 1 dice "COD"/);
+    expect(() => read_workbook(sheets([bautismo(1), bautismo(2, { tipo_libro: 'X' })]))).toThrow(/fila 2 .* no es B, C ni M/);
+    expect(() => read_workbook(sheets([bautismo(1), bautismo(2, { codigo_parroquia: 40 })]))).toThrow(/más de una parroquia/);
+    expect(() => read_workbook(sheets([bautismo(1)], [[40, 'B', 13, '13', null]]))).toThrow(/más de una parroquia/);
     // Con tildes o mayúsculas distintas, el encabezado sigue siendo el mismo.
-    expect(read_workbook(sheets([bautismo(1)], [[...BOOKS_HEADER].map((name) => name?.toLowerCase() ?? null), ...BOOK_ROWS]), TODAY).partidas).toHaveLength(1);
+    expect(read_workbook(sheets([bautismo(1)], [[...BOOKS_HEADER].map((name) => name?.toLowerCase() ?? null), ...BOOK_ROWS])).partidas).toHaveLength(1);
   });
 
   it('sin encabezado, la primera fila ya es una partida', () => {
