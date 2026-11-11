@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useSacramentSearch } from './useSacramentSearch';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Marriage, Minister, NameColumn, Person } from '../../shared/models';
+import type { Marriage, Minister, Person } from '../../shared/models';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { SacramentSearchPanel } from '../components/features/SacramentSearchPanel';
 import { MarriageForm } from '../components/features/MarriageForm';
 import { AnnulmentModal } from '../components/features/AnnulmentModal';
-import type { SacramentSearchValues } from '../components/features/SacramentSearchForm';
 import { HistoryDialog } from '../components/features/HistoryDialog';
 import { MarriagePrintView } from '../components/features/MarriagePrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { CertificatePrintPreview } from '../components/print/CertificatePrintPreview';
 import { useSessionStore } from '../store/sessionStore';
 import { usePermissions } from '../lib/permissions';
-import { annulSacrament, restoreSacrament, saveSacrament, searchSacraments } from '../controllers/SacramentController';
+import { annulSacrament, restoreSacrament, saveSacrament } from '../controllers/SacramentController';
 import { searchPriests } from '../controllers/PriestController';
 import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
@@ -28,15 +28,11 @@ export function MarriagesPage() {
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
   const token = useSessionStore((state) => state.token);
 
-  const [records, setRecords] = useState<Marriage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [sortBy, setSortBy] = useState<NameColumn>('nombres');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [filters, setFilters] = useState<SacramentSearchValues>({});
-  const [reloadCounter, setReloadCounter] = useState(0);
+  const {
+    records, isLoading, setIsLoading, errorMessage, setErrorMessage,
+    currentPage, setCurrentPage, totalPages, sortBy, setSortBy,
+    sortDirection, setSortDirection, handleSearch, handleClear, reload,
+  } = useSacramentSearch<Marriage>('matrimonio', parroquiaActivaId);
 
   const [formState, setFormState] = useState<{ mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; record: Marriage }>({ mode: 'closed' });
   const [formError, setFormError] = useState<string | null>(null);
@@ -48,50 +44,11 @@ export function MarriagesPage() {
   const [isSearchingPriests, setIsSearchingPriests] = useState(false);
   const lastPriestSearch = useRef(0);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setIsLoading(true);
-      setErrorMessage(null);
-
-      const result = await searchSacraments<Marriage>('matrimonio', { ...filters, orden: sortBy, direccion: sortDirection, pagina: currentPage });
-
-      // Si mientras tanto cambió algún filtro, esta respuesta ya está vieja.
-      if (cancelled) return;
-
-      setIsLoading(false);
-
-      if (!result.success || !result.page) {
-        setErrorMessage(result.errorMessage ?? 'Error al buscar partidas.');
-        return;
-      }
-
-      setRecords(result.page.resultados);
-      setTotalPages(result.page.total_paginas);
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [filters, currentPage, sortBy, sortDirection, parroquiaActivaId, reloadCounter]);
-
   const permissions = usePermissions();
   const canWrite = permissions.canWrite;
 
   function canManage(recordParroquiaId: number): boolean {
     return canWrite && recordParroquiaId === parroquiaId;
-  }
-
-  function handleSearch(newFilters: SacramentSearchValues) {
-    setFilters(newFilters);
-    setCurrentPage(1);
-  }
-
-  function handleClear() {
-    setFilters({});
-    setCurrentPage(1);
   }
 
   async function handleSearchPriest(query: string) {
@@ -139,7 +96,7 @@ export function MarriagesPage() {
     }
 
     closeForm();
-    setReloadCounter((count) => count + 1);
+    reload();
   }
 
   async function handleConfirmAnnulment(motivo: string) {
@@ -150,7 +107,7 @@ export function MarriagesPage() {
       return;
     }
     setAnnulment(null);
-    setReloadCounter((count) => count + 1);
+    reload();
   }
 
   async function handlePrint(id: number) {

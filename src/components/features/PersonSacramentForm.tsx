@@ -11,6 +11,7 @@ import { MarginalNotesSection } from './MarginalNotesSection';
 import { SacramentCelebrationFields } from './SacramentCelebrationFields';
 import { SacramentPersonPanel } from './SacramentPersonPanel';
 import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { duplicateQuery } from './duplicateQuery';
 import { useDuplicateCheck } from './useDuplicateCheck';
 import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
@@ -64,16 +65,7 @@ export function PersonSacramentForm({
   const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
 
   const { persona } = record;
-  const duplicates = useDuplicateCheck(tipo, record.sacramento.id, [{
-    para: '',
-    dni: persona.dni,
-    nombres: persona.nombres,
-    apellido_paterno: persona.apellido_paterno,
-    apellido_materno: persona.apellido_materno,
-    fecha_nacimiento: persona.fecha_nacimiento,
-    padre: persona.padre,
-    madre: persona.madre,
-  }]);
+  const duplicates = useDuplicateCheck(tipo, record.sacramento.id, [duplicateQuery('', persona)]);
 
   // Las correcciones nuevas se agregan a las ya registradas (que Electron no vuelve a guardar).
   const toSave = (): Baptism => ({ ...record, persona: { ...persona, cambios: [...persona.cambios, ...newChanges(drafts)] } });

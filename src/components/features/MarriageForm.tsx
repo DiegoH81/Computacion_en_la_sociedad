@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Marriage, Minister, Person } from '../../../shared/models';
+import type { Marriage, Minister } from '../../../shared/models';
 import { emptyMarriage } from '../../lib/emptyRecords';
 import { newChanges, personOptions, recordedChanges, type CorrectionDraft } from '../../lib/personCorrections';
 import { pendingRequests, requestedBy, usesRequestedValues, withRequestedValues } from '../../lib/changeRequests';
@@ -16,6 +16,7 @@ import { MarginalNotesSection } from './MarginalNotesSection';
 import { MarriageFamilyFields, MarriagePersonFields } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
 import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { duplicateQuery } from './duplicateQuery';
 import { useDuplicateCheck } from './useDuplicateCheck';
 import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
@@ -40,19 +41,6 @@ interface MarriageFormProps {
   isSearchingPriests: boolean;
   /** Un usuario (ayudante) que edita: no modifica la partida, pide los cambios. */
   onlyCorrections?: boolean;
-}
-
-function duplicateQuery(para: string, person: Person) {
-  return {
-    para,
-    dni: person.dni,
-    nombres: person.nombres,
-    apellido_paterno: person.apellido_paterno,
-    apellido_materno: person.apellido_materno,
-    fecha_nacimiento: person.fecha_nacimiento,
-    padre: person.padre,
-    madre: person.madre,
-  };
 }
 
 export function MarriageForm({
