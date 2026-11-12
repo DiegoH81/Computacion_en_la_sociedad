@@ -136,7 +136,8 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
     setFormError(null);
   }
 
-  async function handleSaveForm(record: Baptism) {
+  // Con thenPrint, después de guardar se abre la impresión de la partida ya guardada (como el botón Imprimir).
+  async function handleSaveForm(record: Baptism, thenPrint: boolean) {
     setIsLoading(true);
     setFormError(null);
 
@@ -151,6 +152,8 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
 
     closeForm();
     setReloadCounter((count) => count + 1);
+
+    if (thenPrint && result.id !== undefined) await handlePrint(result.id);
   }
 
   async function handleConfirmAnnulment(motivo: string) {

@@ -28,7 +28,8 @@ interface PersonSacramentFormProps {
   initialRecord?: Baptism;
   parroquiaNombre: string;
   errorMessage?: string | null;
-  onSave: (record: Baptism) => void;
+  /** thenPrint: el usuario eligió "Guardar e imprimir". */
+  onSave: (record: Baptism, thenPrint: boolean) => void;
   onCancel: () => void;
   isLoading: boolean;
   priestOptions: Minister[];
@@ -60,7 +61,8 @@ export function PersonSacramentForm({
   const pending = isEditing ? pendingRequests(record) : [];
   // Un usuario con un pedido esperando no puede pedir otro: el formulario queda solo para ver.
   const lockFields = onlyCorrections && pending.length > 0;
-  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
+  // Abierto cuando hay que confirmar que se descarta un pedido; recuerda si después se imprime.
+  const [confirmingDiscard, setConfirmingDiscard] = useState<{ thenPrint: boolean } | null>(null);
   const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
 
   const { persona } = record;
@@ -78,13 +80,13 @@ export function PersonSacramentForm({
   // Las correcciones nuevas se agregan a las ya registradas (que Electron no vuelve a guardar).
   const toSave = (): Baptism => ({ ...record, persona: { ...persona, cambios: [...persona.cambios, ...newChanges(drafts)] } });
 
-  function handleSave() {
+  function handleSave(thenPrint: boolean) {
     // El administrador que guarda sin usar lo que pidió un usuario lo descarta: se le pregunta antes.
     if (!onlyCorrections && pending.length > 0 && !usesRequestedValues(toSave(), drafts, pending)) {
-      setIsConfirmingDiscard(true);
+      setConfirmingDiscard({ thenPrint });
       return;
     }
-    onSave(toSave());
+    onSave(toSave(), thenPrint);
   }
 
   function applyRequestedValues() {
@@ -97,7 +99,9 @@ export function PersonSacramentForm({
   return (
     <FormDialog
       title={!isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
-      onSave={handleSave}
+      onSave={() => handleSave(false)}
+      // Un pedido de cambio no modifica la partida: imprimirla ahora sacaría los datos de antes.
+      onSaveAndPrint={isEditing && onlyCorrections ? undefined : () => handleSave(true)}
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
@@ -150,16 +154,16 @@ export function PersonSacramentForm({
         />
       )}
 
-      {isConfirmingDiscard && (
+      {confirmingDiscard && (
         <ConfirmActionDialog
           title="Descartar el cambio pedido"
           description={`Hay un cambio pendiente de ${requestedBy(pending)}. Si guarda sin usar esos valores, el pedido se descarta.`}
           confirmLabel="Guardar y descartar"
           onConfirm={() => {
-            setIsConfirmingDiscard(false);
-            onSave(toSave());
+            setConfirmingDiscard(null);
+            onSave(toSave(), confirmingDiscard.thenPrint);
           }}
-          onDismiss={() => setIsConfirmingDiscard(false)}
+          onDismiss={() => setConfirmingDiscard(null)}
         />
       )}
     </FormDialog>

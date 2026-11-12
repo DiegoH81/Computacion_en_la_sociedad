@@ -31,3 +31,5 @@ dist-ssr
 resources/instalador/*.json
 
 release
+# Instaladores apartados (no van al repositorio)
+release-*/

@@ -56,6 +56,28 @@ npx wrangler deploy
 
 **6. Pon esa URL en la app.** Crea `resources/instalador/configuracion.json` con la URL que mostró el despliegue, `{ "servidor": "https://registro-sacramental.<subdominio>.workers.dev" }`, y arma el instalador. Si la URL cambia después, basta con editar ese archivo en las PCs (ver `resources/instalador/LEEME.md`); no hay que volver a compilar. También se puede compilar con la URL fija (`.env.production.local` con `VITE_WORKER_URL`), que se usa solo si no hay archivo.
 
+## Entorno de pruebas (sin tocar el del padre)
+
+El padre sigue usando `registro-sacramental` con la base `prelatura-db`. Para probar la versión nueva hay otro
+Worker, `registro-sacramental-pruebas`, con su propia base `prelatura-db-pruebas` (entorno `pruebas` de
+`wrangler.jsonc`). Todos los comandos llevan `--env pruebas`; sin eso, se trabaja sobre el del padre.
+
+Una sola vez, desde `worker/`:
+
+1. `npx wrangler d1 create prelatura-db-pruebas` y copiar el `database_id` en `env.pruebas` de `wrangler.jsonc`.
+2. `npx wrangler d1 migrations apply prelatura-db-pruebas --remote --env pruebas`
+3. `npx wrangler secret put JWT_SECRET --env pruebas` y lo mismo con `DEVICE_KEY_SECRET` (valores nuevos, no
+   los del padre).
+4. `npx wrangler deploy --env pruebas`. URL: `https://registro-sacramental-pruebas.registro-sacramental-prelatura.workers.dev`.
+5. Cargar los datos de prueba (borra todo lo de la base de pruebas; sin `--env=pruebas` el script no acepta `--remote`):
+   `node src/scripts/seed-prelatura.mjs --remote --env=pruebas --admin-password=<clave> --excel="../EXPORTADO - NUESTRA SÑORA DEL ROSARIO (CRUCERO).xlsx"`
+6. Paquete inicial desde esa base: `npm run package:build -- --url <URL de pruebas> --user admin_general --password <clave>`
+7. Poner esa URL en `resources/instalador/configuracion.json` (o en `%APPDATA%` de una sola PC) para que la app
+   sincronice con pruebas.
+
+Para desplegar cambios del Worker en pruebas: `npx wrangler deploy --env pruebas`; las migraciones nuevas, con el
+comando del paso 2.
+
 ## Límites a vigilar
 
 Vigentes al 2026-11-01 en el plan gratuito de Workers: 10 ms de CPU por petición y 50 llamadas a D1 por petición. La app sube 20 cambios por petición y descarga 50 partidas por página para respetar el límite de llamadas. El límite de CPU no se ha medido en Cloudflare real, porque `wrangler dev` no lo aplica. Si aparece el error 1102, hay que pasar al plan de pago o reducir `MAX_RECORDS_PER_PAGE` (en `src/utils/config.ts`).

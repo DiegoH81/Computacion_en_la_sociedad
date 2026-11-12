@@ -12,6 +12,7 @@
     "db:seed": "node src/scripts/seed-dev.mjs",
     "db:migrate:remote": "wrangler d1 migrations apply prelatura-db --remote",
     "db:demo": "node src/scripts/seed-demo.mjs",
+    "db:prelatura": "node src/scripts/seed-prelatura.mjs --excel=\"../EXPORTADO - NUESTRA SÑORA DEL ROSARIO (CRUCERO).xlsx\"",
     "package:build": "node src/scripts/build-package.mjs"
   },
   "devDependencies": {
