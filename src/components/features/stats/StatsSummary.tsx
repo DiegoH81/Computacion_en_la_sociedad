@@ -18,7 +18,12 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   const width = 120;
   const height = 28;
   const max = Math.max(1, ...values);
-  const points = values.map((value, index) => [2 + ((width - 8) * index) / (values.length - 1), height - 3 - ((height - 8) * value) / max]);
+  const points = values.map((value, index) => {
+  const x = 2 + ((width - 8) * index) / (values.length - 1);
+  const y = height - 3 - ((height - 8) * value) / max;
+
+  return [x, y];
+});
   const [lastX, lastY] = points[points.length - 1];
 
   return (
