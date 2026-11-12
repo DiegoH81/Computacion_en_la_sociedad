@@ -698,6 +698,36 @@ test('importación: el Excel del sistema anterior se revisa, se importa una sola
   await expect(window.getByPlaceholder('Buscar celebrante...')).toHaveValue(/PEDRO RAMOS DIAZ/);
 });
 
+test('guardar e imprimir: valida, guarda y abre la impresión de lo guardado, al crear y al editar', async () => {
+  const window = await launchAndLogin();
+  await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();
+  await window.getByRole('button', { name: '+ Agregar' }).click();
+  const dialog = window.getByRole('dialog', { name: 'Agregar partida' });
+  await fillRegister(window, '671', 'N° de');
+  await field(window, 'Nombres').fill('Imprimida');
+
+  // Con datos faltantes no guarda ni imprime: sale el mismo aviso que con "Guardar cambios".
+  await window.getByRole('button', { name: 'Guardar e imprimir' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Faltan datos');
+  await expect(window.locator('.a4-overlay')).toHaveCount(0);
+
+  await completeRequired(window);
+  await window.getByRole('button', { name: 'Guardar e imprimir' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(window.locator('.a4-overlay [data-slot="nombres"]')).toHaveText('Imprimida');
+  await window.getByRole('button', { name: 'Volver' }).last().click();
+  await expect(window.getByRole('cell', { name: 'Imprimida' })).toBeVisible();
+
+  // Al editar se imprime con el cambio ya guardado.
+  await window.getByRole('checkbox', { name: 'Seleccionar partida 671' }).click();
+  await window.getByRole('button', { name: 'Editar' }).click();
+  await field(window, 'Nombres').fill('Reimpresa');
+  await window.getByRole('button', { name: 'Guardar e imprimir' }).click();
+  await expect(window.locator('.a4-overlay [data-slot="nombres"]')).toHaveText('Reimpresa');
+  await window.getByRole('button', { name: 'Volver' }).last().click();
+  await expect(window.getByRole('cell', { name: 'Reimpresa' })).toBeVisible();
+});
+
 test('imprimir sobre el formato: solo los datos, en su lugar, con el ajuste de esta PC', async () => {
   const window = await launchAndLogin();
   await window.getByRole('button', { name: 'Índice y partida de bautismo' }).click();

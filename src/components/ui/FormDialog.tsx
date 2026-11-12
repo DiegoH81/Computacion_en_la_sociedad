@@ -15,6 +15,8 @@ interface FormDialogProps {
   saveLabel?: string;
   /** Falso cuando no hay nada que se pueda guardar (por ejemplo, una partida bloqueada). */
   canSave?: boolean;
+  /** Si está, aparece el botón "Guardar e imprimir": guarda igual que el otro y después abre la impresión. */
+  onSaveAndPrint?: () => void;
   children: ReactNode;
 }
 
@@ -33,6 +35,7 @@ export function FormDialog({
   size = 'large',
   saveLabel = 'Guardar cambios',
   canSave = true,
+  onSaveAndPrint,
   children,
 }: FormDialogProps) {
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
@@ -48,6 +51,11 @@ export function FormDialog({
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black px-5 py-2">
           <h2 className="font-bold uppercase text-white">{title}</h2>
           <div className="flex gap-2">
+            {onSaveAndPrint && (
+              <button type="button" onClick={onSaveAndPrint} disabled={isLoading || !canSave} className={`${HEADER_BUTTON} bg-solid-blue`}>
+                Guardar e imprimir
+              </button>
+            )}
             <button type="button" onClick={onSave} disabled={isLoading || !canSave} className={`${HEADER_BUTTON} bg-solid-green`}>
               {isLoading ? 'Guardando...' : saveLabel}
             </button>
