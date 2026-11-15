@@ -168,14 +168,14 @@ describe('leer el Excel del sistema anterior', () => {
     expect(record.anotaciones).toBe('Fecha aproximada del bautizo de la esposa: ENERO DE 1930');
   });
 
-  it('salta el encabezado si es el del formato, y salta (avisando) las filas incompletas o repetidas', () => {
+  it('salta el encabezado si es el del formato, y salta (avisando) las filas repetidas o de un libro desconocido', () => {
     const rows = [[...RECORDS_HEADER], bautismo(1), bautismo(1), bautismo(2, { nombres: DASHES }), bautismo(3, { num_libro: 99 }), new Array(45).fill(null)];
     const { partidas, errores } = read(rows);
 
-    expect(partidas.map((record) => record.numero)).toEqual(['1']);
+    // Una partida sin nombre se importa igual: solo el libro, el folio y el número son obligatorios.
+    expect(partidas.map((record) => record.numero)).toEqual(['1', '2']);
     expect(errores).toEqual([
       { fila: 3, motivo: 'Repite la partida de la fila 2.' },
-      { fila: 4, motivo: 'Falta el nombre.' },
       { fila: 5, motivo: 'El libro B 99 no está en la hoja "parroquialibros".' },
     ]);
   });
