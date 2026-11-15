@@ -30,6 +30,20 @@ export const HISTORY_EVENTS = [
 
 export type HistoryEvent = (typeof HISTORY_EVENTS)[number];
 
+export const HISTORY_EVENT_LABELS: Record<HistoryEvent, string> =
+{
+	registrada: 'Registró la partida',
+	importada: 'Importó la partida',
+	editada: 'Editó la partida',
+	correccion: 'Corrigió por nota marginal',
+	cambio_pedido: 'Pidió un cambio',
+	cambio_aprobado: 'Aprobó el cambio',
+	cambio_rechazado: 'Rechazó el cambio',
+	cambio_descartado: 'Descartó el cambio',
+	anulada: 'Anuló la partida',
+	rehabilitada: 'Rehabilitó la partida',
+};
+
 export interface PersonData
 {
 	client_id: string;

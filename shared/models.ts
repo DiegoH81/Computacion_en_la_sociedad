@@ -27,6 +27,14 @@ export interface AdditionalParish
 	principal: number;
 }
 
+export interface BackupLogEntry
+{
+	fecha: string;
+	usuario: string;
+	accion: 'exporto' | 'restauro';
+	archivo: string;
+}
+
 export interface Parish
 {
 	id: number;
