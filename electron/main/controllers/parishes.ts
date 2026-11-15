@@ -12,7 +12,7 @@ const LOGO_FORMAT = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 export function list_parishes(db: LocalDatabase)
 {
-	return db.prepare('SELECT id, nombre FROM parroquias WHERE activa = 1 ORDER BY nombre ASC').all();
+	return db.prepare('SELECT id, nombre, ubicacion FROM parroquias WHERE activa = 1 ORDER BY nombre ASC').all();
 }
 
 function logo_path(user_data_folder: string, parish_id: number): string
