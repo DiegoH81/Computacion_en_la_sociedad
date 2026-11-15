@@ -3,17 +3,17 @@ import { BrowserWindow as t, app as n, dialog as r, ipcMain as i, safeStorage as
 import s from "node:path";
 import { fileURLToPath as c } from "node:url";
 import l, { existsSync as u, mkdirSync as d, readFileSync as f, readdirSync as p, renameSync as m, rmSync as h, statSync as g, writeFileSync as _ } from "node:fs";
-import { gunzipSync as v, gzipSync as y } from "node:zlib";
-import b from "better-sqlite3-multiple-ciphers";
-import { createCipheriv as x, createDecipheriv as ee, pbkdf2 as S, randomBytes as C, randomUUID as te, scrypt as w, timingSafeEqual as T } from "node:crypto";
-import { Worker as E } from "node:worker_threads";
-import D from "zlib";
-import { Duplex as O, PassThrough as ne, Transform as k, pipeline as re } from "stream";
-import { Blob as ie } from "node:buffer";
-import A, { Readable as j, Transform as ae } from "node:stream";
-import { createRequire as M } from "module";
+import { deflateRawSync as v, gunzipSync as y, gzipSync as b } from "node:zlib";
+import x from "better-sqlite3-multiple-ciphers";
+import { createCipheriv as ee, createDecipheriv as S, pbkdf2 as C, randomBytes as w, randomUUID as T, scrypt as E, timingSafeEqual as D } from "node:crypto";
+import { Worker as O } from "node:worker_threads";
+import k from "zlib";
+import { Duplex as te, PassThrough as A, Transform as j, pipeline as ne } from "stream";
+import { Blob as M } from "node:buffer";
+import N, { Readable as re, Transform as P } from "node:stream";
+import { createRequire as F } from "module";
 //#region \0rolldown/runtime.js
-var N = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), P = /* @__PURE__ */ e(import.meta.url), oe = [
+var I = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t.exports), L = /* @__PURE__ */ e(import.meta.url), R = [
 	{
 		campo: "libro",
 		label: "Libro"
@@ -42,7 +42,7 @@ var N = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t
 		campo: "anotaciones",
 		label: "Nota marginal"
 	}
-], F = [
+], ie = [
 	{
 		campo: "dni",
 		label: "DNI"
@@ -79,13 +79,13 @@ var N = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t
 		campo: "madre",
 		label: "Madre"
 	}
-], se = [{
+], ae = [{
 	campo: "padrino_1",
 	label: "Padrino"
 }, {
 	campo: "padrino_2",
 	label: "Madrina"
-}], ce = [
+}], oe = [
 	{
 		campo: "lugar",
 		label: "Lugar del matrimonio"
@@ -122,24 +122,33 @@ var N = (e, t) => () => (t || (e((t = { exports: {} }).exports, t), e = null), t
 		campo: "conyuge_2_bautismo_fecha",
 		label: "Fecha de bautismo de la esposa"
 	}
-], I = F.map((e) => e.campo);
+], z = ie.map((e) => e.campo);
+function se(e) {
+	return e === "matrimonio" ? oe : ae;
+}
+function ce(e) {
+	return se(e).map((e) => e.campo);
+}
 function le(e) {
-	return e === "matrimonio" ? ce : se;
-}
-function ue(e) {
-	return le(e).map((e) => e.campo);
-}
-function de(e) {
 	return e === "matrimonio" ? ["conyuge_1", "conyuge_2"] : ["persona"];
 }
-function fe(e, t) {
-	return e === "sacramento" ? oe : e === "detalle" ? le(t) : F;
+function ue(e, t) {
+	return e === "sacramento" ? R : e === "detalle" ? se(t) : ie;
 }
-function pe(e, t) {
+function de(e, t) {
+	let n = [
+		...R,
+		...ie,
+		...ae,
+		...oe
+	].find((e) => e.campo === t)?.label ?? t;
+	return e === "conyuge_1" ? `${n} del esposo` : e === "conyuge_2" ? `${n} de la esposa` : n;
+}
+function fe(e, t) {
 	return t === "sacramento" ? e.sacramento : t === "persona" ? e.persona : t === "conyuge_1" || t === "conyuge_2" ? e[t] : e;
 }
-function L(e, t) {
-	return pe(e, t);
+function pe(e, t) {
+	return fe(e, t);
 }
 function me(e) {
 	if (e == null) return null;
@@ -147,7 +156,7 @@ function me(e) {
 	return t === "" ? null : t;
 }
 function he(e, t, n) {
-	return me(pe(e, t)?.[n]);
+	return me(fe(e, t)?.[n]);
 }
 function ge(e, t, n, r) {
 	let i = n === "ministro_id" && r !== null ? Number(r) : r;
@@ -162,7 +171,7 @@ function ge(e, t, n, r) {
 			[n]: i
 		}
 	};
-	let a = pe(e, t);
+	let a = fe(e, t);
 	return {
 		...e,
 		[t]: {
@@ -174,10 +183,10 @@ function ge(e, t, n, r) {
 function _e(e, t) {
 	let n = [], r = e.sacramento.tipo, i = [
 		"sacramento",
-		...de(r),
+		...le(r),
 		"detalle"
 	];
-	for (let a of i) for (let i of fe(a, r)) {
+	for (let a of i) for (let i of ue(a, r)) {
 		let r = he(e, a, i.campo), o = he(t, a, i.campo);
 		r !== o && n.push({
 			parte: a,
@@ -192,7 +201,7 @@ function ve(e, t) {
 	let n = (e.cambios ?? []).filter((e) => e.id !== void 0 && e.campo_cambio === t && (e.estado === void 0 || e.estado === "aprobado"));
 	return n.length === 0 ? e[t] : n.reduce((e, t) => t.id > e.id ? t : e).valor_nuevo ?? e[t];
 }
-var ye = 1e4, be = 3e5, xe = 5e3, R = {
+var ye = 1e4, be = 3e5, xe = 5e3, B = {
 	cursor: "cursor",
 	last_sync: "ultima_sync",
 	notice: "aviso",
@@ -204,8 +213,9 @@ var ye = 1e4, be = 3e5, xe = 5e3, R = {
 	temp_database: "prelatura-reconstruccion.db",
 	temp_key: "prelatura-reconstruccion.key",
 	set_aside_folder: "bases-apartadas",
-	logos_folder: "logos"
-}, Ce = 2592e6, z = class extends Error {
+	logos_folder: "logos",
+	backup_log: "registro-respaldos.json"
+}, Ce = 2592e6, V = class extends Error {
 	status;
 	constructor(e, t) {
 		super(e), this.name = "ServiceError", this.status = t;
@@ -213,13 +223,13 @@ var ye = 1e4, be = 3e5, xe = 5e3, R = {
 };
 //#endregion
 //#region electron/main/utils/helpers.ts
-function B(e) {
+function H(e) {
 	if (typeof e != "string") return null;
 	let t = e.trim();
 	return t === "" ? null : t;
 }
-function V(e, t = "Partida no encontrada.") {
-	if (!Number.isInteger(e) || e <= 0) throw new z(t, 404);
+function U(e, t = "Partida no encontrada.") {
+	if (!Number.isInteger(e) || e <= 0) throw new V(t, 404);
 	return e;
 }
 function we(e, t) {
@@ -305,7 +315,7 @@ function Re(e, t, n) {
 }
 //#endregion
 //#region electron/main/models/history.ts
-function H(e, t, n, r, i = [], a = null) {
+function W(e, t, n, r, i = [], a = null) {
 	let o = e.prepare("INSERT INTO historial_partidas (client_id, sacramento_id, usuario_id, evento, motivo, fecha) VALUES (?, ?, ?, ?, ?, ?)").run(crypto.randomUUID(), t, n, r, a, (/* @__PURE__ */ new Date()).toISOString()), s = Number(o.lastInsertRowid), c = e.prepare("INSERT INTO historial_campos (historial_id, parte, campo, valor_anterior, valor_nuevo) VALUES (?, ?, ?, ?, ?)");
 	for (let t of i) c.run(s, t.parte, t.campo, Oe(e, t.campo, t.valor_anterior), Oe(e, t.campo, t.valor_nuevo));
 }
@@ -351,19 +361,19 @@ function Ge(e, t) {
 	return e.prepare("SELECT * FROM parroquias WHERE id = ?").get(t);
 }
 function Ke(e) {
-	if (e.role === "admin_general") throw new z(We, 403);
-	if (!e.parish_id) throw new z("El usuario no tiene una parroquia asignada.", 400);
+	if (e.role === "admin_general") throw new V(We, 403);
+	if (!e.parish_id) throw new V("El usuario no tiene una parroquia asignada.", 400);
 	return e.parish_id;
 }
 function qe(e, t, n) {
-	if (e.role === "admin_general") throw new z(We, 403);
-	if (e.parish_id !== t) throw new z(n, 403);
+	if (e.role === "admin_general") throw new V(We, 403);
+	if (e.parish_id !== t) throw new V(n, 403);
 }
 function Je(e, t, n) {
-	if (e.role !== "admin_general" && e.parish_id !== t) throw new z(n, 403);
+	if (e.role !== "admin_general" && e.parish_id !== t) throw new V(n, 403);
 }
 function Ye(e, t, n, r) {
-	if (qe(e, t, n), e.role !== "admin_parroquia") throw new z(r, 403);
+	if (qe(e, t, n), e.role !== "admin_parroquia") throw new V(r, 403);
 }
 //#endregion
 //#region electron/main/models/person.ts
@@ -383,15 +393,15 @@ var Xe = [
 ];
 function Ze(e) {
 	return {
-		dni: B(e.dni),
-		nombres: B(e.nombres) ?? "",
-		apellido_paterno: B(e.apellido_paterno) ?? "",
-		apellido_materno: B(e.apellido_materno) ?? "",
-		fecha_nacimiento: B(e.fecha_nacimiento),
-		fecha_aproximada: B(e.fecha_aproximada),
-		lugar_nacimiento: B(e.lugar_nacimiento),
-		padre: B(e.padre),
-		madre: B(e.madre)
+		dni: H(e.dni),
+		nombres: H(e.nombres) ?? "",
+		apellido_paterno: H(e.apellido_paterno) ?? "",
+		apellido_materno: H(e.apellido_materno) ?? "",
+		fecha_nacimiento: H(e.fecha_nacimiento),
+		fecha_aproximada: H(e.fecha_aproximada),
+		lugar_nacimiento: H(e.lugar_nacimiento),
+		padre: H(e.padre),
+		madre: H(e.madre)
 	};
 }
 function Qe(e, t) {
@@ -406,7 +416,7 @@ function $e(e, t, n) {
 	return Number(i.lastInsertRowid);
 }
 function et(e, t, n) {
-	let r = Ze(n), i = e.prepare(`SELECT ${I.join(", ")} FROM personas WHERE id = ?`).get(t), a = I.filter((e) => i[e] !== r[e]);
+	let r = Ze(n), i = e.prepare(`SELECT ${z.join(", ")} FROM personas WHERE id = ?`).get(t), a = z.filter((e) => i[e] !== r[e]);
 	if (a.length === 0) return;
 	let o = a.map((e) => `${e} = ?`).join(", "), s = a.map((e) => r[e]);
 	e.prepare(`UPDATE personas SET ${o} WHERE id = ?`).run(...s, t);
@@ -415,12 +425,12 @@ function tt(e) {
 	let t = Array.isArray(e.cambios) ? e.cambios.filter((e) => e.id === void 0) : [], n = [];
 	for (let r of t) {
 		let t = Xe.find((e) => e.column === r.campo_cambio);
-		if (!t) throw new z("La nota marginal indica un campo que no se puede corregir.", 400);
-		if (n.some((e) => e.campo_cambio === t.column)) throw new z(`La nota marginal repite el campo ${t.label}.`, 400);
-		let i = B(ve(e, t.column)), a = B(r.valor_nuevo);
-		if (!i) throw new z(`Complete ${t.label} antes de corregirlo en la nota marginal.`, 400);
-		if (!a) throw new z(`Indique el valor nuevo de ${t.label} en la nota marginal.`, 400);
-		if (a === i) throw new z(`El valor nuevo de ${t.label} es igual al anterior.`, 400);
+		if (!t) throw new V("La nota marginal indica un campo que no se puede corregir.", 400);
+		if (n.some((e) => e.campo_cambio === t.column)) throw new V(`La nota marginal repite el campo ${t.label}.`, 400);
+		let i = H(ve(e, t.column)), a = H(r.valor_nuevo);
+		if (!i) throw new V(`Complete ${t.label} antes de corregirlo en la nota marginal.`, 400);
+		if (!a) throw new V(`Indique el valor nuevo de ${t.label} en la nota marginal.`, 400);
+		if (a === i) throw new V(`El valor nuevo de ${t.label} es igual al anterior.`, 400);
 		n.push({
 			campo_cambio: t.column,
 			valor_anterior: i,
@@ -443,26 +453,57 @@ function rt(e, t) {
 	))`;
 }
 //#endregion
+//#region shared/partial_date.ts
+var it = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/, at = "?";
+function ot(e, t) {
+	let n = t ? Number(t) : 2e3;
+	return new Date(n, Number(e), 0).getDate();
+}
+function st(e) {
+	let [t = "", n = "", r = ""] = (e ?? "").split("-").map((e) => e === at ? "" : e);
+	return {
+		year: t,
+		month: n,
+		day: r
+	};
+}
+function ct(e) {
+	if (!e) return "";
+	let t = it.exec(e);
+	if (!t) return e;
+	let [, n, r, i] = t;
+	return [
+		i,
+		r,
+		n
+	].filter(Boolean).join("/");
+}
+function lt(e) {
+	if (!e) return null;
+	let { year: t, month: n, day: r } = st(e);
+	return t ? r && !n ? "falta el mes" : it.test(e) && r && Number(r) > ot(n, t) ? "ese día no existe en ese mes" : null : "falta el año";
+}
+//#endregion
 //#region electron/main/sync/queue.ts
-function U(e, t, n, r) {
+function ut(e, t, n, r) {
 	e.prepare("INSERT INTO sync_cola (entidad, client_id, version_base, cola_id) VALUES (?, ?, ?, ?)\n		 ON CONFLICT (entidad, client_id) DO UPDATE SET revision = revision + 1").run(t, n, r, crypto.randomUUID());
 }
-function it(e, t, n) {
+function dt(e, t, n) {
 	return e.prepare("SELECT 1 FROM sync_cola WHERE entidad = ? AND client_id = ?").get(t, n) !== void 0;
 }
-function at(e, t, n) {
+function ft(e, t, n) {
 	e.prepare("DELETE FROM sync_cola WHERE entidad = ? AND client_id = ?").run(t, n);
 }
-function ot(e, t) {
+function pt(e, t) {
 	let n = e.prepare("SELECT valor FROM sync_estado WHERE clave = ?").get(t);
 	return n ? n.valor : null;
 }
-function st(e, t, n) {
+function mt(e, t, n) {
 	e.prepare("INSERT INTO sync_estado (clave, valor) VALUES (?, ?)\n		 ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor").run(t, n);
 }
 //#endregion
 //#region electron/main/models/minister.ts
-function ct(e, t) {
+function ht(e, t) {
 	let n = e.prepare("SELECT * FROM ministros WHERE id = ?").get(t);
 	return n ? {
 		...n,
@@ -471,79 +512,79 @@ function ct(e, t) {
 }
 //#endregion
 //#region electron/main/models/sacrament.ts
-function lt(e) {
+function gt(e) {
 	return e === "bautismo" || e === "confirmacion" || e === "matrimonio";
 }
-function ut(e) {
+function _t(e) {
 	return e === "bautismo" ? "bautismos" : e === "confirmacion" ? "confirmaciones" : "matrimonios";
 }
-function dt(e) {
+function vt(e) {
 	return e === "matrimonio" ? ["conyuge_1_id", "conyuge_2_id"] : ["persona_id"];
 }
-function ft(e) {
+function yt(e) {
 	return e === "bautismo" ? "SELECT sacramento_id, persona_id FROM bautismos" : e === "confirmacion" ? "SELECT sacramento_id, persona_id FROM confirmaciones" : "SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios\n		UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios";
 }
-var pt = "SELECT sacramento_id, persona_id FROM bautismos\n	UNION ALL SELECT sacramento_id, persona_id FROM confirmaciones\n	UNION ALL SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios\n	UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios";
-function mt(e, t) {
+var bt = "SELECT sacramento_id, persona_id FROM bautismos\n	UNION ALL SELECT sacramento_id, persona_id FROM confirmaciones\n	UNION ALL SELECT sacramento_id, conyuge_1_id AS persona_id FROM matrimonios\n	UNION ALL SELECT sacramento_id, conyuge_2_id AS persona_id FROM matrimonios";
+function xt(e, t) {
 	let n = e.prepare("SELECT * FROM sacramentos WHERE id = ?").get(t);
 	if (!n) return null;
 	let r = null;
-	return n.ministro_id !== null && (r = ct(e, n.ministro_id)), {
+	return n.ministro_id !== null && (r = ht(e, n.ministro_id)), {
 		...n,
 		parroquia: Ge(e, n.parroquia_id),
 		ministro: r
 	};
 }
-function ht(e) {
-	let t = B(e.fecha_emision), n = B(e.libro), r = B(e.folio), i = B(e.numero);
-	if (!n || !r || !i) throw new z("El libro, el folio y el número de registro son requeridos.", 400);
+function St(e) {
+	let t = H(e.fecha_emision), n = H(e.libro), r = H(e.folio), i = H(e.numero);
+	if (!n || !r || !i) throw new V("El libro, el folio y el número de registro son requeridos.", 400);
 	return {
 		fecha_emision: t,
 		libro: n,
 		folio: r,
 		numero: i,
 		ministro_id: e.ministro_id ?? null,
-		fecha_evento: B(e.fecha_evento),
-		anotaciones: B(e.anotaciones)
+		fecha_evento: H(e.fecha_evento),
+		anotaciones: H(e.anotaciones)
 	};
 }
-function gt(e, t, n) {
+function Ct(e, t, n) {
 	let r = e.prepare("SELECT parroquia_id FROM sacramentos WHERE id = ? AND tipo = ?").get(t, n);
-	if (!r) throw new z("Partida no encontrada.", 404);
+	if (!r) throw new V("Partida no encontrada.", 404);
 	return r.parroquia_id;
 }
-var _t = "No tiene permiso para modificar partidas de otra parroquia.";
-function vt(e, t, n, r) {
-	Ye(t, gt(e, n, r), _t, "Solo el administrador de la parroquia puede modificar o anular una partida. Pida la corrección con una nota marginal.");
+var wt = "No tiene permiso para modificar partidas de otra parroquia.";
+function Tt(e, t, n, r) {
+	Ye(t, Ct(e, n, r), wt, "Solo el administrador de la parroquia puede modificar o anular una partida. Pida la corrección con una nota marginal.");
 }
-function yt(e, t, n) {
+function Et(e, t, n) {
 	if (t === null) return;
 	let r = e.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(t);
-	if (r && r.parroquia_id !== n) throw new z("El celebrante debe ser de la parroquia de la partida.", 400);
+	if (r && r.parroquia_id !== n) throw new V("El celebrante debe ser de la parroquia de la partida.", 400);
 }
-function bt(e, t, n, r, i) {
-	let a = ht(i);
-	yt(e, a.ministro_id, r);
+function Dt(e, t, n, r, i) {
+	let a = St(i);
+	Et(e, a.ministro_id, r);
 	let o = e.prepare("INSERT INTO sacramentos (client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t, n, r, a.ministro_id, a.libro, a.folio, a.numero, a.fecha_emision, a.fecha_evento, a.anotaciones);
 	return Number(o.lastInsertRowid);
 }
-function xt(e, t, n) {
-	let r = ht(n), i = e.prepare("SELECT ministro_id, parroquia_id FROM sacramentos WHERE id = ?").get(t);
-	r.ministro_id !== i.ministro_id && yt(e, r.ministro_id, i.parroquia_id), e.prepare("UPDATE sacramentos\n		 SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?\n		 WHERE id = ?").run(r.ministro_id, r.libro, r.folio, r.numero, r.fecha_emision, r.fecha_evento, r.anotaciones, t);
+function Ot(e, t, n) {
+	let r = St(n), i = e.prepare("SELECT ministro_id, parroquia_id FROM sacramentos WHERE id = ?").get(t);
+	r.ministro_id !== i.ministro_id && Et(e, r.ministro_id, i.parroquia_id), e.prepare("UPDATE sacramentos\n		 SET ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?\n		 WHERE id = ?").run(r.ministro_id, r.libro, r.folio, r.numero, r.fecha_emision, r.fecha_evento, r.anotaciones, t);
 }
 //#endregion
 //#region electron/main/models/record.ts
-var St = "Partida no encontrada.";
-function Ct(e, t, n) {
-	let r = mt(e, t);
-	if (!r || r.tipo !== n) throw new z(St, 404);
+var kt = "Partida no encontrada.";
+function At(e, t, n) {
+	let r = xt(e, t);
+	if (!r || r.tipo !== n) throw new V(kt, 404);
 	return {
 		...r,
 		solicitudes: Fe(e, t)
 	};
 }
-function wt(e, t, n) {
-	let r = Ct(e, n, t), i = e.prepare(`SELECT * FROM ${ut(t)} WHERE sacramento_id = ?`).get(n);
+function jt(e, t, n) {
+	let r = At(e, n, t), i = e.prepare(`SELECT * FROM ${_t(t)} WHERE sacramento_id = ?`).get(n);
 	return {
 		sacramento: r,
 		persona: Qe(e, i.persona_id),
@@ -551,8 +592,8 @@ function wt(e, t, n) {
 		padrino_2: i.padrino_2
 	};
 }
-function Tt(e, t) {
-	let n = Ct(e, t, "matrimonio"), r = e.prepare("SELECT * FROM matrimonios WHERE sacramento_id = ?").get(t);
+function Mt(e, t) {
+	let n = At(e, t, "matrimonio"), r = e.prepare("SELECT * FROM matrimonios WHERE sacramento_id = ?").get(t);
 	return {
 		sacramento: n,
 		conyuge_1: Qe(e, r.conyuge_1_id),
@@ -568,76 +609,48 @@ function Tt(e, t) {
 		conyuge_2_bautismo_fecha: r.conyuge_2_bautismo_fecha
 	};
 }
-function Et(e, t) {
+function Nt(e, t) {
 	let n = e.prepare("SELECT tipo FROM sacramentos WHERE id = ?").get(t);
-	if (!n) throw new z(St, 404);
-	return n.tipo === "matrimonio" ? Tt(e, t) : wt(e, n.tipo, t);
+	if (!n) throw new V(kt, 404);
+	return n.tipo === "matrimonio" ? Mt(e, t) : jt(e, n.tipo, t);
 }
-var Dt = [
-	{
-		field: "nombres",
-		label: "nombres"
-	},
-	{
-		field: "apellido_paterno",
-		label: "apellido paterno"
-	},
-	{
-		field: "apellido_materno",
-		label: "apellido materno"
-	}
-], Ot = [
-	{
-		field: "lugar_nacimiento",
-		label: "lugar de nacimiento"
-	},
-	{
-		field: "padre",
-		label: "padre"
-	},
-	{
-		field: "madre",
-		label: "madre"
-	}
-], kt = {
+var Pt = {
 	persona: "",
 	conyuge_1: " del esposo",
 	conyuge_2: " de la esposa",
 	sacramento: "",
 	detalle: ""
 };
-function At(e) {
-	return !!(B(e?.fecha_nacimiento) || B(e?.fecha_aproximada));
+function Ft(e, t) {
+	let n = lt(e);
+	if (n) throw new V(`La ${t} está incompleta: ${n}.`, 400);
 }
-function jt(e, t, n) {
-	let r = [];
-	for (let { field: t, label: n } of Dt) B(e?.[t]) || r.push(n);
-	(t === null || At(t)) && !At(e) && r.push("fecha de nacimiento (o fecha aproximada)");
-	for (let { field: n, label: i } of Ot) (t === null || B(t[n]) !== null) && !B(e?.[n]) && r.push(i);
-	if (r.length > 0) throw new z(`Faltan datos${n}: ${r.join(", ")}.`, 400);
+function It(e) {
+	Ft(e.sacramento?.fecha_evento, "fecha del sacramento");
+	for (let t of le(e.sacramento.tipo)) Ft(pe(e, t)?.fecha_nacimiento, `fecha de nacimiento${Pt[t]}`);
+	if (e.sacramento.tipo === "matrimonio") {
+		let t = e;
+		Ft(t.conyuge_1_bautismo_fecha, "fecha de bautismo del esposo"), Ft(t.conyuge_2_bautismo_fecha, "fecha de bautismo de la esposa");
+	}
 }
-function Mt(e, t) {
-	for (let n of de(e.sacramento.tipo)) jt(L(e, n), t ? L(t, n) : null, kt[n]);
-	if ((t === null || t.sacramento.ministro_id !== null) && !e.sacramento?.ministro_id) throw new z("Seleccione el celebrante.", 400);
-}
-function Nt(e, t) {
+function Lt(e, t) {
 	let n = e.prepare("SELECT tipo, client_id, version FROM sacramentos WHERE id = ?").get(t);
-	U(e, n.tipo, n.client_id, n.version);
+	ut(e, n.tipo, n.client_id, n.version);
 }
-function Pt(e) {
+function Rt(e) {
 	return [
-		B(e.lugar),
-		B(e.testigo_1),
-		B(e.testigo_2),
-		B(e.testigo_3),
-		B(e.testigo_4),
-		B(e.conyuge_1_bautismo_parroquia),
-		B(e.conyuge_1_bautismo_fecha),
-		B(e.conyuge_2_bautismo_parroquia),
-		B(e.conyuge_2_bautismo_fecha)
+		H(e.lugar),
+		H(e.testigo_1),
+		H(e.testigo_2),
+		H(e.testigo_3),
+		H(e.testigo_4),
+		H(e.conyuge_1_bautismo_parroquia),
+		H(e.conyuge_1_bautismo_fecha),
+		H(e.conyuge_2_bautismo_parroquia),
+		H(e.conyuge_2_bautismo_fecha)
 	];
 }
-function Ft(e, t) {
+function zt(e, t) {
 	return t.map((t) => ({
 		parte: e,
 		campo: t.campo_cambio,
@@ -645,9 +658,9 @@ function Ft(e, t) {
 		valor_nuevo: t.valor_nuevo
 	}));
 }
-function It(e, t, n, r) {
-	return de(n.sacramento.tipo).map((i) => {
-		let a = L(n, i), o = tt(a);
+function Bt(e, t, n, r) {
+	return le(n.sacramento.tipo).map((i) => {
+		let a = pe(n, i), o = tt(a);
 		return {
 			id: $e(e, t, r ? o.person : a),
 			part: i,
@@ -655,44 +668,44 @@ function It(e, t, n, r) {
 		};
 	});
 }
-function Lt(e) {
-	return e.flatMap((e) => Ft(e.part, e.corrections));
+function Vt(e) {
+	return e.flatMap((e) => zt(e.part, e.corrections));
 }
-function Rt(e, t, n, r) {
+function Ht(e, t, n, r) {
 	let i = n.sacramento.tipo;
 	if (i === "matrimonio") {
-		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t, r[0], r[1], ...Pt(n));
+		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t, r[0], r[1], ...Rt(n));
 		return;
 	}
 	let a = n;
-	e.prepare(`INSERT INTO ${ut(i)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(t, r[0], B(a.padrino_1), B(a.padrino_2));
+	e.prepare(`INSERT INTO ${_t(i)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(t, r[0], H(a.padrino_1), H(a.padrino_2));
 }
-function zt(e, t, n) {
+function Ut(e, t, n) {
 	let r = n.sacramento.tipo;
 	if (r === "matrimonio") {
-		e.prepare("UPDATE matrimonios SET\n				lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,\n				conyuge_1_bautismo_parroquia = ?, conyuge_1_bautismo_fecha = ?,\n				conyuge_2_bautismo_parroquia = ?, conyuge_2_bautismo_fecha = ?\n			 WHERE sacramento_id = ?").run(...Pt(n), t);
+		e.prepare("UPDATE matrimonios SET\n				lugar = ?, testigo_1 = ?, testigo_2 = ?, testigo_3 = ?, testigo_4 = ?,\n				conyuge_1_bautismo_parroquia = ?, conyuge_1_bautismo_fecha = ?,\n				conyuge_2_bautismo_parroquia = ?, conyuge_2_bautismo_fecha = ?\n			 WHERE sacramento_id = ?").run(...Rt(n), t);
 		return;
 	}
 	let i = n;
-	e.prepare(`UPDATE ${ut(r)} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(B(i.padrino_1), B(i.padrino_2), t);
+	e.prepare(`UPDATE ${_t(r)} SET padrino_1 = ?, padrino_2 = ? WHERE sacramento_id = ?`).run(H(i.padrino_1), H(i.padrino_2), t);
 }
-function Bt(e, t, n, r) {
-	Mt(r, n);
+function Wt(e, t, n, r) {
+	It(r);
 	let i = n.sacramento.id, a = [];
-	for (let o of de(n.sacramento.tipo)) {
-		let s = L(n, o), c = s.id, l = L(r, o), u = (l.cambios ?? []).filter((e) => e.id === void 0), d = tt({
+	for (let o of le(n.sacramento.tipo)) {
+		let s = pe(n, o), c = s.id, l = pe(r, o), u = (l.cambios ?? []).filter((e) => e.id === void 0), d = tt({
 			...l,
 			cambios: [...s.cambios, ...u]
 		});
-		et(e, c, d.person), nt(e, t, c, i, d.corrections), a.push(...Ft(o, d.corrections));
+		et(e, c, d.person), nt(e, t, c, i, d.corrections), a.push(...zt(o, d.corrections));
 	}
-	return xt(e, i, r.sacramento), zt(e, i, r), {
+	return Ot(e, i, r.sacramento), Ut(e, i, r), {
 		fields: _e(n, r),
 		corrections: a
 	};
 }
-function Vt(e, t, n, r) {
-	let i = L(e, t), a = {
+function Gt(e, t, n, r) {
+	let i = pe(e, t), a = {
 		campo_cambio: n,
 		valor_nuevo: r
 	};
@@ -706,17 +719,17 @@ function Vt(e, t, n, r) {
 }
 //#endregion
 //#region electron/main/controllers/requests.ts
-var Ht = "Solo un administrador de la parroquia puede aprobar o rechazar cambios.", Ut = "La partida tiene un cambio pendiente de aprobación. Un administrador de la parroquia debe aprobarlo o rechazarlo primero.", Wt = "Descartada al editar la partida";
-function Gt(e, t) {
+var Kt = "Solo un administrador de la parroquia puede aprobar o rechazar cambios.", qt = "La partida tiene un cambio pendiente de aprobación. Un administrador de la parroquia debe aprobarlo o rechazarlo primero.", Jt = "Descartada al editar la partida";
+function Yt(e, t) {
 	return e.map((e) => ({
 		...e,
 		tipo: t
 	}));
 }
-function Kt(e, t) {
+function Xt(e, t) {
 	let n = [];
-	for (let r of de(e.sacramento.tipo)) {
-		let i = L(t, r), a = Array.isArray(i?.cambios) ? i.cambios.filter((e) => e.id === void 0) : [], o = L(e, r), s = tt({
+	for (let r of le(e.sacramento.tipo)) {
+		let i = pe(t, r), a = Array.isArray(i?.cambios) ? i.cambios.filter((e) => e.id === void 0) : [], o = pe(e, r), s = tt({
 			...o,
 			cambios: [...o.cambios, ...a]
 		}).corrections;
@@ -729,118 +742,118 @@ function Kt(e, t) {
 	}
 	return n;
 }
-function qt(e, t, n) {
-	let r = V(n.sacramento?.id), i = Et(e, r);
-	if (qe(t, i.sacramento.parroquia_id, _t), i.sacramento.estado === "anulado") throw new z("Una partida anulada no admite cambios.", 409);
-	if (je(e, r)) throw new z(Ut, 409);
-	let a = B(n.sacramento?.anotaciones), o = B(i.sacramento.anotaciones) === null && a !== null, s = _e(i, n).filter((e) => !(o && e.campo === "anotaciones")), c = Kt(i, n);
-	if (c.some((e) => s.some((t) => t.parte === e.parte && t.campo === e.campo))) throw new z("No cambie el mismo dato en el formulario y en la nota marginal a la vez.", 400);
-	if (s.length === 0 && c.length === 0 && !o) throw new z("No hay cambios para pedir.", 400);
-	Mt(n, i);
-	let l = [...Gt(s, "digitacion"), ...Gt(c, "nota_marginal")];
+function Zt(e, t, n) {
+	let r = U(n.sacramento?.id), i = Nt(e, r);
+	if (qe(t, i.sacramento.parroquia_id, wt), i.sacramento.estado === "anulado") throw new V("Una partida anulada no admite cambios.", 409);
+	if (je(e, r)) throw new V(qt, 409);
+	let a = H(n.sacramento?.anotaciones), o = H(i.sacramento.anotaciones) === null && a !== null, s = _e(i, n).filter((e) => !(o && e.campo === "anotaciones")), c = Xt(i, n);
+	if (c.some((e) => s.some((t) => t.parte === e.parte && t.campo === e.campo))) throw new V("No cambie el mismo dato en el formulario y en la nota marginal a la vez.", 400);
+	if (s.length === 0 && c.length === 0 && !o) throw new V("No hay cambios para pedir.", 400);
+	It(n);
+	let l = [...Yt(s, "digitacion"), ...Yt(c, "nota_marginal")];
 	e.transaction(() => {
-		Nt(e, r), o && (e.prepare("UPDATE sacramentos SET anotaciones = ? WHERE id = ?").run(a, r), H(e, r, t.user_id, "editada", [{
+		Lt(e, r), o && (e.prepare("UPDATE sacramentos SET anotaciones = ? WHERE id = ?").run(a, r), W(e, r, t.user_id, "editada", [{
 			parte: "sacramento",
 			campo: "anotaciones",
 			valor_anterior: null,
 			valor_nuevo: a
-		}])), l.length > 0 && (Ne(e, r, t.user_id, l), H(e, r, t.user_id, "cambio_pedido", l));
+		}])), l.length > 0 && (Ne(e, r, t.user_id, l), W(e, r, t.user_id, "cambio_pedido", l));
 	})();
 }
-function Jt(e, t) {
+function Qt(e, t) {
 	let n = e;
-	for (let e of t) n = e.tipo === "nota_marginal" ? Vt(n, e.parte, e.campo, e.valor_nuevo) : ge(n, e.parte, e.campo, e.valor_nuevo);
+	for (let e of t) n = e.tipo === "nota_marginal" ? Gt(n, e.parte, e.campo, e.valor_nuevo) : ge(n, e.parte, e.campo, e.valor_nuevo);
 	return n;
 }
-function Yt(e, t) {
-	return t.every((t) => t.tipo === "digitacion" ? he(e, t.parte, t.campo) === t.valor_nuevo : (L(e, t.parte).cambios ?? []).some((e) => e.id === void 0 && e.campo_cambio === t.campo && B(e.valor_nuevo) === t.valor_nuevo));
+function $t(e, t) {
+	return t.every((t) => t.tipo === "digitacion" ? he(e, t.parte, t.campo) === t.valor_nuevo : (pe(e, t.parte).cambios ?? []).some((e) => e.id === void 0 && e.campo_cambio === t.campo && H(e.valor_nuevo) === t.valor_nuevo));
 }
-function Xt(e, t) {
-	Ye(e, t.sacramento.parroquia_id, _t, Ht);
+function en(e, t) {
+	Ye(e, t.sacramento.parroquia_id, wt, Kt);
 }
-function Zt(e, t, n, r) {
-	if (r !== "aprobado" && r !== "rechazado") throw new z("Indique si aprueba o rechaza el cambio.", 400);
-	let i = Et(e, n);
-	Xt(t, i);
+function tn(e, t, n, r) {
+	if (r !== "aprobado" && r !== "rechazado") throw new V("Indique si aprueba o rechaza el cambio.", 400);
+	let i = Nt(e, n);
+	en(t, i);
 	let a = Me(e, n);
-	if (a.length === 0) throw new z("La partida no tiene cambios pendientes.", 409);
+	if (a.length === 0) throw new V("La partida no tiene cambios pendientes.", 409);
 	e.transaction(() => {
-		Nt(e, n), r === "aprobado" ? (Bt(e, t, i, Jt(i, a)), H(e, n, t.user_id, "cambio_aprobado", a)) : H(e, n, t.user_id, "cambio_rechazado", a), Pe(e, n, r, t.user_id), e.prepare("UPDATE sacramentos SET updated_at = ? WHERE id = ?").run((/* @__PURE__ */ new Date()).toISOString(), n);
+		Lt(e, n), r === "aprobado" ? (Wt(e, t, i, Qt(i, a)), W(e, n, t.user_id, "cambio_aprobado", a)) : W(e, n, t.user_id, "cambio_rechazado", a), Pe(e, n, r, t.user_id), e.prepare("UPDATE sacramentos SET updated_at = ? WHERE id = ?").run((/* @__PURE__ */ new Date()).toISOString(), n);
 	})();
 }
-function Qt(e, t, n, r) {
+function nn(e, t, n, r) {
 	let i = Me(e, n);
 	if (i.length !== 0) {
-		if (Yt(r, i)) {
-			Pe(e, n, "aprobado", t.user_id), H(e, n, t.user_id, "cambio_aprobado", i);
+		if ($t(r, i)) {
+			Pe(e, n, "aprobado", t.user_id), W(e, n, t.user_id, "cambio_aprobado", i);
 			return;
 		}
-		Pe(e, n, "descartado", t.user_id, Wt), H(e, n, t.user_id, "cambio_descartado", i, Wt);
+		Pe(e, n, "descartado", t.user_id, Jt), W(e, n, t.user_id, "cambio_descartado", i, Jt);
 	}
 }
-function $t(e, t) {
-	if (t.role !== "admin_parroquia" || !t.parish_id) throw new z(Ht, 403);
+function rn(e, t) {
+	if (t.role !== "admin_parroquia" || !t.parish_id) throw new V(Kt, 403);
 	return e.prepare("SELECT r.sacramento_id, MIN(r.id) AS primera, u.nombre, u.apellido_paterno, u.apellido_materno\n			 FROM solicitudes_cambio r\n			 JOIN sacramentos s ON s.id = r.sacramento_id\n			 LEFT JOIN usuarios u ON u.id = r.usuario_id\n			 WHERE r.estado = 'pendiente' AND s.parroquia_id = ?\n			 GROUP BY r.sacramento_id\n			 ORDER BY primera").all(t.parish_id).map((t) => ({
-		partida: Et(e, t.sacramento_id),
+		partida: Nt(e, t.sacramento_id),
 		solicitado_por: Ee(t.nombre, t.apellido_paterno, t.apellido_materno)
 	}));
 }
-var en = {
-	"requests.pending": (e, { db: t, session: n }) => ({ pendientes: $t(t, n) }),
-	"requests.review": (e, { db: t, session: n }) => (Zt(t, n, V(e.sacramento_id), e.decision), { success: !0 })
-}, tn = 32, nn = 32, rn = 16, an = {
+var an = {
+	"requests.pending": (e, { db: t, session: n }) => ({ pendientes: rn(t, n) }),
+	"requests.review": (e, { db: t, session: n }) => (tn(t, n, U(e.sacramento_id), e.decision), { success: !0 })
+}, on = 32, sn = 32, cn = 16, ln = {
 	N: 2 ** 15,
 	r: 8,
 	p: 1,
 	maxmem: 67108864
 };
-function on() {
-	return C(tn).toString("hex");
+function un() {
+	return w(on).toString("hex");
 }
-function sn(e, t, n, r) {
+function dn(e, t, n, r) {
 	return new Promise((i, a) => {
-		w(e.normalize("NFKC"), t, r, n, (e, t) => {
+		E(e.normalize("NFKC"), t, r, n, (e, t) => {
 			e ? a(e) : i(t);
 		});
 	});
 }
-async function cn(e) {
-	let t = C(rn), n = await sn(e, t, an, nn);
-	return `scrypt:${an.N}:${an.r}:${an.p}:${t.toString("base64")}:${n.toString("base64")}`;
+async function fn(e) {
+	let t = w(cn), n = await dn(e, t, ln, sn);
+	return `scrypt:${ln.N}:${ln.r}:${ln.p}:${t.toString("base64")}:${n.toString("base64")}`;
 }
-var ln = 1e5, un = 256;
-function dn(e, t, n) {
+var pn = 1e5, mn = 256;
+function hn(e, t, n) {
 	return new Promise((r, i) => {
-		S(e, t, n, un / 8, "sha256", (e, t) => {
+		C(e, t, n, mn / 8, "sha256", (e, t) => {
 			e ? i(e) : r(t);
 		});
 	});
 }
-async function fn(e) {
-	let t = C(rn), n = await dn(e, t, ln);
-	return `${ln}:${t.toString("base64")}:${n.toString("base64")}`;
+async function gn(e) {
+	let t = w(cn), n = await hn(e, t, pn);
+	return `${pn}:${t.toString("base64")}:${n.toString("base64")}`;
 }
-async function pn(e, t) {
+async function _n(e, t) {
 	let [n, r, i] = t.split(":");
 	if (!/^\d+$/.test(n ?? "") || !r || !i) return !1;
-	let a = Buffer.from(i, "base64"), o = await dn(e, Buffer.from(r, "base64"), Number(n));
-	return o.length === a.length && T(o, a);
+	let a = Buffer.from(i, "base64"), o = await hn(e, Buffer.from(r, "base64"), Number(n));
+	return o.length === a.length && D(o, a);
 }
-async function mn(e, t) {
-	if (!t.startsWith("scrypt:")) return pn(e, t);
+async function vn(e, t) {
+	if (!t.startsWith("scrypt:")) return _n(e, t);
 	let [, n, r, i, a, o] = t.split(":");
 	if (!a || !o) return !1;
 	let s = Buffer.from(o, "base64"), c = {
 		N: Number(n),
 		r: Number(r),
 		p: Number(i),
-		maxmem: an.maxmem
-	}, l = await sn(e, Buffer.from(a, "base64"), c, s.length);
-	return T(l, s);
+		maxmem: ln.maxmem
+	}, l = await dn(e, Buffer.from(a, "base64"), c, s.length);
+	return D(l, s);
 }
-var hn = 12;
-async function gn(e, t) {
-	let n = C(rn), r = C(hn), i = await sn(e, n, an, tn), a = x("aes-256-gcm", i, r), o = Buffer.concat([a.update(t), a.final()]);
+var yn = 12;
+async function bn(e, t) {
+	let n = w(cn), r = w(yn), i = await dn(e, n, ln, on), a = ee("aes-256-gcm", i, r), o = Buffer.concat([a.update(t), a.final()]);
 	return {
 		sal: n.toString("base64"),
 		iv: r.toString("base64"),
@@ -848,10 +861,10 @@ async function gn(e, t) {
 		datos: o.toString("base64")
 	};
 }
-async function _n(e, t) {
-	let n = await sn(e, Buffer.from(t.sal, "base64"), an, tn);
+async function xn(e, t) {
+	let n = await dn(e, Buffer.from(t.sal, "base64"), ln, on);
 	try {
-		let e = ee("aes-256-gcm", n, Buffer.from(t.iv, "base64"));
+		let e = S("aes-256-gcm", n, Buffer.from(t.iv, "base64"));
 		return e.setAuthTag(Buffer.from(t.etiqueta, "base64")), Buffer.concat([e.update(Buffer.from(t.datos, "base64")), e.final()]);
 	} catch {
 		return null;
@@ -859,7 +872,7 @@ async function _n(e, t) {
 }
 //#endregion
 //#region electron/main/db/migrations.ts
-var vn = [
+var Sn = [
 	"\n  CREATE TABLE parroquias (\n    id        INTEGER PRIMARY KEY,\n    nombre    TEXT    NOT NULL,\n    ubicacion TEXT,\n    activa    INTEGER NOT NULL DEFAULT 1\n  );\n\n  CREATE TABLE usuarios (\n    id               INTEGER PRIMARY KEY,\n    parroquia_id     INTEGER REFERENCES parroquias(id),\n    username         TEXT    NOT NULL UNIQUE,\n    rol              TEXT    NOT NULL CHECK (rol IN ('admin', 'usuario_parroquia')),\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1\n  );\n\n  CREATE TABLE ministros (\n    id               INTEGER PRIMARY KEY,\n    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),\n    titulo           TEXT,\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1\n  );\n\n  CREATE TABLE personas (\n    id               INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id        TEXT    NOT NULL UNIQUE,\n    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),\n    dni              TEXT    CHECK (dni IS NULL OR dni <> ''),\n    nombres          TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL DEFAULT '',\n    fecha_nacimiento TEXT,\n    edad             INTEGER CHECK (edad IS NULL OR edad >= 0),\n    lugar_nacimiento TEXT,\n    padre            TEXT,\n    madre            TEXT,\n    version          INTEGER NOT NULL DEFAULT 1,\n    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n  CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;\n  CREATE INDEX idx_personas_busqueda ON personas (nombres, apellido_paterno, apellido_materno);\n\n  CREATE TABLE sacramentos (\n    id                     INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id              TEXT    NOT NULL UNIQUE,\n    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),\n    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),\n    ministro_id            INTEGER REFERENCES ministros(id),\n    libro                  TEXT    NOT NULL,\n    folio                  TEXT    NOT NULL,\n    numero                 TEXT    NOT NULL,\n    fecha_emision          TEXT    NOT NULL,\n    fecha_evento           TEXT,\n    anotaciones            TEXT,\n    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),\n    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),\n    anulado_en             TEXT,\n    motivo_anulacion       TEXT,\n    version                INTEGER NOT NULL DEFAULT 1,\n    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    -- Permite que cada subtipo enlace (id, tipo): un bautismo no puede colgar de un matrimonio.\n    UNIQUE (id, tipo),\n    CHECK (\n      estado = 'vigente'\n      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL\n          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')\n    )\n  );\n  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);\n\n  CREATE TABLE matrimonios (\n    sacramento_id                INTEGER PRIMARY KEY,\n    tipo                         TEXT    NOT NULL DEFAULT 'matrimonio' CHECK (tipo = 'matrimonio'),\n    conyuge_1_id                 INTEGER NOT NULL REFERENCES personas(id),\n    conyuge_2_id                 INTEGER NOT NULL REFERENCES personas(id),\n    lugar                        TEXT,\n    testigo_1                    TEXT,\n    testigo_2                    TEXT,\n    testigo_3                    TEXT,\n    testigo_4                    TEXT,\n    conyuge_1_bautismo_parroquia TEXT,\n    conyuge_1_bautismo_fecha     TEXT,\n    conyuge_2_bautismo_parroquia TEXT,\n    conyuge_2_bautismo_fecha     TEXT,\n    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo),\n    CHECK (conyuge_1_id <> conyuge_2_id)\n  );\n  CREATE INDEX idx_matrimonios_conyuge_1 ON matrimonios (conyuge_1_id);\n  CREATE INDEX idx_matrimonios_conyuge_2 ON matrimonios (conyuge_2_id);\n\n  CREATE TABLE bautismos (\n    sacramento_id INTEGER PRIMARY KEY,\n    tipo          TEXT    NOT NULL DEFAULT 'bautismo' CHECK (tipo = 'bautismo'),\n    persona_id    INTEGER NOT NULL REFERENCES personas(id),\n    padrino_1     TEXT,\n    padrino_2     TEXT,\n    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)\n  );\n  CREATE INDEX idx_bautismos_persona ON bautismos (persona_id);\n\n  CREATE TABLE confirmaciones (\n    sacramento_id INTEGER PRIMARY KEY,\n    tipo          TEXT    NOT NULL DEFAULT 'confirmacion' CHECK (tipo = 'confirmacion'),\n    persona_id    INTEGER NOT NULL REFERENCES personas(id),\n    padrino_1     TEXT,\n    padrino_2     TEXT,\n    FOREIGN KEY (sacramento_id, tipo) REFERENCES sacramentos (id, tipo)\n  );\n  CREATE INDEX idx_confirmaciones_persona ON confirmaciones (persona_id);\n\n  CREATE TABLE cambios_persona (\n    id             INTEGER PRIMARY KEY AUTOINCREMENT,\n    -- Evita duplicar la corrección si se reenvía tras un corte de internet.\n    client_id      TEXT    NOT NULL UNIQUE,\n    persona_id     INTEGER NOT NULL REFERENCES personas(id),\n    sacramento_id  INTEGER REFERENCES sacramentos(id),\n    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id),\n    campo_cambio   TEXT    NOT NULL,\n    valor_anterior TEXT,\n    valor_nuevo    TEXT,\n    fecha_cambio   TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n  CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);\n\n  -- Cada UPDATE sube version, salvo que la sincronización ya la haya fijado.\n  CREATE TRIGGER trg_personas_touch\n  AFTER UPDATE ON personas\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE personas\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n\n  CREATE TRIGGER trg_sacramentos_touch\n  AFTER UPDATE ON sacramentos\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE sacramentos\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n  ",
 	"\n  CREATE TABLE ministros_nueva (\n    id               INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id        TEXT    NOT NULL UNIQUE,\n    parroquia_id     INTEGER NOT NULL REFERENCES parroquias(id),\n    titulo           TEXT,\n    nombre           TEXT    NOT NULL,\n    apellido_paterno TEXT    NOT NULL,\n    apellido_materno TEXT    NOT NULL,\n    activo           INTEGER NOT NULL DEFAULT 1,\n    version          INTEGER NOT NULL DEFAULT 1,\n    created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))\n  );\n\n  INSERT INTO ministros_nueva (id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo)\n  SELECT id, 'servidor-' || id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo\n  FROM ministros;\n\n  DROP TABLE ministros;\n  ALTER TABLE ministros_nueva RENAME TO ministros;\n\n  CREATE INDEX idx_ministros_busqueda ON ministros (nombre, apellido_paterno, apellido_materno);\n\n  CREATE TRIGGER trg_ministros_touch\n  AFTER UPDATE ON ministros\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE ministros\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n  ",
 	"\n  -- Registros con cambios sin subir. Se envía su estado final, así que basta una fila por registro.\n  -- version_base: última versión que conoce el servidor; NULL si el registro aún no existe allí.\n  CREATE TABLE sync_cola (\n    id           INTEGER PRIMARY KEY AUTOINCREMENT,\n    entidad      TEXT    NOT NULL CHECK (entidad IN ('bautismo', 'confirmacion', 'matrimonio', 'ministro')),\n    client_id    TEXT    NOT NULL,\n    version_base INTEGER,\n    creado_en    TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    UNIQUE (entidad, client_id)\n  );\n\n  INSERT INTO sync_cola (entidad, client_id)\n  SELECT tipo, client_id FROM sacramentos ORDER BY id;\n\n  INSERT INTO sync_cola (entidad, client_id)\n  SELECT 'ministro', client_id FROM ministros ORDER BY id;\n  ",
@@ -874,10 +887,10 @@ var vn = [
 	"\n  UPDATE personas\n  SET nombres = (\n    SELECT c.valor_anterior FROM cambios_persona c\n    WHERE c.persona_id = personas.id AND c.campo_cambio = 'nombres' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL\n    ORDER BY c.fecha_cambio, c.id LIMIT 1\n  )\n  WHERE EXISTS (\n    SELECT 1 FROM cambios_persona c\n    WHERE c.persona_id = personas.id AND c.campo_cambio = 'nombres' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL\n  );\n\n  UPDATE personas\n  SET apellido_paterno = (\n    SELECT c.valor_anterior FROM cambios_persona c\n    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_paterno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL\n    ORDER BY c.fecha_cambio, c.id LIMIT 1\n  )\n  WHERE EXISTS (\n    SELECT 1 FROM cambios_persona c\n    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_paterno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL\n  );\n\n  UPDATE personas\n  SET apellido_materno = (\n    SELECT c.valor_anterior FROM cambios_persona c\n    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_materno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL\n    ORDER BY c.fecha_cambio, c.id LIMIT 1\n  )\n  WHERE EXISTS (\n    SELECT 1 FROM cambios_persona c\n    WHERE c.persona_id = personas.id AND c.campo_cambio = 'apellido_materno' AND c.estado = 'aprobado' AND c.valor_anterior IS NOT NULL\n  );\n  ",
 	"\n  UPDATE sync_cola SET version_base = version_base + 1\n  WHERE version_base IS NOT NULL AND client_id IN (\n    SELECT client_id FROM sacramentos\n    WHERE fecha_evento IS NOT NULL AND fecha_emision <> fecha_evento\n    AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada')\n  );\n\n  UPDATE sacramentos\n  SET fecha_emision = fecha_evento, version = version + 1\n  WHERE fecha_evento IS NOT NULL AND fecha_emision <> fecha_evento\n    AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada');\n  ",
 	"\n  CREATE TABLE sacramentos_respaldo AS SELECT * FROM sacramentos;\n\n  DROP TABLE sacramentos;\n\n  CREATE TABLE sacramentos (\n    id                     INTEGER PRIMARY KEY AUTOINCREMENT,\n    client_id              TEXT    NOT NULL UNIQUE,\n    tipo                   TEXT    NOT NULL CHECK (tipo IN ('matrimonio', 'bautismo', 'confirmacion')),\n    parroquia_id           INTEGER NOT NULL REFERENCES parroquias(id),\n    ministro_id            INTEGER REFERENCES ministros(id),\n    libro                  TEXT    NOT NULL,\n    folio                  TEXT    NOT NULL,\n    numero                 TEXT    NOT NULL,\n    fecha_emision          TEXT,\n    fecha_evento           TEXT,\n    anotaciones            TEXT,\n    estado                 TEXT    NOT NULL DEFAULT 'vigente' CHECK (estado IN ('vigente', 'anulado')),\n    anulado_por_usuario_id INTEGER REFERENCES usuarios(id),\n    anulado_en             TEXT,\n    motivo_anulacion       TEXT,\n    version                INTEGER NOT NULL DEFAULT 1,\n    created_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),\n    UNIQUE (id, tipo),\n    CHECK (\n      estado = 'vigente'\n      OR (anulado_por_usuario_id IS NOT NULL AND anulado_en IS NOT NULL\n          AND motivo_anulacion IS NOT NULL AND motivo_anulacion <> '')\n    )\n  );\n\n  INSERT INTO sacramentos\n    (id, client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,\n     estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, created_at, updated_at)\n  SELECT\n    id, client_id, tipo, parroquia_id, ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,\n    estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, created_at, updated_at\n  FROM sacramentos_respaldo;\n\n  DROP TABLE sacramentos_respaldo;\n\n  CREATE INDEX idx_sacramentos_registro ON sacramentos (parroquia_id, tipo, libro, folio, numero);\n\n  CREATE TRIGGER trg_sacramentos_touch\n  AFTER UPDATE ON sacramentos\n  FOR EACH ROW\n  WHEN NEW.version = OLD.version\n  BEGIN\n    UPDATE sacramentos\n       SET version = OLD.version + 1,\n           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')\n     WHERE id = NEW.id;\n  END;\n\n  UPDATE sync_cola SET version_base = version_base + 1\n  WHERE version_base IS NOT NULL AND client_id IN (\n    SELECT client_id FROM sacramentos\n    WHERE fecha_evento IS NULL AND fecha_emision IS NOT NULL\n      AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada')\n  );\n\n  UPDATE sacramentos\n  SET fecha_emision = NULL, version = version + 1\n  WHERE fecha_evento IS NULL AND fecha_emision IS NOT NULL\n    AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada');\n  "
-], yn = /^[0-9a-f]{64}$/i, bn = class extends Error {};
-function xn(e, t) {
+], Cn = /^[0-9a-f]{64}$/i, wn = class extends Error {};
+function Tn(e, t) {
 	let n = e.pragma("user_version", { simple: !0 });
-	if (n > t.length) throw new bn(`La base local está en la versión ${n} y esta app solo conoce hasta la ${t.length}.`);
+	if (n > t.length) throw new wn(`La base local está en la versión ${n} y esta app solo conoce hasta la ${t.length}.`);
 	e.pragma("foreign_keys = OFF");
 	for (let r = n; r < t.length; r++) e.transaction(() => {
 		if (e.exec(t[r]), e.pragma("foreign_key_check").length > 0) throw Error("La migración dejó claves foráneas rotas.");
@@ -885,20 +898,20 @@ function xn(e, t) {
 	})();
 	e.pragma("foreign_keys = ON");
 }
-function Sn(e, t, n = vn) {
-	if (!yn.test(t)) throw Error("La clave de la base local debe tener 32 bytes en hexadecimal.");
-	let r = new b(e);
+function En(e, t, n = Sn) {
+	if (!Cn.test(t)) throw Error("La clave de la base local debe tener 32 bytes en hexadecimal.");
+	let r = new x(e);
 	try {
-		return r.pragma("cipher='chacha20'"), r.pragma(`hexkey='${t}'`), r.prepare("SELECT count(*) FROM sqlite_master").get(), r.pragma("foreign_keys = ON"), r.pragma("journal_mode = WAL"), r.pragma("synchronous = FULL"), xn(r, n), r;
+		return r.pragma("cipher='chacha20'"), r.pragma(`hexkey='${t}'`), r.prepare("SELECT count(*) FROM sqlite_master").get(), r.pragma("foreign_keys = ON"), r.pragma("journal_mode = WAL"), r.pragma("synchronous = FULL"), Tn(r, n), r;
 	} catch (e) {
 		throw r.close(), e;
 	}
 }
-function Cn(e) {
+function Dn(e) {
 	let t = e?.code ?? "";
 	return t.startsWith("SQLITE_NOTADB") || t.startsWith("SQLITE_CORRUPT");
 }
-function wn(e) {
+function On(e) {
 	return {
 		directory: e,
 		database: s.join(e, Se.database),
@@ -909,42 +922,42 @@ function wn(e) {
 		set_aside_folder: s.join(e, Se.set_aside_folder)
 	};
 }
-function Tn(e) {
+function kn(e) {
 	if (u(e.device)) return f(e.device, "utf8").trim();
-	let t = te();
+	let t = T();
 	return _(e.device, t), t;
 }
-function En(e, t) {
+function An(e, t) {
 	for (let n of [
 		"",
 		"-wal",
 		"-shm"
 	]) u(e + n) && m(e + n, t + n);
 }
-function Dn(e) {
+function jn(e) {
 	for (let t of [
 		"",
 		"-wal",
 		"-shm"
 	]) h(e + t, { force: !0 });
 }
-function On(e) {
+function Mn(e) {
 	u(e.set_aside_folder) && p(e.set_aside_folder).filter((e) => e.endsWith(".db")).sort().reverse().forEach((t, n) => {
 		let r = s.join(e.set_aside_folder, t), i = Date.now() - g(r).mtimeMs > Ce;
-		(n > 0 || i) && Dn(r);
+		(n > 0 || i) && jn(r);
 	});
 }
-function kn(e) {
+function Nn(e) {
 	if (!u(e.database)) return;
 	d(e.set_aside_folder, { recursive: !0 });
 	let t = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
-	En(e.database, s.join(e.set_aside_folder, `prelatura-local-${t}.db`)), On(e);
+	An(e.database, s.join(e.set_aside_folder, `prelatura-local-${t}.db`)), Mn(e);
 }
-function An(e, t) {
-	On(e);
+function Pn(e, t) {
+	Mn(e);
 	let n = t.read(e.key);
 	if (!u(e.database)) {
-		let r = n ?? on(), i = Sn(e.database, r);
+		let r = n ?? un(), i = En(e.database, r);
 		return n || t.write(e.key, r), {
 			status: "open",
 			db: i,
@@ -953,113 +966,113 @@ function An(e, t) {
 	}
 	if (!n) return { status: "needs-recovery" };
 	try {
-		let t = Sn(e.database, n);
-		return Dn(e.temp_database), h(e.temp_key, { force: !0 }), {
+		let t = En(e.database, n);
+		return jn(e.temp_database), h(e.temp_key, { force: !0 }), {
 			status: "open",
 			db: t,
 			key: n
 		};
 	} catch (e) {
-		if (e instanceof bn) return {
+		if (e instanceof wn) return {
 			status: "failed",
 			message: "La base local es de una versión más nueva. Actualice la aplicación."
 		};
-		if (Cn(e)) return { status: "needs-recovery" };
+		if (Dn(e)) return { status: "needs-recovery" };
 		throw e;
 	}
 }
-function jn(e, t, n) {
+function Fn(e, t, n) {
 	try {
-		let r = Sn(e.database, n);
+		let r = En(e.database, n);
 		return t.write(e.key, n), r;
 	} catch (e) {
-		if (!Cn(e)) throw e;
+		if (!Dn(e)) throw e;
 		return null;
 	}
 }
-function Mn(e, t) {
+function In(e, t) {
 	let n = t.read(e.temp_key);
-	(!n || !u(e.temp_database)) && (Dn(e.temp_database), n = on(), t.write(e.temp_key, n));
+	(!n || !u(e.temp_database)) && (jn(e.temp_database), n = un(), t.write(e.temp_key, n));
 	try {
 		return {
-			db: Sn(e.temp_database, n),
+			db: En(e.temp_database, n),
 			key: n
 		};
 	} catch (t) {
-		if (!Cn(t)) throw t;
-		return Dn(e.temp_database), {
-			db: Sn(e.temp_database, n),
+		if (!Dn(t)) throw t;
+		return jn(e.temp_database), {
+			db: En(e.temp_database, n),
 			key: n
 		};
 	}
 }
-function Nn(e, t, n) {
-	Dn(e.temp_database);
-	let r = on();
+function Ln(e, t, n) {
+	jn(e.temp_database);
+	let r = un();
 	return t.write(e.temp_key, r), {
-		db: Sn(e.temp_database, r, n),
+		db: En(e.temp_database, r, n),
 		key: r
 	};
 }
-function Pn(e, t, n) {
-	return kn(e), En(e.temp_database, e.database), t.write(e.key, n), h(e.temp_key, { force: !0 }), Sn(e.database, n);
+function Rn(e, t, n) {
+	return Nn(e), An(e.temp_database, e.database), t.write(e.key, n), h(e.temp_key, { force: !0 }), En(e.database, n);
 }
 //#endregion
 //#region electron/main/db/app_database.ts
-var Fn = null, In = null, Ln = !1, Rn = "La base local no está disponible.";
-function zn() {
+var zn = null, Bn = null, Vn = !1, Hn = "La base local no está disponible.";
+function Un() {
 	if (!a.isEncryptionAvailable()) throw Error("El sistema operativo no ofrece almacenamiento seguro para la clave.");
 }
-function Bn(e) {
-	if (zn(), !u(e)) return null;
+function Wn(e) {
+	if (Un(), !u(e)) return null;
 	try {
 		return a.decryptString(f(e));
 	} catch {
 		return null;
 	}
 }
-function Vn(e, t) {
-	zn(), _(e, a.encryptString(t), { mode: 384 });
+function Gn(e, t) {
+	Un(), _(e, a.encryptString(t), { mode: 384 });
 }
-var Hn = {
-	read: Bn,
-	write: Vn
+var Kn = {
+	read: Wn,
+	write: Gn
 };
-function Un() {
-	return wn(n.getPath("userData"));
-}
-function Wn() {
-	let e = An(Un(), Hn);
-	e.status === "open" ? (Fn = e.db, In = e.key) : e.status === "needs-recovery" ? (Ln = !0, Rn = "La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.") : Rn = e.message;
-}
-function W() {
-	if (!Fn) throw new z(Rn, 503);
-	return Fn;
-}
-function Gn() {
-	return In;
-}
-function Kn() {
-	return Ln;
-}
-function qn(e, t) {
-	Fn = e, In = t, Ln = !1;
+function qn() {
+	return On(n.getPath("userData"));
 }
 function Jn() {
-	Fn?.close(), Fn = null, In = null;
+	let e = Pn(qn(), Kn);
+	e.status === "open" ? (zn = e.db, Bn = e.key) : e.status === "needs-recovery" ? (Vn = !0, Hn = "La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.") : Hn = e.message;
+}
+function G() {
+	if (!zn) throw new V(Hn, 503);
+	return zn;
+}
+function Yn() {
+	return Bn;
+}
+function Xn() {
+	return Vn;
+}
+function Zn(e, t) {
+	zn = e, Bn = t, Vn = !1;
+}
+function Qn() {
+	zn?.close(), zn = null, Bn = null;
 }
 //#endregion
 //#region electron/shared/index.ts
-var Yn = "local:request", Xn = "sin-conexion";
+var $n = "local:request", er = "sin-conexion";
 //#endregion
 //#region electron/main/models/user.ts
-function Zn(e, t) {
+function tr(e, t) {
 	return e.prepare("SELECT parroquia_id, rol, principal, origen FROM membresias WHERE usuario_id = ? ORDER BY origen DESC, parroquia_id").all(t);
 }
-function Qn(e, t) {
+function nr(e, t) {
 	return e.prepare("SELECT m.parroquia_id AS id, p.nombre, m.rol\n			 FROM membresias m\n			 JOIN parroquias p ON p.id = m.parroquia_id\n			 WHERE m.usuario_id = ?\n			 ORDER BY m.origen DESC, p.nombre").all(t);
 }
-function $n(e, t, n, r) {
+function rr(e, t, n, r) {
 	return n === "admin_general" ? {
 		id: t,
 		rol: n,
@@ -1069,10 +1082,10 @@ function $n(e, t, n, r) {
 		id: t,
 		rol: n,
 		parroquia_id: r,
-		principal: Zn(e, t).find((e) => e.parroquia_id === r)?.principal === 1
+		principal: tr(e, t).find((e) => e.parroquia_id === r)?.principal === 1
 	};
 }
-function er(e, t, n) {
+function ir(e, t, n) {
 	let r = e.prepare("SELECT id, client_id, rol, parroquia_id, principal, version, activo FROM usuarios WHERE id = ?").get(t);
 	if (!r) return null;
 	let i = {
@@ -1087,7 +1100,7 @@ function er(e, t, n) {
 		parroquia_id: null,
 		principal: r.principal === 1
 	};
-	let a = Zn(e, t), o = a.find((e) => e.parroquia_id === n) ?? a.find((e) => e.origen === 1), s = a.filter((e) => e !== o);
+	let a = tr(e, t), o = a.find((e) => e.parroquia_id === n) ?? a.find((e) => e.origen === 1), s = a.filter((e) => e !== o);
 	return {
 		...i,
 		rol: o?.rol ?? r.rol,
@@ -1099,90 +1112,90 @@ function er(e, t, n) {
 }
 //#endregion
 //#region electron/main/models/session.ts
-var G = null, tr = null;
-function nr() {
-	if (!G) throw new z("Sesión no válida.", 401);
-	return G;
+var K = null, ar = null;
+function or() {
+	if (!K) throw new V("Sesión no válida.", 401);
+	return K;
 }
-function K() {
-	return G;
+function sr() {
+	return K;
 }
-function rr() {
-	return tr;
+function cr() {
+	return ar;
 }
-function ir(e, t, n) {
-	G = e, tr = {
+function lr(e, t, n) {
+	K = e, ar = {
 		username: t,
 		password: n
 	};
 }
-function ar(e, t) {
-	let n = nr();
-	if (n.role === "admin_general") throw new z("El administrador general no trabaja en ninguna parroquia: solo consulta.", 400);
-	let r = Zn(e, n.user_id).find((e) => e.parroquia_id === t);
-	if (!r) throw new z("Esta cuenta no trabaja en esa parroquia: solo puede consultarla.", 403);
+function ur(e, t) {
+	let n = or();
+	if (n.role === "admin_general") throw new V("El administrador general no trabaja en ninguna parroquia: solo consulta.", 400);
+	let r = tr(e, n.user_id).find((e) => e.parroquia_id === t);
+	if (!r) throw new V("Esta cuenta no trabaja en esa parroquia: solo puede consultarla.", 403);
 	return n.role = r.rol, n.parish_id = t, n;
 }
-function or(e) {
-	if (!G || G.role === "admin_general") return;
-	let t = Zn(e, G.user_id), n = t.find((e) => e.parroquia_id === G?.parish_id) ?? t.find((e) => e.origen === 1);
-	n && (G.role = n.rol, G.parish_id = n.parroquia_id);
+function dr(e) {
+	if (!K || K.role === "admin_general") return;
+	let t = tr(e, K.user_id), n = t.find((e) => e.parroquia_id === K?.parish_id) ?? t.find((e) => e.origen === 1);
+	n && (K.role = n.rol, K.parish_id = n.parroquia_id);
 }
-function sr() {
-	G = null, tr = null;
+function fr() {
+	K = null, ar = null;
 }
 //#endregion
 //#region electron/main/utils/logger.ts
-function cr(...e) {
+function pr(...e) {
 	console.log(...e);
 }
-function lr(...e) {
+function mr(...e) {
 	console.error(...e);
 }
-var ur = "http://localhost:8787", dr = null;
-function fr(e) {
+var hr = "http://localhost:8787", gr = null;
+function _r(e) {
 	if (!u(e)) return null;
 	try {
 		let t = JSON.parse(f(e, "utf8"));
 		if (typeof t.servidor == "string" && /^https?:\/\/\S+$/.test(t.servidor.trim())) return t.servidor.trim().replace(/\/+$/, "");
-		lr(`${e}: "servidor" debe ser una dirección que empiece con http:// o https://.`);
+		mr(`${e}: "servidor" debe ser una dirección que empiece con http:// o https://.`);
 	} catch (t) {
-		lr(`No se pudo leer ${e}:`, t);
+		mr(`No se pudo leer ${e}:`, t);
 	}
 	return null;
 }
-function pr() {
+function vr() {
 	return n.isPackaged ? s.join(process.resourcesPath, "instalador") : s.join(n.getAppPath(), "resources", "instalador");
 }
-function mr() {
-	if (dr) return dr;
-	let e = process.env.PRELATURA_API_URL ?? fr(s.join(n.getPath("userData"), "configuracion.json")) ?? fr(s.join(pr(), "configuracion.json")) ?? void 0 ?? ur;
-	return cr(`Servidor: ${e}`), dr = e, e;
+function yr() {
+	if (gr) return gr;
+	let e = process.env.PRELATURA_API_URL ?? _r(s.join(n.getPath("userData"), "configuracion.json")) ?? _r(s.join(vr(), "configuracion.json")) ?? "https://registro-sacramental-pruebas.registro-sacramental-prelatura.workers.dev" ?? hr;
+	return pr(`Servidor: ${e}`), gr = e, e;
 }
 //#endregion
 //#region electron/main/sync/online.ts
-var hr = "No se pudo conectar con el servidor. Verifique su conexión.", q = async (e, t = {}) => {
+var br = "No se pudo conectar con el servidor. Verifique su conexión.", q = async (e, t = {}) => {
 	let n = t.method ?? "GET", r = t.timeoutMs ?? 3e4, i = {};
 	t.body !== void 0 && (i["Content-Type"] = "application/json"), t.token && (i.Authorization = `Bearer ${t.token}`);
 	let a, o;
 	try {
-		a = await fetch(`${mr()}${e}`, {
+		a = await fetch(`${yr()}${e}`, {
 			method: n,
 			headers: i,
 			body: t.body === void 0 ? void 0 : JSON.stringify(t.body),
 			signal: AbortSignal.timeout(r)
 		}), o = await a.json().catch(() => null);
 	} catch {
-		throw new z(hr, 0);
+		throw new V(br, 0);
 	}
-	if (!a.ok) throw new z(o?.message ? String(o.message) : "Ocurrió un error inesperado.", a.status);
-	if (o === null) throw new z(hr, 0);
+	if (!a.ok) throw new V(o?.message ? String(o.message) : "Ocurrió un error inesperado.", a.status);
+	if (o === null) throw new V(br, 0);
 	return o;
 };
-function gr(e) {
-	return e instanceof z && (e.status === 0 || e.status >= 500);
+function xr(e) {
+	return e instanceof V && (e.status === 0 || e.status >= 500);
 }
-function _r(e, t, n) {
+function Sr(e, t, n) {
 	return e("/api/auth/login", {
 		method: "POST",
 		body: {
@@ -1192,26 +1205,26 @@ function _r(e, t, n) {
 		timeoutMs: ye
 	});
 }
-function vr(e, t) {
+function Cr(e, t) {
 	return e("/api/reference", { token: t });
 }
-function yr(e, t, n) {
+function wr(e, t, n) {
 	return e("/api/sync/push", {
 		method: "POST",
 		body: { cambios: n },
 		token: t
 	});
 }
-function br(e, t, n) {
+function Tr(e, t, n) {
 	return e(`/api/sync/pull?cursor=${encodeURIComponent(n)}`, { token: t });
 }
-function xr(e, t, n, r) {
+function Er(e, t, n, r) {
 	return e(`/api/sync/record?${`entidad=${encodeURIComponent(n)}&client_id=${encodeURIComponent(r)}`}`, { token: t });
 }
-function Sr(e, t, n) {
+function Dr(e, t, n) {
 	return e(`/api/devices/${n}/key`, { token: t });
 }
-function Cr(e, t, n, r) {
+function Or(e, t, n, r) {
 	return e(`/api/devices/${n}/key`, {
 		method: "PUT",
 		body: { clave: r },
@@ -1220,27 +1233,27 @@ function Cr(e, t, n, r) {
 }
 //#endregion
 //#region electron/main/sync/records.ts
-var wr = class extends Error {};
-function Tr(e, t, n) {
+var kr = class extends Error {};
+function Ar(e, t, n) {
 	e.prepare(`UPDATE ${t} SET version = -1 WHERE id = ?`).run(n);
 }
-function Er(e) {
+function jr(e) {
 	return e === "ministro" ? "ministros" : e === "usuario" ? "usuarios" : "sacramentos";
 }
-function Dr(e, t, n, r) {
-	e.prepare(`UPDATE ${Er(t)} SET version = ? WHERE client_id = ? AND version <> ?`).run(r, n, r);
+function Mr(e, t, n, r) {
+	e.prepare(`UPDATE ${jr(t)} SET version = ? WHERE client_id = ? AND version <> ?`).run(r, n, r);
 }
-function Or(e, t) {
+function Nr(e, t) {
 	return e.prepare("SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(t);
 }
-function kr(e, t) {
+function Pr(e, t) {
 	return e.prepare("SELECT client_id, id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo,\n				password_hash_pendiente AS password_hash\n			 FROM usuarios WHERE client_id = ?").get(t);
 }
-function Ar(e, t) {
-	let n = e.prepare("SELECT s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,\n				s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion\n			 FROM sacramentos s\n			 LEFT JOIN ministros m ON m.id = s.ministro_id\n			 WHERE s.client_id = ?").get(t), r = n.tipo, i = e.prepare(`SELECT * FROM ${ut(r)} WHERE sacramento_id = ?`).get(n.id), a = e.prepare(`SELECT client_id, ${I.join(", ")} FROM personas WHERE id = ?`), o = [];
-	for (let e of dt(r)) o.push(a.get(i[e]));
+function Fr(e, t) {
+	let n = e.prepare("SELECT s.id, s.tipo, s.client_id, s.parroquia_id, m.client_id AS ministro_client_id, s.libro, s.folio, s.numero,\n				s.fecha_emision, s.fecha_evento, s.anotaciones, s.estado, s.anulado_por_usuario_id, s.anulado_en, s.motivo_anulacion\n			 FROM sacramentos s\n			 LEFT JOIN ministros m ON m.id = s.ministro_id\n			 WHERE s.client_id = ?").get(t), r = n.tipo, i = e.prepare(`SELECT * FROM ${_t(r)} WHERE sacramento_id = ?`).get(n.id), a = e.prepare(`SELECT client_id, ${z.join(", ")} FROM personas WHERE id = ?`), o = [];
+	for (let e of vt(r)) o.push(a.get(i[e]));
 	let s = {};
-	for (let e of ue(r)) s[e] = i[e];
+	for (let e of ce(r)) s[e] = i[e];
 	let c = e.prepare("SELECT c.client_id, p.client_id AS persona_client_id, c.usuario_id, c.campo_cambio, c.valor_anterior, c.valor_nuevo, c.fecha_cambio,\n				c.estado, c.revisado_por_usuario_id, c.revisado_en\n			 FROM cambios_persona c\n			 JOIN personas p ON p.id = c.persona_id\n			 WHERE c.sacramento_id = ?\n			 ORDER BY c.id").all(n.id);
 	return {
 		tipo: r,
@@ -1264,25 +1277,25 @@ function Ar(e, t) {
 		historial: Ve(e, n.id)
 	};
 }
-function jr(e, t, n) {
-	let r = I.map((e) => n[e]), i = e.prepare("SELECT id FROM personas WHERE client_id = ?").get(n.client_id);
+function Ir(e, t, n) {
+	let r = z.map((e) => n[e]), i = e.prepare("SELECT id FROM personas WHERE client_id = ?").get(n.client_id);
 	if (i) {
-		let t = I.map((e) => `${e} = ?`).join(", ");
+		let t = z.map((e) => `${e} = ?`).join(", ");
 		return e.prepare(`UPDATE personas SET ${t} WHERE id = ?`).run(...r, i.id), i.id;
 	}
-	let a = I.map(() => "?").join(", "), o = e.prepare(`INSERT INTO personas (client_id, parroquia_id, ${I.join(", ")}) VALUES (?, ?, ${a})`).run(n.client_id, t, ...r);
+	let a = z.map(() => "?").join(", "), o = e.prepare(`INSERT INTO personas (client_id, parroquia_id, ${z.join(", ")}) VALUES (?, ?, ${a})`).run(n.client_id, t, ...r);
 	return Number(o.lastInsertRowid);
 }
-function Mr(e, t) {
+function Lr(e, t) {
 	if (!t) return null;
 	let n = e.prepare("SELECT id FROM ministros WHERE client_id = ?").get(t);
-	if (!n) throw new wr(`Ministro desconocido: ${t}`);
+	if (!n) throw new kr(`Ministro desconocido: ${t}`);
 	return n.id;
 }
-function Nr(e, t, n = !1) {
+function Rr(e, t, n = !1) {
 	let r = t.version ?? 1, i = e.prepare("SELECT id, version FROM sacramentos WHERE client_id = ?").get(t.client_id);
-	if (!n && (it(e, t.tipo, t.client_id) || i && i.version === r)) return;
-	let a = Mr(e, t.ministro_client_id), o = t.personas.map((n) => jr(e, t.parroquia_id, n)), s = t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString(), c = [
+	if (!n && (dt(e, t.tipo, t.client_id) || i && i.version === r)) return;
+	let a = Lr(e, t.ministro_client_id), o = t.personas.map((n) => Ir(e, t.parroquia_id, n)), s = t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString(), c = [
 		a,
 		t.libro,
 		t.folio,
@@ -1297,48 +1310,48 @@ function Nr(e, t, n = !1) {
 		r,
 		s
 	], l;
-	if (i) l = i.id, Tr(e, "sacramentos", i.id), e.prepare("UPDATE sacramentos SET\n				ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?,\n				estado = ?, anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?, version = ?, updated_at = ?\n			 WHERE id = ?").run(...c, i.id);
+	if (i) l = i.id, Ar(e, "sacramentos", i.id), e.prepare("UPDATE sacramentos SET\n				ministro_id = ?, libro = ?, folio = ?, numero = ?, fecha_emision = ?, fecha_evento = ?, anotaciones = ?,\n				estado = ?, anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?, version = ?, updated_at = ?\n			 WHERE id = ?").run(...c, i.id);
 	else {
 		let n = e.prepare("INSERT INTO sacramentos\n					(ministro_id, libro, folio, numero, fecha_emision, fecha_evento, anotaciones,\n					 estado, anulado_por_usuario_id, anulado_en, motivo_anulacion, version, updated_at,\n					 client_id, tipo, parroquia_id)\n				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(...c, t.client_id, t.tipo, t.parroquia_id);
 		l = Number(n.lastInsertRowid);
 	}
-	if (Pr(e, t, l, o), Fr(e, t, l, o), Le(e, l, t.solicitudes ?? []), He(e, l, t.historial ?? []), n) {
+	if (zr(e, t, l, o), Br(e, t, l, o), Le(e, l, t.solicitudes ?? []), He(e, l, t.historial ?? []), n) {
 		let n = JSON.stringify(t.cambios.map((e) => e.client_id));
-		e.prepare("DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(l, n), Re(e, l, t.solicitudes ?? []), Ue(e, l, t.historial ?? []), at(e, t.tipo, t.client_id);
+		e.prepare("DELETE FROM cambios_persona WHERE sacramento_id = ? AND client_id NOT IN (SELECT value FROM json_each(?))").run(l, n), Re(e, l, t.solicitudes ?? []), Ue(e, l, t.historial ?? []), ft(e, t.tipo, t.client_id);
 	}
 }
-function Pr(e, t, n, r) {
+function zr(e, t, n, r) {
 	let i = t.detalle;
 	if (t.tipo === "matrimonio") {
 		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n			 ON CONFLICT (sacramento_id) DO UPDATE SET\n				conyuge_1_id = excluded.conyuge_1_id,\n				conyuge_2_id = excluded.conyuge_2_id,\n				lugar = excluded.lugar,\n				testigo_1 = excluded.testigo_1,\n				testigo_2 = excluded.testigo_2,\n				testigo_3 = excluded.testigo_3,\n				testigo_4 = excluded.testigo_4,\n				conyuge_1_bautismo_parroquia = excluded.conyuge_1_bautismo_parroquia,\n				conyuge_1_bautismo_fecha = excluded.conyuge_1_bautismo_fecha,\n				conyuge_2_bautismo_parroquia = excluded.conyuge_2_bautismo_parroquia,\n				conyuge_2_bautismo_fecha = excluded.conyuge_2_bautismo_fecha").run(n, r[0], r[1], i.lugar ?? null, i.testigo_1 ?? null, i.testigo_2 ?? null, i.testigo_3 ?? null, i.testigo_4 ?? null, i.conyuge_1_bautismo_parroquia ?? null, i.conyuge_1_bautismo_fecha ?? null, i.conyuge_2_bautismo_parroquia ?? null, i.conyuge_2_bautismo_fecha ?? null);
 		return;
 	}
-	e.prepare(`INSERT INTO ${ut(t.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2)
+	e.prepare(`INSERT INTO ${_t(t.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT (sacramento_id) DO UPDATE SET
 			persona_id = excluded.persona_id,
 			padrino_1 = excluded.padrino_1,
 			padrino_2 = excluded.padrino_2`).run(n, r[0], i.padrino_1 ?? null, i.padrino_2 ?? null);
 }
-function Fr(e, t, n, r) {
+function Br(e, t, n, r) {
 	let i = /* @__PURE__ */ new Map();
 	t.personas.forEach((e, t) => i.set(e.client_id, r[t]));
 	let a = e.prepare("INSERT INTO cambios_persona\n			(client_id, persona_id, sacramento_id, usuario_id, campo_cambio, valor_anterior, valor_nuevo, fecha_cambio,\n			 estado, revisado_por_usuario_id, revisado_en)\n		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n		 ON CONFLICT (client_id) DO UPDATE SET\n			estado = excluded.estado,\n			revisado_por_usuario_id = excluded.revisado_por_usuario_id,\n			revisado_en = excluded.revisado_en");
 	for (let e of t.cambios) a.run(e.client_id, i.get(e.persona_client_id), n, e.usuario_id, e.campo_cambio, e.valor_anterior, e.valor_nuevo, e.fecha_cambio, e.estado ?? "aprobado", e.revisado_por_usuario_id ?? null, e.revisado_en ?? null);
 }
-function Ir(e) {
+function Vr(e) {
 	return `El nombre de usuario "${e}" ya lo tiene otra cuenta (creada en otra PC). Póngale otro nombre de usuario a esta cuenta en Configuración > Agregar usuario > Editar: después se sube sola.`;
 }
-function Lr(e) {
+function Hr(e) {
 	return e.startsWith("~");
 }
-function Rr(e, t, n = !1) {
+function Ur(e, t, n = !1) {
 	if (t = {
 		...t,
 		client_id: t.client_id ?? `servidor-${t.id}`
-	}, !n && it(e, "usuario", t.client_id)) return;
+	}, !n && dt(e, "usuario", t.client_id)) return;
 	let r = e.prepare("SELECT id, client_id FROM usuarios WHERE username = ? AND id <> ? AND id < 0").get(t.username, t.id);
-	r && it(e, "usuario", r.client_id) && e.prepare("UPDATE sync_cola SET estado = 'rechazado', motivo = ? WHERE entidad = 'usuario' AND client_id = ?").run(Ir(t.username), r.client_id), e.prepare("UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?").run(t.username, t.id), e.prepare("UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?").run(t.client_id, t.id), e.prepare("INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)\n		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)\n		 ON CONFLICT (id) DO UPDATE SET\n			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,\n			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,\n			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL").run({
+	r && dt(e, "usuario", r.client_id) && e.prepare("UPDATE sync_cola SET estado = 'rechazado', motivo = ? WHERE entidad = 'usuario' AND client_id = ?").run(Vr(t.username), r.client_id), e.prepare("UPDATE usuarios SET username = '~' || id WHERE username = ? AND id <> ?").run(t.username, t.id), e.prepare("UPDATE usuarios SET client_id = '~' || id WHERE client_id = ? AND id <> ?").run(t.client_id, t.id), e.prepare("INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal, updated_at)\n		 VALUES (@id, @client_id, @parroquia_id, @username, @rol, @nombre, @apellido_paterno, @apellido_materno, @activo, @principal, @updated_at)\n		 ON CONFLICT (id) DO UPDATE SET\n			client_id = @client_id, parroquia_id = @parroquia_id, username = @username, rol = @rol, nombre = @nombre,\n			apellido_paterno = @apellido_paterno, apellido_materno = @apellido_materno, activo = @activo,\n			principal = @principal, updated_at = @updated_at, password_hash_pendiente = NULL").run({
 		id: t.id,
 		client_id: t.client_id,
 		parroquia_id: t.parroquia_id,
@@ -1350,96 +1363,96 @@ function Rr(e, t, n = !1) {
 		activo: t.activo,
 		principal: t.principal ?? 0,
 		updated_at: t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString()
-	}), Tr(e, "usuarios", t.id), e.prepare("UPDATE usuarios SET version = ? WHERE id = ?").run(t.version ?? 1, t.id), t.password_hash && e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n			 ON CONFLICT (usuario_id) DO UPDATE SET\n				verificador = excluded.verificador,\n				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t.id, t.password_hash), n && at(e, "usuario", t.client_id);
+	}), Ar(e, "usuarios", t.id), e.prepare("UPDATE usuarios SET version = ? WHERE id = ?").run(t.version ?? 1, t.id), t.password_hash && e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n			 ON CONFLICT (usuario_id) DO UPDATE SET\n				verificador = excluded.verificador,\n				actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t.id, t.password_hash), n && ft(e, "usuario", t.client_id);
 }
-function zr(e, t, n) {
+function Wr(e, t, n) {
 	let r = e.prepare("SELECT id FROM usuarios WHERE client_id = ?").get(t);
 	if (!r || r.id === n) return null;
 	let i = r.id;
 	return e.pragma("defer_foreign_keys = ON"), e.prepare("UPDATE usuarios SET id = ? WHERE id = ?").run(n, i), e.prepare("UPDATE cambios_persona SET usuario_id = ? WHERE usuario_id = ?").run(n, i), e.prepare("UPDATE cambios_persona SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(n, i), e.prepare("UPDATE sacramentos SET anulado_por_usuario_id = ? WHERE anulado_por_usuario_id = ?").run(n, i), e.prepare("UPDATE solicitudes_cambio SET usuario_id = ? WHERE usuario_id = ?").run(n, i), e.prepare("UPDATE solicitudes_cambio SET revisado_por_usuario_id = ? WHERE revisado_por_usuario_id = ?").run(n, i), e.prepare("UPDATE historial_partidas SET usuario_id = ? WHERE usuario_id = ?").run(n, i), e.prepare("UPDATE credenciales_locales SET usuario_id = ? WHERE usuario_id = ?").run(n, i), i;
 }
-var Br = [
+var Gr = [
 	"titulo",
 	"nombre",
 	"apellido_paterno",
 	"apellido_materno",
 	"activo"
 ];
-function Vr(e, t, n = !1) {
+function Kr(e, t, n = !1) {
 	let r = t.version ?? 1, i = t.updated_at ?? (/* @__PURE__ */ new Date()).toISOString(), a = e.prepare("SELECT id, version, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?").get(t.client_id);
-	if (!n && it(e, "ministro", t.client_id)) {
-		let n = a !== void 0 && Br.every((e) => (a[e] ?? null) === (t[e] ?? null)), i = e.prepare("SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?").get("ministro", t.client_id);
+	if (!n && dt(e, "ministro", t.client_id)) {
+		let n = a !== void 0 && Gr.every((e) => (a[e] ?? null) === (t[e] ?? null)), i = e.prepare("SELECT version_base FROM sync_cola WHERE entidad = ? AND client_id = ?").get("ministro", t.client_id);
 		if (!n || i.version_base !== null) return;
-		at(e, "ministro", t.client_id), Dr(e, "ministro", t.client_id, r);
+		ft(e, "ministro", t.client_id), Mr(e, "ministro", t.client_id, r);
 		return;
 	}
 	if (!a) {
 		e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(t.client_id, t.parroquia_id, t.titulo ?? null, t.nombre, t.apellido_paterno, t.apellido_materno, t.activo, r, i);
 		return;
 	}
-	(n || a.version !== r) && (Tr(e, "ministros", a.id), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?, version = ?, updated_at = ?\n			 WHERE id = ?").run(t.titulo ?? null, t.nombre, t.apellido_paterno, t.apellido_materno, t.activo, r, i, a.id)), n && at(e, "ministro", t.client_id);
+	(n || a.version !== r) && (Ar(e, "ministros", a.id), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ?, activo = ?, version = ?, updated_at = ?\n			 WHERE id = ?").run(t.titulo ?? null, t.nombre, t.apellido_paterno, t.apellido_materno, t.activo, r, i, a.id)), n && ft(e, "ministro", t.client_id);
 }
 //#endregion
 //#region electron/main/sync/sync.ts
-function Hr(e, t) {
+function qr(e, t) {
 	let n = e.prepare("INSERT INTO parroquias (id, nombre, ubicacion, activa) VALUES (@id, @nombre, @ubicacion, @activa)\n		 ON CONFLICT (id) DO UPDATE SET nombre = @nombre, ubicacion = @ubicacion, activa = @activa"), r = e.prepare("UPDATE ministros SET client_id = ? WHERE client_id = ?"), i = e.prepare("INSERT INTO usuario_parroquias (usuario_id, parroquia_id, rol, principal)\n		 SELECT @usuario_id, @parroquia_id, @rol, @principal\n		 WHERE EXISTS (SELECT 1 FROM usuarios WHERE id = @usuario_id)\n			AND EXISTS (SELECT 1 FROM parroquias WHERE id = @parroquia_id)");
 	e.transaction(() => {
 		for (let e of t.parroquias) n.run(e);
-		for (let n of t.ministros) r.run(n.client_id, `servidor-${n.id}`), Vr(e, n);
-		for (let n of t.usuarios) Rr(e, n);
+		for (let n of t.ministros) r.run(n.client_id, `servidor-${n.id}`), Kr(e, n);
+		for (let n of t.usuarios) Ur(e, n);
 		e.prepare("DELETE FROM usuario_parroquias").run();
 		for (let e of t.usuario_parroquias ?? []) i.run(e);
 		e.exec("DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)");
 	})();
 }
-async function Ur(e, t, n) {
-	Hr(e, await vr(t, n)), or(e);
+async function Jr(e, t, n) {
+	qr(e, await Cr(t, n)), dr(e);
 }
-function Wr(e, t) {
-	return t.entidad === "ministro" ? Or(e, t.client_id) : t.entidad === "usuario" ? kr(e, t.client_id) : Ar(e, t.client_id);
+function Yr(e, t) {
+	return t.entidad === "ministro" ? Nr(e, t.client_id) : t.entidad === "usuario" ? Pr(e, t.client_id) : Fr(e, t.client_id);
 }
-function Gr(e, t, n) {
+function Xr(e, t, n) {
 	if (!n) return;
-	let r = zr(e, t, n), i = K();
+	let r = Wr(e, t, n), i = sr();
 	r !== null && i && i.user_id === r && (i.user_id = n);
 }
-function Kr(e, t, n) {
+function Zr(e, t, n) {
 	e.transaction(() => {
 		if (n.estado === "conflicto" || n.estado === "rechazado") {
 			e.prepare("UPDATE sync_cola SET estado = ?, motivo = ? WHERE id = ?").run(n.estado, n.motivo, t.id);
 			return;
 		}
-		t.entidad === "usuario" && Gr(e, t.client_id, n.id), e.prepare("SELECT revision FROM sync_cola WHERE id = ?").get(t.id).revision === t.revision ? (at(e, t.entidad, t.client_id), Dr(e, t.entidad, t.client_id, n.version), t.entidad === "usuario" && e.prepare("UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?").run(t.client_id)) : e.prepare("UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?").run(n.version, t.id);
+		t.entidad === "usuario" && Xr(e, t.client_id, n.id), e.prepare("SELECT revision FROM sync_cola WHERE id = ?").get(t.id).revision === t.revision ? (ft(e, t.entidad, t.client_id), Mr(e, t.entidad, t.client_id, n.version), t.entidad === "usuario" && e.prepare("UPDATE usuarios SET password_hash_pendiente = NULL WHERE client_id = ?").run(t.client_id)) : e.prepare("UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE id = ?").run(n.version, t.id);
 	})();
 }
-var qr = ["El administrador general solo consulta", "No tiene permiso para modificar"];
-function Jr(e, t) {
+var Qr = ["El administrador general solo consulta", "No tiene permiso para modificar"];
+function $r(e, t) {
 	if (t.entidad === "usuario") {
 		let n = e.prepare("SELECT username FROM usuarios WHERE client_id = ?").pluck().get(t.client_id);
-		return n === void 0 || !Lr(n);
+		return n === void 0 || !Hr(n);
 	}
-	let n = K();
+	let n = sr();
 	if (!n) return !0;
 	if (n.role === "admin_general") return !1;
 	let r = t.entidad === "ministro" ? "ministros" : "sacramentos", i = e.prepare(`SELECT parroquia_id FROM ${r} WHERE client_id = ?`).pluck().get(t.client_id);
 	return i === void 0 || e.prepare("SELECT 1 FROM membresias WHERE usuario_id = ? AND parroquia_id = ?").get(n.user_id, i) !== void 0;
 }
-function Yr(e, t) {
+function ei(e, t) {
 	return t.entidad === "usuario" || t.entidad === "ministro" ? !1 : e.prepare("SELECT 1 FROM sacramentos s\n			 WHERE s.client_id = ?\n			   AND (s.anulado_por_usuario_id < 0\n				OR EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = s.id AND h.usuario_id < 0)\n				OR EXISTS (SELECT 1 FROM cambios_persona c WHERE c.sacramento_id = s.id AND (c.usuario_id < 0 OR c.revisado_por_usuario_id < 0))\n				OR EXISTS (SELECT 1 FROM solicitudes_cambio r WHERE r.sacramento_id = s.id AND (r.usuario_id < 0 OR r.revisado_por_usuario_id < 0)))").get(t.client_id) !== void 0;
 }
-function Xr(e, t) {
+function ti(e, t) {
 	let n = e.prepare("SELECT estado, motivo FROM sync_cola WHERE id = ?").get(t);
-	n.estado === "rechazado" && qr.some((e) => n.motivo?.startsWith(e)) && e.prepare("UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE id = ?").run(t);
+	n.estado === "rechazado" && Qr.some((e) => n.motivo?.startsWith(e)) && e.prepare("UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE id = ?").run(t);
 }
-async function Zr(e, t, n) {
+async function ni(e, t, n) {
 	let r = e.prepare("SELECT id, entidad, client_id FROM sync_cola WHERE estado <> 'conflicto' AND (entidad = 'usuario') = ? ORDER BY entidad = 'ministro' DESC, id");
 	for (let i of [1, 0]) {
 		let a = [];
-		for (let t of r.all(i)) Yr(e, t) ? e.prepare("UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE id = ? AND estado = 'rechazado'").run(t.id) : Jr(e, t) ? a.push(t.id) : Xr(e, t.id);
-		await Qr(e, t, n, a);
+		for (let t of r.all(i)) ei(e, t) ? e.prepare("UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE id = ? AND estado = 'rechazado'").run(t.id) : $r(e, t) ? a.push(t.id) : ti(e, t.id);
+		await ri(e, t, n, a);
 	}
 }
-async function Qr(e, t, n, r) {
+async function ri(e, t, n, r) {
 	let i = e.prepare("SELECT * FROM sync_cola WHERE id = ?");
 	for (let a = 0; a < r.length; a += 15) {
 		let o = [];
@@ -1448,52 +1461,52 @@ async function Qr(e, t, n, r) {
 			t && t.estado !== "conflicto" && o.push(t);
 		}
 		if (o.length === 0) continue;
-		let s = await yr(t, n, o.map((t) => ({
+		let s = await wr(t, n, o.map((t) => ({
 			entidad: t.entidad,
 			client_id: t.client_id,
 			version_base: t.version_base,
 			cola_id: t.cola_id,
-			datos: Wr(e, t)
+			datos: Yr(e, t)
 		})));
-		for (let t = 0; t < o.length; t++) s.resultados[t] && Kr(e, o[t], s.resultados[t]);
+		for (let t = 0; t < o.length; t++) s.resultados[t] && Zr(e, o[t], s.resultados[t]);
 	}
 }
-function $r(e, t) {
+function ii(e, t) {
 	e.transaction(() => {
-		for (let n of t.partidas) Nr(e, n);
-		st(e, R.cursor, String(t.cursor));
+		for (let n of t.partidas) Rr(e, n);
+		mt(e, B.cursor, String(t.cursor));
 	})();
 }
-function ei(e) {
-	return e instanceof wr || e?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
+function ai(e) {
+	return e instanceof kr || e?.code === "SQLITE_CONSTRAINT_FOREIGNKEY";
 }
-async function ti(e, t, n) {
+async function oi(e, t, n) {
 	for (;;) {
-		let r = await br(t, n, ot(e, R.cursor) ?? "0");
+		let r = await Tr(t, n, pt(e, B.cursor) ?? "0");
 		try {
-			$r(e, r);
+			ii(e, r);
 		} catch (i) {
-			if (!ei(i)) throw i;
-			await Ur(e, t, n), $r(e, r);
+			if (!ai(i)) throw i;
+			await Jr(e, t, n), ii(e, r);
 		}
 		if (!r.hayMas) return;
 	}
 }
-async function ni(e, t, n) {
-	await Ur(e, t, n), await Zr(e, t, n), await ti(e, t, n), st(e, R.last_sync, (/* @__PURE__ */ new Date()).toISOString());
+async function si(e, t, n) {
+	await Jr(e, t, n), await ni(e, t, n), await oi(e, t, n), mt(e, B.last_sync, (/* @__PURE__ */ new Date()).toISOString());
 }
-async function ri(e, t, n, r, i, a) {
-	let o = (await xr(t, n, r, i)).registro;
+async function ci(e, t, n, r, i, a) {
+	let o = (await Er(t, n, r, i)).registro;
 	e.transaction(() => {
-		a === "local" ? e.prepare("UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE entidad = ? AND client_id = ?").run(o.version, r, i) : r === "ministro" ? Vr(e, o, !0) : r === "usuario" ? Rr(e, o, !0) : Nr(e, o, !0);
+		a === "local" ? e.prepare("UPDATE sync_cola SET version_base = ?, estado = 'pendiente', motivo = NULL WHERE entidad = ? AND client_id = ?").run(o.version, r, i) : r === "ministro" ? Kr(e, o, !0) : r === "usuario" ? Ur(e, o, !0) : Rr(e, o, !0);
 	})();
 }
-var ii = {
+var li = {
 	bautismo: "Bautismo",
 	confirmacion: "Confirmación",
 	matrimonio: "Matrimonio"
 };
-function ai(e, t) {
+function ui(e, t) {
 	if (t.entidad === "ministro") {
 		let n = e.prepare("SELECT nombre, apellido_paterno FROM ministros WHERE client_id = ?").get(t.client_id);
 		return `Ministro ${n?.nombre ?? ""} ${n?.apellido_paterno ?? ""}`.trim();
@@ -1506,12 +1519,12 @@ function ai(e, t) {
 			n.apellido_paterno,
 			n.apellido_materno
 		].filter(Boolean).join(" ");
-		return Lr(n.username) ? `Cuenta de ${r} (necesita otro nombre de usuario)` : `Usuario ${n.username} (${r})`;
+		return Hr(n.username) ? `Cuenta de ${r} (necesita otro nombre de usuario)` : `Usuario ${n.username} (${r})`;
 	}
-	let n = ii[t.entidad], r = e.prepare("SELECT libro, folio, numero FROM sacramentos WHERE client_id = ?").get(t.client_id);
+	let n = li[t.entidad], r = e.prepare("SELECT libro, folio, numero FROM sacramentos WHERE client_id = ?").get(t.client_id);
 	return r ? `${n}: libro ${r.libro}, folio ${r.folio}, registro ${r.numero}` : n;
 }
-function oi(e) {
+function di(e) {
 	let t = e.prepare("SELECT estado, COUNT(*) AS total FROM sync_cola GROUP BY estado").all(), n = (e) => {
 		let n = t.find((t) => t.estado === e);
 		return n ? n.total : 0;
@@ -1520,165 +1533,438 @@ function oi(e) {
 		client_id: t.client_id,
 		estado: t.estado,
 		motivo: t.motivo,
-		descripcion: ai(e, t)
+		descripcion: ui(e, t)
 	}));
 	return {
 		pendientes: n("pendiente"),
 		conflictos: n("conflicto"),
 		rechazados: n("rechazado"),
-		ultima_sync: ot(e, R.last_sync),
-		aviso: ot(e, R.notice),
+		ultima_sync: pt(e, B.last_sync),
+		aviso: pt(e, B.notice),
 		items: r
 	};
 }
 //#endregion
 //#region electron/main/sync/recovery.ts
-var si = "La base local se reconstruyó desde el servidor. Revise lo registrado recientemente: lo que no se había subido debe volver a digitarse desde el libro.";
-async function ci(e, t, n) {
+var fi = "La base local se reconstruyó desde el servidor. Revise lo registrado recientemente: lo que no se había subido debe volver a digitarse desde el libro.";
+async function pi(e, t, n) {
 	try {
-		return (await Sr(t, n, Tn(e))).clave;
+		return (await Dr(t, n, kn(e))).clave;
 	} catch (e) {
-		if (e instanceof z && e.status === 404) return null;
+		if (e instanceof V && e.status === 404) return null;
 		throw e;
 	}
 }
-async function li(e, t, n, r) {
-	let i = Mn(e, t);
+async function mi(e, t, n, r) {
+	let i = In(e, t);
 	try {
-		await Ur(i.db, n, r), await ti(i.db, n, r), st(i.db, R.last_sync, (/* @__PURE__ */ new Date()).toISOString()), st(i.db, R.notice, si), st(i.db, R.key_registered, null);
+		await Jr(i.db, n, r), await oi(i.db, n, r), mt(i.db, B.last_sync, (/* @__PURE__ */ new Date()).toISOString()), mt(i.db, B.notice, fi), mt(i.db, B.key_registered, null);
 	} finally {
 		i.db.close();
 	}
 	return {
-		db: Pn(e, t, i.key),
+		db: Rn(e, t, i.key),
 		key: i.key
 	};
 }
-async function ui(e, t, n, r) {
+async function hi(e, t, n, r) {
 	if (u(e.database)) {
-		let i = await ci(e, n, r);
+		let i = await pi(e, n, r);
 		if (i) {
-			let n = jn(e, t, i);
+			let n = Fn(e, t, i);
 			if (n) return {
 				db: n,
 				key: i
 			};
 		}
 	}
-	return li(e, t, n, r);
+	return mi(e, t, n, r);
 }
-async function di(e, t, n, r, i, a) {
-	let o = ot(e, R.key_registered);
+async function gi(e, t, n, r, i, a) {
+	let o = pt(e, B.key_registered);
 	if (o && (o !== "admin" || a === null)) return;
-	let s = await Cr(r, i, Tn(t), n);
-	st(e, R.key_registered, s.parroquiaId === null ? "admin" : "parroquia");
+	let s = await Or(r, i, kn(t), n);
+	mt(e, B.key_registered, s.parroquiaId === null ? "admin" : "parroquia");
 }
 //#endregion
 //#region electron/main/sync/auto_sync.ts
-var fi = "sin-conexion", pi = null, mi = null, hi = null;
-function gi(e) {
-	hi ||= setInterval(() => void J(), be), fi = e;
+var _i = "sin-conexion", vi = null, yi = null, bi = null;
+function xi(e) {
+	bi ||= setInterval(() => void J(), be), _i = e;
 }
-function _i() {
-	hi && clearInterval(hi), hi = null;
+function Si() {
+	bi && clearInterval(bi), bi = null;
 }
-function vi() {
-	fi = "sin-conexion", pi = null;
+function Ci() {
+	_i = "sin-conexion", vi = null;
 }
-var yi = "Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.";
-function bi(e) {
+var wi = "Esta cuenta todavía no está en el servidor. Se subirá la próxima vez que el administrador de la parroquia sincronice con internet; hasta entonces puede trabajar sin conexión.";
+function Ti(e) {
 	if (e < 0) return !0;
 	try {
-		return !!W().prepare("SELECT password_hash_pendiente FROM usuarios WHERE id = ?").get(e)?.password_hash_pendiente;
+		return !!G().prepare("SELECT password_hash_pendiente FROM usuarios WHERE id = ?").get(e)?.password_hash_pendiente;
 	} catch {
 		return !1;
 	}
 }
-async function xi() {
-	let e = K(), t = rr();
+async function Ei() {
+	let e = sr(), t = cr();
 	if (!e || !t) return null;
 	try {
-		let n = await _r(q, t.username, t.password);
+		let n = await Sr(q, t.username, t.password);
 		return e.token = n.token, n.token;
 	} catch (t) {
-		return e.token = "", gr(t) ? (fi = "sin-conexion", null) : bi(e.user_id) ? (fi = "error", pi = yi, null) : (fi = "requiere-login", pi = "La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.", null);
+		return e.token = "", xr(t) ? (_i = "sin-conexion", null) : Ti(e.user_id) ? (_i = "error", vi = wi, null) : (_i = "requiere-login", vi = "La contraseña cambió o la cuenta se desactivó. Inicie sesión de nuevo para sincronizar.", null);
 	}
 }
-async function Si(e) {
-	let t = K()?.token || await xi();
+async function Di(e) {
+	let t = sr()?.token || await Ei();
 	if (t) try {
 		await e(t);
 	} catch (t) {
-		if (!(t instanceof z && t.status === 401)) throw t;
-		let n = await xi();
+		if (!(t instanceof V && t.status === 401)) throw t;
+		let n = await Ei();
 		n && await e(n);
 	}
 }
-async function Ci() {
-	pi = null;
+async function Oi() {
+	vi = null;
 	try {
 		let e = !1;
-		await Si(async (t) => {
-			let n = W();
-			await ni(n, q, t), e = !0;
-			let r = Gn();
-			r && await di(n, Un(), r, q, t, K()?.parish_id ?? null).catch((e) => {
-				lr("No se pudo subir la copia de la clave:", e);
+		await Di(async (t) => {
+			let n = G();
+			await si(n, q, t), e = !0;
+			let r = Yn();
+			r && await gi(n, qn(), r, q, t, sr()?.parish_id ?? null).catch((e) => {
+				mr("No se pudo subir la copia de la clave:", e);
 			});
-		}), e && (fi = "en-linea");
+		}), e && (_i = "en-linea");
 	} catch (e) {
-		if (gr(e)) {
-			fi = "sin-conexion";
+		if (xr(e)) {
+			_i = "sin-conexion";
 			return;
 		}
-		lr("Falló la sincronización:", e), fi = "error", pi = e instanceof z ? e.message : "Ocurrió un error al sincronizar.";
+		mr("Falló la sincronización:", e), _i = "error", vi = e instanceof V ? e.message : "Ocurrió un error al sincronizar.";
 	}
 }
 function J() {
-	return K() ? (mi ||= Ci().finally(() => {
-		mi = null;
-	}), mi) : Promise.resolve();
+	return sr() ? (yi ||= Oi().finally(() => {
+		yi = null;
+	}), yi) : Promise.resolve();
 }
-function wi() {
-	return mi ?? Promise.resolve();
+function ki() {
+	return yi ?? Promise.resolve();
 }
-function Ti() {
-	return nr(), {
-		...oi(W()),
-		modo: fi,
-		en_curso: mi !== null,
-		mensaje: pi,
-		token: K()?.token || "sin-conexion"
+function Ai() {
+	return or(), {
+		...di(G()),
+		modo: _i,
+		en_curso: yi !== null,
+		mensaje: vi,
+		token: sr()?.token || "sin-conexion"
 	};
 }
-async function Ei(e, t, n) {
-	nr();
+async function ji(e, t, n) {
+	or();
 	let r = !1;
-	if (await Si(async (i) => {
-		await ri(W(), q, i, e, t, n), r = !0;
-	}), !r) throw new z("Se necesita conexión para resolver el conflicto.", 0);
+	if (await Di(async (i) => {
+		await ci(G(), q, i, e, t, n), r = !0;
+	}), !r) throw new V("Se necesita conexión para resolver el conflicto.", 0);
 	await J();
 }
-function Di() {
-	nr(), st(W(), R.notice, null);
+function Mi() {
+	or(), mt(G(), B.notice, null);
 }
-async function Oi(e) {
-	if (!K() || oi(W()).pendientes === 0) return;
+async function Ni(e) {
+	if (!sr() || di(G()).pendientes === 0) return;
 	let t = new Promise((t) => setTimeout(t, e));
 	await Promise.race([J(), t]);
 }
 //#endregion
+//#region electron/main/utils/xlsx.ts
+var Pi = 22;
+function Fi(e) {
+	return e.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function Ii(e) {
+	let t = "", n = e + 1;
+	for (; n > 0;) {
+		let e = (n - 1) % 26;
+		t = String.fromCharCode(65 + e) + t, n = Math.floor((n - 1) / 26);
+	}
+	return t;
+}
+function Li(e, t, n) {
+	if (e == null || e === "") return "";
+	let r = n ? " s=\"1\"" : "";
+	return typeof e == "number" ? `<c r="${t}"${r}><v>${e}</v></c>` : `<c r="${t}" t="inlineStr"${r}><is><t xml:space="preserve">${Fi(e)}</t></is></c>`;
+}
+function Ri(e) {
+	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${`<cols><col min="1" max="${Math.max(1, ...e.rows.map((e) => e.length))}" width="${Pi}" customWidth="1"/></cols>`}<sheetData>${e.rows.map((e, t) => {
+		let n = e.map((e, n) => Li(e, `${Ii(n)}${t + 1}`, t === 0)).join("");
+		return `<row r="${t + 1}">${n}</row>`;
+	}).join("")}</sheetData></worksheet>`;
+}
+function zi(e) {
+	let t = {}, n = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+	return t["[Content_Types].xml"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${e.map((e, t) => `<Override PartName="/xl/worksheets/sheet${t + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`, t["_rels/.rels"] = n + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>" + "</Relationships>", t["xl/workbook.xml"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${e.map((e, t) => `<sheet name="${Fi(e.name.slice(0, 31))}" sheetId="${t + 1}" r:id="rId${t + 1}"/>`).join("")}</sheets></workbook>`, t["xl/_rels/workbook.xml.rels"] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${e.map((e, t) => `<Relationship Id="rId${t + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${t + 1}.xml"/>`).join("")}${`<Relationship Id="rId${e.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`}</Relationships>`, t["xl/styles.xml"] = n + "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" + "<fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font><font><b/><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>" + "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill></fills>" + "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>" + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>" + "<cellXfs count=\"2\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/><xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"0\" xfId=\"0\" applyFont=\"1\"/></cellXfs>" + "</styleSheet>", e.forEach((e, n) => {
+		t[`xl/worksheets/sheet${n + 1}.xml`] = Ri(e);
+	}), t;
+}
+var Bi = Array.from({ length: 256 }, (e, t) => {
+	let n = t;
+	for (let e = 0; e < 8; e++) n = n & 1 ? 3988292384 ^ n >>> 1 : n >>> 1;
+	return n >>> 0;
+});
+function Vi(e) {
+	let t = 4294967295;
+	for (let n of e) t = Bi[(t ^ n) & 255] ^ t >>> 8;
+	return (t ^ 4294967295) >>> 0;
+}
+function Hi(e) {
+	let t = [], n = [], r = 0;
+	for (let [i, a] of Object.entries(e)) {
+		let e = Buffer.from(i, "utf8"), o = Buffer.from(a, "utf8"), s = v(o), c = Vi(o), l = Buffer.alloc(30);
+		l.writeUInt32LE(67324752, 0), l.writeUInt16LE(20, 4), l.writeUInt16LE(2048, 6), l.writeUInt16LE(8, 8), l.writeUInt32LE(0, 10), l.writeUInt32LE(c, 14), l.writeUInt32LE(s.length, 18), l.writeUInt32LE(o.length, 22), l.writeUInt16LE(e.length, 26), l.writeUInt16LE(0, 28);
+		let u = Buffer.alloc(46);
+		u.writeUInt32LE(33639248, 0), u.writeUInt16LE(20, 4), u.writeUInt16LE(20, 6), u.writeUInt16LE(2048, 8), u.writeUInt16LE(8, 10), u.writeUInt32LE(0, 12), u.writeUInt32LE(c, 16), u.writeUInt32LE(s.length, 20), u.writeUInt32LE(o.length, 24), u.writeUInt16LE(e.length, 28), u.writeUInt32LE(r, 42), t.push(l, e, s), n.push(u, e), r += l.length + e.length + s.length;
+	}
+	let i = n.reduce((e, t) => e + t.length, 0), a = Object.keys(e).length, o = Buffer.alloc(22);
+	return o.writeUInt32LE(101010256, 0), o.writeUInt16LE(a, 8), o.writeUInt16LE(a, 10), o.writeUInt32LE(i, 12), o.writeUInt32LE(r, 16), Buffer.concat([
+		...t,
+		...n,
+		o
+	]);
+}
+function Ui(e) {
+	return Hi(zi(e));
+}
+//#endregion
+//#region shared/sync.ts
+var Wi = [
+	"admin_general",
+	"admin_parroquia",
+	"usuario"
+], Gi = {
+	registrada: "Registró la partida",
+	importada: "Importó la partida",
+	editada: "Editó la partida",
+	correccion: "Corrigió por nota marginal",
+	cambio_pedido: "Pidió un cambio",
+	cambio_aprobado: "Aprobó el cambio",
+	cambio_rechazado: "Rechazó el cambio",
+	cambio_descartado: "Descartó el cambio",
+	anulada: "Anuló la partida",
+	rehabilitada: "Rehabilitó la partida"
+}, Ki = {
+	bautismo: "Bautismo",
+	confirmacion: "Confirmación",
+	matrimonio: "Matrimonio"
+};
+function qi(e) {
+	return e ? new Date(e).toLocaleDateString("es-PE", {
+		day: "2-digit",
+		month: "2-digit",
+		year: "numeric"
+	}) : "";
+}
+function Ji(e) {
+	return new Date(e).toLocaleString("es-PE", {
+		dateStyle: "short",
+		timeStyle: "short"
+	});
+}
+function Yi(e) {
+	return e ? [
+		e.titulo,
+		e.nombre,
+		e.apellido_paterno,
+		e.apellido_materno
+	].filter(Boolean).join(" ") : "";
+}
+function Xi(e) {
+	return Ee(e.nombres, e.apellido_paterno, e.apellido_materno);
+}
+function Zi(e) {
+	return ct(e.fecha_nacimiento) || (e.fecha_aproximada ?? "");
+}
+function Qi(e) {
+	return [
+		e.dni,
+		e.nombres,
+		e.apellido_paterno,
+		e.apellido_materno,
+		Zi(e),
+		e.lugar_nacimiento,
+		e.padre,
+		e.madre
+	];
+}
+function $i(e) {
+	return [
+		"DNI",
+		"Nombres",
+		"Apellido paterno",
+		"Apellido materno",
+		"Fecha de nacimiento",
+		"Lugar de nacimiento",
+		"Padre",
+		"Madre"
+	].map((t) => `${t}${e}`);
+}
+var ea = [
+	"Libro",
+	"Folio",
+	"Número"
+], ta = [
+	"Celebrante",
+	"Anotación marginal",
+	"Estado",
+	"Fecha de registro"
+];
+function na(e) {
+	let t = e.sacramento;
+	return [
+		t.libro,
+		t.folio,
+		t.numero
+	];
+}
+function ra(e) {
+	let t = e.sacramento;
+	return [
+		Yi(t.ministro),
+		t.anotaciones,
+		t.estado === "anulado" ? "Anulada" : "Vigente",
+		qi(t.created_at)
+	];
+}
+function ia(e, t) {
+	let n = `Fecha de ${Ki[e].toLowerCase()}`, r = [
+		...ea,
+		...$i(""),
+		n,
+		"Padrino",
+		"Madrina",
+		...ta
+	], i = t.map((e) => [
+		...na(e),
+		...Qi(e.persona),
+		ct(e.sacramento.fecha_evento),
+		e.padrino_1,
+		e.padrino_2,
+		...ra(e)
+	]);
+	return {
+		name: e === "bautismo" ? "Bautismos" : "Confirmaciones",
+		rows: [r, ...i]
+	};
+}
+function aa(e) {
+	return {
+		name: "Matrimonios",
+		rows: [[
+			...ea,
+			...$i(" del esposo"),
+			"Parroquia de bautismo del esposo",
+			"Fecha de bautismo del esposo",
+			...$i(" de la esposa"),
+			"Parroquia de bautismo de la esposa",
+			"Fecha de bautismo de la esposa",
+			"Fecha de matrimonio",
+			"Lugar del matrimonio",
+			"Testigo 1",
+			"Testigo 2",
+			"Testigo 3",
+			"Testigo 4",
+			...ta
+		], ...e.map((e) => [
+			...na(e),
+			...Qi(e.conyuge_1),
+			e.conyuge_1_bautismo_parroquia,
+			ct(e.conyuge_1_bautismo_fecha),
+			...Qi(e.conyuge_2),
+			e.conyuge_2_bautismo_parroquia,
+			ct(e.conyuge_2_bautismo_fecha),
+			ct(e.sacramento.fecha_evento),
+			e.lugar,
+			e.testigo_1,
+			e.testigo_2,
+			e.testigo_3,
+			e.testigo_4,
+			...ra(e)
+		])]
+	};
+}
+function oa(e) {
+	if (e.sacramento.tipo === "matrimonio") {
+		let t = e;
+		return `${Xi(t.conyuge_1)} y ${Xi(t.conyuge_2)}`;
+	}
+	return Xi(e.persona);
+}
+function sa(e, t) {
+	let n = [
+		"Fecha",
+		"Sacramento",
+		"Libro",
+		"Folio",
+		"Número",
+		"Partida de",
+		"Qué se hizo",
+		"Usuario",
+		"Motivo",
+		"Datos cambiados"
+	], r = [];
+	for (let n of t) for (let t of Be(e, n.sacramento.id)) {
+		let e = t.campos.map((e) => `${de(e.parte, e.campo)}: ${e.texto_anterior ?? "(vacío)"} → ${e.texto_nuevo ?? "(vacío)"}`);
+		r.push({
+			fecha: t.fecha,
+			cells: [
+				Ji(t.fecha),
+				Ki[n.sacramento.tipo],
+				...na(n),
+				oa(n),
+				Gi[t.evento],
+				t.usuario,
+				t.motivo,
+				e.join("\n")
+			]
+		});
+	}
+	return r.sort((e, t) => t.fecha.localeCompare(e.fecha)), {
+		name: "Historial",
+		rows: [n, ...r.map((e) => e.cells)]
+	};
+}
+function ca(e, t, n) {
+	return e.prepare("SELECT id FROM sacramentos\n			 WHERE parroquia_id = ? AND tipo = ?\n			 ORDER BY CAST(libro AS INTEGER), libro, CAST(folio AS INTEGER), folio, CAST(numero AS INTEGER), numero").pluck().all(t, n).map((t) => Nt(e, t));
+}
+function la(e, t) {
+	let n = ca(e, t, "bautismo"), r = ca(e, t, "confirmacion"), i = ca(e, t, "matrimonio");
+	return [
+		ia("bautismo", n),
+		ia("confirmacion", r),
+		aa(i),
+		sa(e, [
+			...n,
+			...r,
+			...i
+		])
+	];
+}
+//#endregion
 //#region electron/main/controllers/login.ts
-async function ki(e, t, n) {
-	let r = await cn(n);
+async function ua(e, t, n) {
+	let r = await fn(n);
 	e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n		 ON CONFLICT (usuario_id) DO UPDATE SET\n			verificador = excluded.verificador,\n			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t, r);
 }
-async function Ai(e, t, n) {
+async function da(e, t, n) {
 	let r = e.prepare("SELECT u.id, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,\n				c.verificador, p.nombre AS parroquia_nombre\n			 FROM usuarios u\n			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id\n			 LEFT JOIN parroquias p ON p.id = u.parroquia_id\n			 WHERE u.username = ?").get(t);
 	return !r || !r.verificador ? {
 		ok: !1,
 		reason: "sin-credencial"
-	} : r.activo !== 1 || !await mn(n, r.verificador) ? {
+	} : r.activo !== 1 || !await vn(n, r.verificador) ? {
 		ok: !1,
 		reason: "incorrecta"
 	} : {
@@ -1689,234 +1975,234 @@ async function Ai(e, t, n) {
 			parroquia_id: r.parroquia_id,
 			parroquia_nombre: r.parroquia_nombre,
 			nombre_completo: Ee(r.nombre, r.apellido_paterno, r.apellido_materno),
-			parroquias: Qn(e, r.id)
+			parroquias: nr(e, r.id)
 		}
 	};
 }
-async function ji(e, t, n) {
+async function fa(e, t, n) {
 	let r = e.token, i = e.usuario;
-	if (Kn()) {
-		let e = await ui(Un(), Hn, q, r);
-		qn(e.db, e.key);
+	if (Xn()) {
+		let e = await hi(qn(), Kn, q, r);
+		Zn(e.db, e.key);
 	}
-	let a = W();
+	let a = G();
 	try {
-		await Ur(a, q, r);
+		await Jr(a, q, r);
 	} catch (e) {
 		if (!a.prepare("SELECT 1 FROM usuarios WHERE id = ?").get(i.id)) throw e;
 	}
-	return await ki(a, i.id, n), ir({
+	return await ua(a, i.id, n), lr({
 		user_id: i.id,
 		role: i.rol,
 		parish_id: i.parroquia_id,
 		token: r
-	}, t, n), gi("en-linea"), await J(), {
+	}, t, n), xi("en-linea"), await J(), {
 		...e,
 		usuario: {
 			...i,
-			parroquias: Qn(a, i.id)
+			parroquias: nr(a, i.id)
 		}
 	};
 }
-function Mi(e, t, n) {
-	return ir({
+function pa(e, t, n) {
+	return lr({
 		user_id: e.id,
 		role: e.rol,
 		parish_id: e.parroquia_id,
 		token: ""
-	}, t, n), gi("sin-conexion"), J(), {
-		token: Xn,
+	}, t, n), xi("sin-conexion"), J(), {
+		token: er,
 		usuario: e
 	};
 }
-var Ni = "Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.";
-async function Pi(e) {
+var ma = "Este usuario todavía no está en esta PC. Conéctese a internet para entrar por primera vez, o restaure un respaldo.";
+async function ha(e) {
 	let t = typeof e?.username == "string" ? e.username.trim() : "", n = typeof e?.password == "string" ? e.password : "", r = {
 		ok: !1,
 		reason: "sin-credencial"
 	};
-	if (!Kn() && (r = await Ai(W(), t, n), r.ok)) return Mi(r.usuario, t, n);
+	if (!Xn() && (r = await da(G(), t, n), r.ok)) return pa(r.usuario, t, n);
 	let i;
 	try {
-		i = await _r(q, t, n);
+		i = await Sr(q, t, n);
 	} catch (e) {
-		throw gr(e) ? Kn() ? new z("La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.", 503) : r.reason === "sin-credencial" ? new z(Ni, 401) : new z("Usuario o contraseña incorrectos.", 401) : e;
+		throw xr(e) ? Xn() ? new V("La base local no se puede abrir. Conéctese a internet e inicie sesión para recuperarla.", 503) : r.reason === "sin-credencial" ? new V(ma, 401) : new V("Usuario o contraseña incorrectos.", 401) : e;
 	}
-	return ji(i, t, n);
+	return fa(i, t, n);
 }
-function Fi() {
-	_i(), sr(), vi();
+function ga() {
+	Si(), fr(), Ci();
 }
-function Ii(e, t) {
-	if (!Number.isInteger(t)) throw new z("Parroquia no válida.", 400);
-	let n = ar(e, t);
+function _a(e, t) {
+	if (!Number.isInteger(t)) throw new V("Parroquia no válida.", 400);
+	let n = ur(e, t);
 	return {
 		rol: n.role,
 		parroquia_id: n.parish_id
 	};
 }
-var Li = { "auth.selectParish": (e, { db: t }) => Ii(t, e?.parroquia_id) }, Ri = {
-	"auth.login": Pi,
-	"auth.logout": () => (Fi(), { success: !0 })
-}, zi = "prelatura-paquete-inicial", Bi = "paquete-inicial.json";
-function Vi(e) {
+var va = { "auth.selectParish": (e, { db: t }) => _a(t, e?.parroquia_id) }, ya = {
+	"auth.login": ha,
+	"auth.logout": () => (ga(), { success: !0 })
+}, ba = "prelatura-paquete-inicial", xa = "paquete-inicial.json";
+function Sa(e) {
 	return e.prepare("SELECT COUNT(*) FROM usuarios").pluck().get() === 0;
 }
-function Hi(e, t) {
-	if (t.role !== "admin_general") throw new z("Solo el administrador general puede generar el paquete inicial.", 403);
-	if (e.prepare("SELECT COUNT(*) FROM sync_cola").pluck().get() > 0) throw new z("Hay cambios sin subir. Sincronice con internet antes de generar el paquete inicial.", 409);
+function Ca(e, t) {
+	if (t.role !== "admin_general") throw new V("Solo el administrador general puede generar el paquete inicial.", 403);
+	if (e.prepare("SELECT COUNT(*) FROM sync_cola").pluck().get() > 0) throw new V("Hay cambios sin subir. Sincronice con internet antes de generar el paquete inicial.", 409);
 	let n = e.prepare("SELECT u.id, u.client_id, u.parroquia_id, u.username, u.rol, u.nombre, u.apellido_paterno, u.apellido_materno,\n				u.activo, u.principal, u.version, u.updated_at, c.verificador AS password_hash\n			 FROM usuarios u\n			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id\n			 WHERE u.id > 0\n			 ORDER BY u.id").all(), r = e.prepare("SELECT id, client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo, version, updated_at FROM ministros ORDER BY id").all(), i = e.prepare("SELECT client_id, version, created_at, updated_at FROM sacramentos ORDER BY id").all();
 	return {
-		formato: zi,
+		formato: ba,
 		version: 1,
 		generado_en: (/* @__PURE__ */ new Date()).toISOString(),
-		cursor: ot(e, R.cursor),
+		cursor: pt(e, B.cursor),
 		parroquias: e.prepare("SELECT id, nombre, ubicacion, activa FROM parroquias ORDER BY id").all(),
 		usuarios: n,
 		usuario_parroquias: e.prepare("SELECT usuario_id, parroquia_id, rol, principal FROM usuario_parroquias WHERE usuario_id > 0 ORDER BY usuario_id, parroquia_id").all(),
 		ministros: r,
 		partidas: i.map((t) => ({
-			...Ar(e, t.client_id),
+			...Fr(e, t.client_id),
 			version: t.version,
 			created_at: t.created_at,
 			updated_at: t.updated_at
 		}))
 	};
 }
-function Ui(e) {
+function wa(e) {
 	let t = e;
-	if (!t || t.formato !== "prelatura-paquete-inicial") throw new z("El archivo no es un paquete inicial de esta aplicación.", 400);
-	if (t.version !== 1) throw new z("El paquete inicial es de otra versión de la aplicación.", 400);
-	if (!Array.isArray(t.parroquias) || !Array.isArray(t.usuarios) || !Array.isArray(t.ministros) || !Array.isArray(t.partidas)) throw new z("El paquete inicial está incompleto.", 400);
+	if (!t || t.formato !== "prelatura-paquete-inicial") throw new V("El archivo no es un paquete inicial de esta aplicación.", 400);
+	if (t.version !== 1) throw new V("El paquete inicial es de otra versión de la aplicación.", 400);
+	if (!Array.isArray(t.parroquias) || !Array.isArray(t.usuarios) || !Array.isArray(t.ministros) || !Array.isArray(t.partidas)) throw new V("El paquete inicial está incompleto.", 400);
 	return t;
 }
-function Wi(e, t) {
-	let n = Ui(t);
-	if (!Vi(e)) throw new z("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
+function Ta(e, t) {
+	let n = wa(t);
+	if (!Sa(e)) throw new V("Esta PC ya tiene usuarios: el paquete inicial solo se carga en una PC nueva.", 409);
 	return e.transaction(() => {
-		Hr(e, {
+		qr(e, {
 			parroquias: n.parroquias,
 			ministros: n.ministros,
 			usuarios: n.usuarios,
 			usuario_parroquias: n.usuario_parroquias
 		});
-		for (let t of n.partidas) Nr(e, t);
-		n.cursor && st(e, R.cursor, n.cursor);
+		for (let t of n.partidas) Rr(e, t);
+		n.cursor && mt(e, B.cursor, n.cursor);
 	})(), {
 		parroquias: n.parroquias.length,
 		usuarios: n.usuarios.length,
 		partidas: n.partidas.length
 	};
 }
-function Gi(e) {
+function Ea(e) {
 	try {
 		return JSON.parse(f(e, "utf8"));
 	} catch {
-		throw new z("No se pudo leer el paquete inicial.", 400);
+		throw new V("No se pudo leer el paquete inicial.", 400);
 	}
 }
-function Ki() {
-	return n.isPackaged ? s.join(process.resourcesPath, "instalador", Bi) : s.join(n.getAppPath(), "resources", "instalador", Bi);
+function Da() {
+	return n.isPackaged ? s.join(process.resourcesPath, "instalador", xa) : s.join(n.getAppPath(), "resources", "instalador", xa);
 }
-function qi() {
+function Oa() {
 	if (process.env.PRELATURA_SIN_PAQUETE === "1") return;
-	let e = process.env.PRELATURA_PAQUETE || Ki(), t;
+	let e = process.env.PRELATURA_PAQUETE || Da(), t;
 	try {
-		t = W();
+		t = G();
 	} catch {
 		return;
 	}
-	if (u(e) && Vi(t)) try {
-		let n = Wi(t, Gi(e));
-		cr(`Paquete inicial cargado: ${n.parroquias} parroquias, ${n.usuarios} usuarios y ${n.partidas} partidas.`);
+	if (u(e) && Sa(t)) try {
+		let n = Ta(t, Ea(e));
+		pr(`Paquete inicial cargado: ${n.parroquias} parroquias, ${n.usuarios} usuarios y ${n.partidas} partidas.`);
 	} catch (e) {
-		lr("No se pudo cargar el paquete inicial del instalador:", e);
+		mr("No se pudo cargar el paquete inicial del instalador:", e);
 	}
 }
-function Ji() {
+function ka() {
 	return t.getFocusedWindow() ?? void 0;
 }
-var Yi = { "package.status": () => {
+var Aa = { "package.status": () => {
 	try {
-		return { necesita_paquete: Vi(W()) };
+		return { necesita_paquete: Sa(G()) };
 	} catch {
 		return { necesita_paquete: !1 };
 	}
-} }, Xi = { "package.export": async (e, { db: t, session: n }) => {
-	let i = Hi(t, n), a = {
+} }, ja = { "package.export": async (e, { db: t, session: n }) => {
+	let i = Ca(t, n), a = {
 		title: "Guardar el paquete inicial",
-		defaultPath: Bi,
+		defaultPath: xa,
 		filters: [{
 			name: "Paquete inicial",
 			extensions: ["json"]
 		}]
-	}, o = Ji(), s = o ? await r.showSaveDialog(o, a) : await r.showSaveDialog(a);
+	}, o = ka(), s = o ? await r.showSaveDialog(o, a) : await r.showSaveDialog(a);
 	return s.canceled || !s.filePath ? { cancelado: !0 } : (_(s.filePath, JSON.stringify(i), "utf8"), {
 		cancelado: !1,
 		parroquias: i.parroquias.length,
 		usuarios: i.usuarios.length,
 		partidas: i.partidas.length
 	});
-} }, Zi = "prelatura-respaldo", Qi = "respaldo", $i = /^parroquia-\d+\.txt$/, ea = "La contraseña no es la del respaldo, o el archivo está dañado.", ta = "El archivo no es un respaldo de esta aplicación.";
-function na(e) {
+} }, Ma = "prelatura-respaldo", Na = "respaldo", Pa = /^parroquia-\d+\.txt$/, Fa = "La contraseña no es la del respaldo, o el archivo está dañado.", Ia = "El archivo no es un respaldo de esta aplicación.", La = 200;
+function Ra(e) {
 	return e.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all();
 }
-function ra(e) {
+function za(e) {
 	return s.join(e, Se.logos_folder);
 }
-function ia(e, t) {
+function Ba(e, t) {
 	let n = {};
-	for (let t of na(e)) {
+	for (let t of Ra(e)) {
 		let r = e.prepare(`SELECT * FROM "${t}"`).raw();
 		n[t] = {
 			columnas: r.columns().map((e) => e.name),
 			filas: r.all()
 		};
 	}
-	let r = {}, i = ra(t);
-	if (u(i)) for (let e of p(i).filter((e) => $i.test(e))) r[e] = f(s.join(i, e), "utf8");
+	let r = {}, i = za(t);
+	if (u(i)) for (let e of p(i).filter((e) => Pa.test(e))) r[e] = f(s.join(i, e), "utf8");
 	return {
 		version_base: e.pragma("user_version", { simple: !0 }),
 		tablas: n,
 		logos: r
 	};
 }
-async function aa(e, t) {
-	let n = await gn(t, y(JSON.stringify(e)));
+async function Va(e, t) {
+	let n = await bn(t, b(JSON.stringify(e)));
 	return JSON.stringify({
-		formato: Zi,
+		formato: Ma,
 		version: 1,
 		creado_en: (/* @__PURE__ */ new Date()).toISOString(),
 		...n
 	});
 }
-async function oa(e, t) {
+async function Ha(e, t) {
 	let n;
 	try {
 		n = JSON.parse(e);
 	} catch {
-		throw new z(ta, 400);
+		throw new V(Ia, 400);
 	}
-	if (n?.formato !== "prelatura-respaldo" || !n.sal || !n.iv || !n.etiqueta || !n.datos) throw new z(ta, 400);
-	if (n.version !== 1) throw new z("El respaldo es de otra versión de la aplicación.", 400);
-	let r = await _n(t, n);
-	if (!r) throw new z(ea, 400);
-	let i = JSON.parse(v(r).toString("utf8"));
-	if (!Number.isInteger(i?.version_base) || i.version_base < 1 || typeof i.tablas != "object" || typeof i.logos != "object") throw new z(ta, 400);
+	if (n?.formato !== "prelatura-respaldo" || !n.sal || !n.iv || !n.etiqueta || !n.datos) throw new V(Ia, 400);
+	if (n.version !== 1) throw new V("El respaldo es de otra versión de la aplicación.", 400);
+	let r = await xn(t, n);
+	if (!r) throw new V(Fa, 400);
+	let i = JSON.parse(y(r).toString("utf8"));
+	if (!Number.isInteger(i?.version_base) || i.version_base < 1 || typeof i.tablas != "object" || typeof i.logos != "object") throw new V(Ia, 400);
 	return i;
 }
-function sa(e, t) {
-	let n = na(e);
-	for (let e of Object.keys(t.tablas)) if (!n.includes(e)) throw new z(ta, 400);
+function Ua(e, t) {
+	let n = Ra(e);
+	for (let e of Object.keys(t.tablas)) if (!n.includes(e)) throw new V(Ia, 400);
 	let r = e.transaction(() => {
 		for (let t of n) e.prepare(`DELETE FROM "${t}"`).run();
 		for (let [n, r] of Object.entries(t.tablas)) {
 			let t = e.pragma(`table_info("${n}")`).map((e) => e.name);
-			if (!r.columnas.every((e) => t.includes(e))) throw new z(ta, 400);
+			if (!r.columnas.every((e) => t.includes(e))) throw new V(Ia, 400);
 			let i = r.columnas.map((e) => `"${e}"`).join(", "), a = r.columnas.map(() => "?").join(", "), o = e.prepare(`INSERT INTO "${n}" (${i}) VALUES (${a})`);
 			for (let e of r.filas) o.run(e);
 		}
-		if (e.prepare("DELETE FROM sync_estado WHERE clave = ?").run(R.key_registered), e.pragma("foreign_key_check").length > 0) throw new z("El respaldo está incompleto: hay datos que apuntan a registros que no están.", 400);
+		if (e.prepare("DELETE FROM sync_estado WHERE clave = ?").run(B.key_registered), e.pragma("foreign_key_check").length > 0) throw new V("El respaldo está incompleto: hay datos que apuntan a registros que no están.", 400);
 	});
 	e.pragma("foreign_keys = OFF");
 	try {
@@ -1925,91 +2211,139 @@ function sa(e, t) {
 		e.pragma("foreign_keys = ON");
 	}
 }
-function ca(e, t, n) {
-	if (n.version_base > vn.length) throw new z("El respaldo es de una versión más nueva de la aplicación. Actualícela antes de restaurarlo.", 400);
-	let r = Nn(e, t, vn.slice(0, n.version_base));
+function Wa(e, t, n) {
+	if (n.version_base > Sn.length) throw new V("El respaldo es de una versión más nueva de la aplicación. Actualícela antes de restaurarlo.", 400);
+	let r = Ln(e, t, Sn.slice(0, n.version_base));
 	try {
-		sa(r.db, n);
+		Ua(r.db, n);
 	} finally {
 		r.db.close();
 	}
-	return Sn(e.temp_database, r.key).close(), r.key;
+	return En(e.temp_database, r.key).close(), r.key;
 }
-function la(e, t) {
-	let n = ra(e);
+function Ga(e, t) {
+	let n = za(e);
 	d(n, { recursive: !0 });
-	for (let e of p(n).filter((e) => $i.test(e))) h(s.join(n, e), { force: !0 });
-	for (let [e, r] of Object.entries(t)) $i.test(e) && typeof r == "string" && _(s.join(n, e), r, "utf8");
+	for (let e of p(n).filter((e) => Pa.test(e))) h(s.join(n, e), { force: !0 });
+	for (let [e, r] of Object.entries(t)) Pa.test(e) && typeof r == "string" && _(s.join(n, e), r, "utf8");
 }
-async function ua(e) {
-	let t = Un(), n = ca(t, Hn, e);
-	Fi(), await wi(), Jn(), qn(Pn(t, Hn, n), n), la(t.directory, e.logos);
+async function Ka(e) {
+	let t = qn(), n = Wa(t, Kn, e);
+	ga(), await ki(), Qn(), Zn(Rn(t, Kn, n), n), Ga(t.directory, e.logos);
 }
-function da(e) {
-	if (e.role !== "admin_parroquia") throw new z("Solo el administrador de una parroquia puede hacer o restaurar respaldos.", 403);
+function qa(e) {
+	return s.join(e, Se.backup_log);
 }
-function fa(e, t) {
+function Ja(e) {
+	try {
+		let t = JSON.parse(f(qa(e), "utf8"));
+		return Array.isArray(t) ? t : [];
+	} catch {
+		return [];
+	}
+}
+function Ya(e, t) {
+	let n = [t, ...Ja(e)].slice(0, La);
+	_(qa(e), JSON.stringify(n, null, 2), "utf8");
+}
+function Xa(e, t) {
+	let n = e.prepare("SELECT username, nombre, apellido_paterno, apellido_materno FROM usuarios WHERE id = ?").get(t.user_id);
+	if (!n) return "Usuario desconocido";
+	let r = Ee(n.nombre, n.apellido_paterno, n.apellido_materno);
+	return r ? `${r} (${n.username})` : n.username;
+}
+function Za(e) {
+	let { dir: t, name: n } = s.parse(e);
+	return s.join(t, `${n}.xlsx`);
+}
+function Qa(e) {
+	if (e.role !== "admin_parroquia") throw new V("Solo el administrador de una parroquia puede hacer o restaurar respaldos.", 403);
+}
+function $a(e, t) {
 	let n = typeof e == "string" ? e : "";
-	if (t && n.length < 8) throw new z("La contraseña del respaldo debe tener al menos 8 caracteres.", 400);
-	if (!n) throw new z("Escriba la contraseña del respaldo.", 400);
+	if (t && n.length < 8) throw new V("La contraseña del respaldo debe tener al menos 8 caracteres.", 400);
+	if (!n) throw new V("Escriba la contraseña del respaldo.", 400);
 	return n;
 }
-function pa(e, t) {
+function eo(e, t) {
 	return e.tablas[t]?.filas.length ?? 0;
 }
-function ma(e) {
+function to(e) {
 	return {
 		cancelado: !1,
-		partidas: pa(e, "sacramentos"),
-		pendientes: pa(e, "sync_cola")
+		partidas: eo(e, "sacramentos"),
+		pendientes: eo(e, "sync_cola")
 	};
 }
-async function ha(e) {
-	let t = fa(e, !1), n = {
+async function no(e, t) {
+	let n = $a(e, !1), i = {
 		title: "Elegir el respaldo",
 		properties: ["openFile"],
 		filters: [{
 			name: "Respaldo",
-			extensions: [Qi]
+			extensions: [Na]
 		}]
-	}, i = Ji(), a = i ? await r.showOpenDialog(i, n) : await r.showOpenDialog(n);
-	if (a.canceled || a.filePaths.length === 0) return { cancelado: !0 };
-	let o;
+	}, a = ka(), o = a ? await r.showOpenDialog(a, i) : await r.showOpenDialog(i);
+	if (o.canceled || o.filePaths.length === 0) return { cancelado: !0 };
+	let c;
 	try {
-		o = f(a.filePaths[0], "utf8");
+		c = f(o.filePaths[0], "utf8");
 	} catch {
-		throw new z("No se pudo leer el respaldo.", 400);
+		throw new V("No se pudo leer el respaldo.", 400);
 	}
-	let s = await oa(o, t);
-	return await ua(s), ma(s);
+	let l = await Ha(c, n);
+	return await Ka(l), Ya(qn().directory, {
+		fecha: (/* @__PURE__ */ new Date()).toISOString(),
+		usuario: t,
+		accion: "restauro",
+		archivo: s.basename(o.filePaths[0])
+	}), to(l);
 }
-function ga() {
+function ro() {
 	try {
-		return Vi(W());
+		return Sa(G());
 	} catch {
 		return !1;
 	}
 }
-var _a = {
+var io = {
 	"backup.export": async (e, { db: t, session: n }) => {
-		da(n);
-		let i = fa(e?.password, !0), a = {
+		Qa(n);
+		let i = $a(e?.password, !0), a = {
 			title: "Guardar el respaldo",
-			defaultPath: `respaldo-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.${Qi}`,
+			defaultPath: `respaldo-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.${Na}`,
 			filters: [{
 				name: "Respaldo",
-				extensions: [Qi]
+				extensions: [Na]
 			}]
-		}, o = Ji(), s = o ? await r.showSaveDialog(o, a) : await r.showSaveDialog(a);
-		if (s.canceled || !s.filePath) return { cancelado: !0 };
-		let c = ia(t, Un().directory);
-		return _(s.filePath, await aa(c, i), "utf8"), ma(c);
+		}, o = ka(), c = o ? await r.showSaveDialog(o, a) : await r.showSaveDialog(a);
+		if (c.canceled || !c.filePath) return { cancelado: !0 };
+		let l = qn().directory, u = Ba(t, l);
+		_(c.filePath, await Va(u, i), "utf8");
+		let d = Za(c.filePath);
+		Ya(l, {
+			fecha: (/* @__PURE__ */ new Date()).toISOString(),
+			usuario: Xa(t, n),
+			accion: "exporto",
+			archivo: s.basename(c.filePath)
+		});
+		try {
+			_(d, Ui(la(t, n.parish_id)));
+		} catch {
+			throw new V(`Se guardó el respaldo, pero no el Excel: puede que "${s.basename(d)}" esté abierto. Ciérrelo y vuelva a exportar.`, 409);
+		}
+		return {
+			...to(u),
+			archivo: s.basename(c.filePath),
+			excel: s.basename(d)
+		};
 	},
-	"backup.restore": (e, { session: t }) => (da(t), ha(e?.password))
-}, va = { "backup.restoreEmpty": (e) => {
-	if (!ga()) throw new z("Esta PC ya tiene usuarios: entre como administrador y restaure el respaldo desde Configuración.", 409);
-	return ha(e?.password);
-} }, ya = 50, ba = 75, xa = .75, Sa = [
+	"backup.restore": (e, { db: t, session: n }) => (Qa(n), no(e?.password, Xa(t, n))),
+	"backup.log": (e, { session: t }) => (Qa(t), { registros: Ja(qn().directory) })
+}, ao = { "backup.restoreEmpty": (e) => {
+	if (!ro()) throw new V("Esta PC ya tiene usuarios: entre como administrador y restaure el respaldo desde Configuración.", 409);
+	return no(e?.password, "Sin sesión (PC nueva)");
+} }, oo = 50, so = 75, co = .75, lo = [
 	"dni",
 	"nombres",
 	"apellido_paterno",
@@ -2017,7 +2351,7 @@ var _a = {
 	"fecha_nacimiento",
 	"padre",
 	"madre"
-], Ca = {
+], uo = {
 	dni: 40,
 	nombres: 25,
 	apellido_paterno: 20,
@@ -2025,7 +2359,7 @@ var _a = {
 	fecha_nacimiento: 20,
 	padre: 10,
 	madre: 10
-}, wa = {
+}, fo = {
 	dni: "DNI",
 	nombres: "Nombres",
 	apellido_paterno: "Apellido paterno",
@@ -2037,7 +2371,7 @@ var _a = {
 function Y(e) {
 	return (e ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
-function Ta(e, t) {
+function po(e, t) {
 	let n = [];
 	for (let e = 0; e <= t.length; e++) n.push(e);
 	for (let r = 1; r <= e.length; r++) {
@@ -2050,17 +2384,17 @@ function Ta(e, t) {
 	}
 	return n[t.length];
 }
-function Ea(e, t) {
+function mo(e, t) {
 	if (!e || !t) return 0;
 	if (e === t) return 1;
 	let n = e.split(" "), r = t.split(" "), i = n.length <= r.length ? n : r, a = n.length <= r.length ? r : n;
 	if (i.every((e) => a.includes(e))) return .85;
 	let o = Math.max(e.length, t.length);
 	if (Math.abs(e.length - t.length) / o > .25) return 0;
-	let s = 1 - Ta(e, t) / o;
-	return s >= xa ? s : 0;
+	let s = 1 - po(e, t) / o;
+	return s >= co ? s : 0;
 }
-function Da(e, t) {
+function ho(e, t) {
 	return !e || !t ? {
 		comparable: !1,
 		value: 0
@@ -2072,10 +2406,10 @@ function Da(e, t) {
 		value: 0
 	};
 }
-function Oa(e, t, n) {
+function go(e, t, n) {
 	let r = !!(e.dni && t.dni), i = r && e.dni === Y(t.dni), a = (r, i) => {
 		let a = [Y(i), ...n.get(`${t.persona_id}:${r}`) ?? []];
-		return Math.max(...a.map((t) => Ea(e[r], t)));
+		return Math.max(...a.map((t) => mo(e[r], t)));
 	}, o = a("nombres", t.nombres), s = a("apellido_paterno", t.apellido_paterno);
 	if (!i && (o === 0 || s === 0)) return null;
 	let c = {
@@ -2095,37 +2429,37 @@ function Oa(e, t, n) {
 			comparable: !!(e.apellido_materno && t.apellido_materno),
 			value: a("apellido_materno", t.apellido_materno)
 		},
-		fecha_nacimiento: Da(e.fecha_nacimiento, Y(t.fecha_nacimiento)),
+		fecha_nacimiento: ho(e.fecha_nacimiento, Y(t.fecha_nacimiento)),
 		padre: {
 			comparable: !!(e.padre && t.padre),
-			value: Ea(e.padre, Y(t.padre))
+			value: mo(e.padre, Y(t.padre))
 		},
 		madre: {
 			comparable: !!(e.madre && t.madre),
-			value: Ea(e.madre, Y(t.madre))
+			value: mo(e.madre, Y(t.madre))
 		}
 	}, l = 0, u = 0, d = [];
-	for (let e of Sa) {
+	for (let e of lo) {
 		let t = c[e];
-		t.comparable && (u += Ca[e], l += Ca[e] * t.value, t.value >= xa && d.push(wa[e]));
+		t.comparable && (u += uo[e], l += uo[e] * t.value, t.value >= co && d.push(fo[e]));
 	}
-	let f = Math.round(l / u * 100), p = o >= xa && s >= xa, m = r && !i, h = !1;
+	let f = Math.round(l / u * 100), p = o >= co && s >= co, m = r && !i, h = !1;
 	for (let e of [
 		"fecha_nacimiento",
 		"padre",
 		"madre"
-	]) c[e].comparable && c[e].value >= xa && (h = !0);
+	]) c[e].comparable && c[e].value >= co && (h = !0);
 	return i && (o > 0 || s > 0) || p && h && !m ? {
 		nivel: "alta",
 		porcentaje: f,
 		coincide: d
-	} : i || f >= ba ? {
+	} : i || f >= so ? {
 		nivel: "posible",
 		porcentaje: f,
 		coincide: d
 	} : null;
 }
-function ka(e) {
+function _o(e) {
 	return {
 		dni: Y(e.dni),
 		nombres: Y(e.nombres),
@@ -2136,15 +2470,15 @@ function ka(e) {
 		madre: Y(e.madre)
 	};
 }
-function Aa(e, t) {
+function vo(e, t) {
 	let n = Number(t.nivel === "alta") - Number(e.nivel === "alta");
 	return n === 0 ? t.porcentaje - e.porcentaje : n;
 }
-function ja(e, t, n, r) {
-	if (!lt(t)) throw new z("Tipo de sacramento inválido.", 400);
+function yo(e, t, n, r) {
+	if (!gt(t)) throw new V("Tipo de sacramento inválido.", 400);
 	let i = r.map((e) => ({
 		para: e.para ?? "",
-		values: ka(e)
+		values: _o(e)
 	})).filter((e) => e.values.dni || e.values.nombres && e.values.apellido_paterno);
 	if (i.length === 0) return {
 		matches: [],
@@ -2152,7 +2486,7 @@ function ja(e, t, n, r) {
 	};
 	let a = Number.isInteger(n) ? n : 0, o = e.prepare(`SELECT s.id, sub.persona_id, s.libro, s.folio, s.numero, par.nombre AS parroquia_nombre,
 				pe.dni, pe.nombres, pe.apellido_paterno, pe.apellido_materno, pe.fecha_nacimiento, pe.padre, pe.madre
-			 FROM (${ft(t)}) sub
+			 FROM (${yt(t)}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
 			 JOIN parroquias par ON par.id = s.parroquia_id
@@ -2165,7 +2499,7 @@ function ja(e, t, n, r) {
 	for (let e of i) {
 		let t = [];
 		for (let n of o) {
-			let r = Oa(e.values, n, s);
+			let r = go(e.values, n, s);
 			r && t.push({
 				sacramento_id: n.id,
 				para: e.para,
@@ -2179,28 +2513,28 @@ function ja(e, t, n, r) {
 				numero: n.numero
 			});
 		}
-		l += t.length, t.sort(Aa), u.push(...t.slice(0, ya));
+		l += t.length, t.sort(vo), u.push(...t.slice(0, oo));
 	}
-	return u.sort(Aa), {
+	return u.sort(vo), {
 		matches: u,
 		total: l
 	};
 }
-var Ma = { "sacraments.findDuplicates": (e, { db: t }) => ja(t, e.tipo, e.excluir_sacramento_id, e.personas) }, Na = /^[$_\u0080-\uFFFFa-zA-Z][$_\u0080-\uFFFF\w]*$/;
-function Pa(e) {
+var bo = { "sacraments.findDuplicates": (e, { db: t }) => yo(t, e.tipo, e.excluir_sacramento_id, e.personas) }, xo = /^[$_\u0080-\uFFFFa-zA-Z][$_\u0080-\uFFFF\w]*$/;
+function So(e) {
 	let t = {}, n = {}, r = e(), i = e.toString(), a = i.slice(i.indexOf("[") + 1, i.lastIndexOf("]")).split(",").map((e) => e.trim());
-	for (let e of a) if (!Na.test(e)) throw Error(`Invalid dependency name: ${e}`);
+	for (let e of a) if (!xo.test(e)) throw Error(`Invalid dependency name: ${e}`);
 	let o = 0;
 	for (; o < r.length;) {
 		let e = a[o], i = r[o];
-		typeof i == "function" ? t[e] = Fa(i, e) : n[e] = i, o++;
+		typeof i == "function" ? t[e] = Co(i, e) : n[e] = i, o++;
 	}
 	return {
 		functions: t,
 		variables: n
 	};
 }
-function Fa(e, t) {
+function Co(e, t) {
 	let n = e.toString();
 	if (e.prototype) {
 		if (n.indexOf("[native code]") >= 0) {
@@ -2217,7 +2551,7 @@ function Fa(e, t) {
 }
 //#endregion
 //#region node_modules/worker-f/lib/createWorker.js
-function Ia(e, t, n, r, i, a) {
+function wo(e, t, n, r, i, a) {
 	let o = !1, s, c = () => {
 		s.stop();
 	}, l = (e, t) => {
@@ -2231,7 +2565,7 @@ function Ia(e, t, n, r, i, a) {
 		start: (c, u) => {
 			if (o) throw Error("Was started");
 			o = !0;
-			let d = i(), f = d && d._, p = f || Ra(t, c);
+			let d = i(), f = d && d._, p = f || Eo(t, c);
 			f || a({ _: p });
 			let [m, h] = p;
 			s = e(m, () => {
@@ -2245,24 +2579,24 @@ function Ia(e, t, n, r, i, a) {
 		ingest: l
 	};
 }
-var La = ")(postMessage)}";
-function Ra(e, t) {
-	let [n, r] = za(t);
-	return [n + ";var onMessage = function(data) {for (var key in data) {self[key] = data[key]}onMessage = (" + e.toString() + La, r];
+var To = ")(postMessage)}";
+function Eo(e, t) {
+	let [n, r] = Do(t);
+	return [n + ";var onMessage = function(data) {for (var key in data) {self[key] = data[key]}onMessage = (" + e.toString() + To, r];
 }
-function za(e) {
+function Do(e) {
 	let t = {}, n = {};
 	for (let r of e) {
-		let { functions: e, variables: i } = Pa(r);
+		let { functions: e, variables: i } = So(r);
 		t = Object.assign(Object.assign({}, t), e), n = Object.assign(Object.assign({}, n), i);
 	}
 	return [Object.keys(t).map((e) => e + "=" + t[e]).join(";"), n];
 }
 //#endregion
 //#region node_modules/worker-f/lib/createWorkerFunctionOrStream.js
-function Ba(e, t, n, r, i, a) {
-	let o = !1, s = !1, c = [], l = () => [], u = () => [], d, f, p = (e) => Va[e], m = (e, t) => {
-		Va[e] = t;
+function Oo(e, t, n, r, i, a) {
+	let o = !1, s = !1, c = [], l = () => [], u = () => [], d, f, p = (e) => ko[e], m = (e, t) => {
+		ko[e] = t;
 	}, h = () => {
 		if (!o) throw Error("Not started");
 	}, g = () => {
@@ -2289,11 +2623,11 @@ function Ba(e, t, n, r, i, a) {
 		]), o = !0, x.start(c, void 0);
 	}, C = () => {
 		s = !0, x.stop();
-	}, te = (e) => {
+	}, w = (e) => {
 		x.ingest([Date.now(), e], l(...e));
-	}, w, T = Object.assign({
-		inputLatency: w,
-		outputLatency: w,
+	}, T, E = Object.assign({
+		inputLatency: T,
+		outputLatency: T,
 		addDependencies(e) {
 			v(), ee(e);
 		},
@@ -2313,8 +2647,8 @@ function Ba(e, t, n, r, i, a) {
 		},
 		start: S,
 		stop: C
-	}, n(S, C, o, s, te, h, g, _));
-	return x = Ia(e, (e) => {
+	}, n(S, C, o, s, w, h, g, _));
+	return x = wo(e, (e) => {
 		let t = -1, n = -1, i = r(b, (r) => {
 			e([
 				t,
@@ -2327,7 +2661,7 @@ function Ba(e, t, n, r, i, a) {
 	}, (e) => {
 		s || i(e);
 	}, ([e, t, n, r]) => {
-		s || (e !== -1 && (T.inputLatency = t - e), T.outputLatency = Date.now() - n, a(r));
+		s || (e !== -1 && (E.inputLatency = t - e), E.outputLatency = Date.now() - n, a(r));
 	}, () => {
 		if (d) {
 			let e = p(d);
@@ -2335,14 +2669,14 @@ function Ba(e, t, n, r, i, a) {
 		}
 	}, (e) => {
 		d && m(d, Object.assign(Object.assign({}, p(d)), { other: e }));
-	}), T;
+	}), E;
 }
-var Va = {};
+var ko = {};
 //#endregion
 //#region node_modules/worker-f/lib/createWorkerFunction.js
-function Ha(e, t) {
+function Ao(e, t) {
 	let n, r;
-	return Ba(e, t, (e, t, i, a, o, s, c, l) => ({
+	return Oo(e, t, (e, t, i, a, o, s, c, l) => ({
 		call(...e) {
 			if (l(), s(), n || r) throw Error("Previous call not finished");
 			return new Promise((t, i) => {
@@ -2368,10 +2702,10 @@ function Ha(e, t) {
 }
 //#endregion
 //#region node_modules/worker-f/lib/environment/createWorkerInNode.js
-function Ua(e, t, n, r, i) {
+function jo(e, t, n, r, i) {
 	let a = !1, o = !1, s = t();
-	s || (s = Wa(e), n(s));
-	let c = new E(s, { eval: !0 }).on("error", (e) => {
+	s || (s = Mo(e), n(s));
+	let c = new O(s, { eval: !0 }).on("error", (e) => {
 		o = !0, r(e);
 	}).on("message", (e) => {
 		i(e);
@@ -2380,31 +2714,31 @@ function Ua(e, t, n, r, i) {
 	});
 	return {
 		stop: () => {
-			a = !0, E.prototype.terminate.call(c);
+			a = !0, O.prototype.terminate.call(c);
 		},
 		ingest: c.postMessage.bind(c)
 	};
 }
-function Wa(e) {
-	return e + ";" + Ga;
+function Mo(e) {
+	return e + ";" + No;
 }
-var Ga = "var workerThreads = require(\"worker_threads\");workerThreads.parentPort.on(\"message\", function(data) {onMessage(data)});var postMessage = function(data, transferList) {workerThreads.parentPort.postMessage(data, transferList)};self = global";
+var No = "var workerThreads = require(\"worker_threads\");workerThreads.parentPort.on(\"message\", function(data) {onMessage(data)});var postMessage = function(data, transferList) {workerThreads.parentPort.postMessage(data, transferList)};self = global";
 //#endregion
 //#region node_modules/worker-f/lib/export/node/createWorkerFunctionInNode.js
-function Ka(e) {
-	return Ha(Ua, e);
+function Po(e) {
+	return Ao(jo, e);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/saxen/parser.js
-function qa(e) {
+function Fo(e) {
 	"@babel/helpers - typeof";
-	return qa = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return Fo = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, qa(e);
+	}, Fo(e);
 }
-function Ja(e) {
+function Io(e) {
 	var t = String.fromCharCode, n = Object.prototype.hasOwnProperty, r = /&#(\d+);|&#x([0-9a-f]+);|&(\w+);/gi, i = {
 		amp: "&",
 		apos: "'",
@@ -2459,11 +2793,11 @@ function Ja(e) {
 	}
 	function _(e) {
 		if (!this) return new _(e);
-		var t = e && e.proxy, n, r, i, a, v = g, y, b, x, ee, S = h, C = !1, te = !1, w = "", T = !1, E = !1, D = null, O = !1, ne, k, re, ie;
-		function A(e) {
-			e instanceof Error || (e = c(e)), D = e, v(e, S);
+		var t = e && e.proxy, n, r, i, a, v = g, y, b, x, ee, S = h, C = !1, w = !1, T = "", E = !1, D = !1, O = null, k = !1, te, A, j, ne;
+		function M(e) {
+			e instanceof Error || (e = c(e)), O = e, v(e, S);
 		}
-		function j(e) {
+		function N(e) {
 			y && (e instanceof Error || (e = c(e)), y(e, S));
 		}
 		this.on = function(e, t) {
@@ -2500,178 +2834,178 @@ function Ja(e) {
 			}
 			return this;
 		}, this.ns = function(e) {
-			if (e === void 0 && (e = {}), qa(e) !== "object") throw c("required args <nsMap={}>");
+			if (e === void 0 && (e = {}), Fo(e) !== "object") throw c("required args <nsMap={}>");
 			var t = {}, n;
 			for (n in e) t[n] = e[n];
-			return E = !0, ie = t, this;
+			return D = !0, ne = t, this;
 		};
-		function ae() {
-			ne = E ? [] : null, k = E ? m(ie) : null, re = [], S = h, O = !1, D = null, te = !1, w = "";
+		function re() {
+			te = D ? [] : null, A = D ? m(ne) : null, j = [], S = h, k = !1, O = null, w = !1, T = "";
 		}
 		this.parse = function(e) {
 			if (typeof e != "string") throw c("required args <xml=string>");
 			if (C) throw c("parse during stream; call end() first");
-			return ae(), M(e), S = h, O = !1, D;
+			return re(), P(e), S = h, k = !1, O;
 		}, this.write = function(e) {
 			if (typeof e != "string") throw c("required args <xml=string>");
-			return C ||= (ae(), !0), D || (w = M(w + e, !0) || ""), this;
+			return C ||= (re(), !0), O || (T = P(T + e, !0) || ""), this;
 		}, this.end = function() {
-			return C || ae(), C = !1, D || M(w), w = "", S = h, O = !1, D;
+			return C || re(), C = !1, O || P(T), T = "", S = h, k = !1, O;
 		}, this.stop = function() {
-			O = !0;
+			k = !0;
 		};
-		function M(e) {
-			var c = arguments.length > 1 && arguments[1] !== void 0 && arguments[1], m = null, h = null, g, _ = 0, v = !1, y = !1, C = 0, w = 0, D, ae, M, N, P, oe, F, se, ce, I = "", le = 0, ue;
-			function de(e, t) {
+		function P(e) {
+			var c = arguments.length > 1 && arguments[1] !== void 0 && arguments[1], m = null, h = null, g, _ = 0, v = !1, y = !1, C = 0, T = 0, O, re, P, F, I, L, R, ie, ae, oe = "", z = 0, se;
+			function ce(e, t) {
 				var n = e.indexOf(":");
 				if (n === -1) return e;
-				var r = k[e.substring(0, n)];
-				return r ? t === r ? e.substr(n + 1) : r + e.substr(n) : (j(l(e.substring(0, n))), null);
+				var r = A[e.substring(0, n)];
+				return r ? t === r ? e.substr(n + 1) : r + e.substr(n) : (N(l(e.substring(0, n))), null);
 			}
-			function fe() {
-				if (ue !== null) return ue;
-				var e, t, n = E && k.xmlns, r = E && T ? [] : null, i = le, a = I, s = a.length, c, l, u, f, m, h = {}, g = /* @__PURE__ */ new Set(), v, y, b;
+			function le() {
+				if (se !== null) return se;
+				var e, t, n = D && A.xmlns, r = D && E ? [] : null, i = z, a = oe, s = a.length, c, l, u, f, m, h = {}, g = /* @__PURE__ */ new Set(), v, y, b;
 				parseAttr: for (; i < s; i++) if (v = !1, y = a.charCodeAt(i), !(y === 32 || y < 14 && y > 8)) {
-					for ((y < 65 || y > 122 || y > 90 && y < 97) && y !== 95 && y !== 58 && (j("illegal first char attribute name"), v = !0), b = i + 1; b < s; b++) if (y = a.charCodeAt(b), !(y > 96 && y < 123 || y > 64 && y < 91 || y > 47 && y < 59 || y === 46 || y === 45 || y === 95)) {
+					for ((y < 65 || y > 122 || y > 90 && y < 97) && y !== 95 && y !== 58 && (N("illegal first char attribute name"), v = !0), b = i + 1; b < s; b++) if (y = a.charCodeAt(b), !(y > 96 && y < 123 || y > 64 && y < 91 || y > 47 && y < 59 || y === 46 || y === 45 || y === 95)) {
 						if (y === 32 || y < 14 && y > 8) {
-							j("missing attribute value"), i = b;
+							N("missing attribute value"), i = b;
 							continue parseAttr;
 						}
 						if (y === 61) break;
-						j("illegal attribute name char"), v = !0;
+						N("illegal attribute name char"), v = !0;
 					}
-					if (m = a.substring(i, b), m === "xmlns:xmlns" && (j("illegal declaration of xmlns"), v = !0), y = a.charCodeAt(b + 1), y === 34) b = a.indexOf("\"", i = b + 2), b === -1 && (b = a.indexOf("'", i), b !== -1 && (j("attribute value quote missmatch"), v = !0));
-					else if (y === 39) b = a.indexOf("'", i = b + 2), b === -1 && (b = a.indexOf("\"", i), b !== -1 && (j("attribute value quote missmatch"), v = !0));
-					else for (j("missing attribute value quotes"), v = !0, b += 1; b < s && (y = a.charCodeAt(b + 1), !(y === 32 || y < 14 && y > 8)); b++);
-					for (b === -1 && (j("missing closing quotes"), b = s, v = !0), v || (u = a.substring(i, b)), i = b; b + 1 < s && (y = a.charCodeAt(b + 1), !(y === 32 || y < 14 && y > 8)); b++) i === b && (j("illegal character after attribute end"), v = !0);
+					if (m = a.substring(i, b), m === "xmlns:xmlns" && (N("illegal declaration of xmlns"), v = !0), y = a.charCodeAt(b + 1), y === 34) b = a.indexOf("\"", i = b + 2), b === -1 && (b = a.indexOf("'", i), b !== -1 && (N("attribute value quote missmatch"), v = !0));
+					else if (y === 39) b = a.indexOf("'", i = b + 2), b === -1 && (b = a.indexOf("\"", i), b !== -1 && (N("attribute value quote missmatch"), v = !0));
+					else for (N("missing attribute value quotes"), v = !0, b += 1; b < s && (y = a.charCodeAt(b + 1), !(y === 32 || y < 14 && y > 8)); b++);
+					for (b === -1 && (N("missing closing quotes"), b = s, v = !0), v || (u = a.substring(i, b)), i = b; b + 1 < s && (y = a.charCodeAt(b + 1), !(y === 32 || y < 14 && y > 8)); b++) i === b && (N("illegal character after attribute end"), v = !0);
 					if (i = b + 1, v) continue parseAttr;
 					if (g.has(m)) {
-						j("attribute <" + m + "> already defined");
+						N("attribute <" + m + "> already defined");
 						continue;
 					}
-					if (g.add(m), !E) {
+					if (g.add(m), !D) {
 						h[m] = u;
 						continue;
 					}
-					if (T) {
+					if (E) {
 						if (l = m === "xmlns" ? "xmlns" : m.charCodeAt(0) === 120 && m.substr(0, 6) === "xmlns:" ? m.substr(6) : null, l !== null) {
-							if (e = o(u), t = p(l), f = ie[e], !f) {
-								if (l === "xmlns" || t in k && k[t] !== e) do
+							if (e = o(u), t = p(l), f = ne[e], !f) {
+								if (l === "xmlns" || t in A && A[t] !== e) do
 									f = "ns" + _++;
-								while (k[f] !== void 0);
+								while (A[f] !== void 0);
 								else f = l;
-								ie[e] = f;
+								ne[e] = f;
 							}
-							k[l] !== f && (c ||= (k = d(k), !0), k[l] = f, l === "xmlns" && (k[p(f)] = e, n = f), k[t] = e), h[m] = u;
+							A[l] !== f && (c ||= (A = d(A), !0), A[l] = f, l === "xmlns" && (A[p(f)] = e, n = f), A[t] = e), h[m] = u;
 							continue;
 						}
 						r.push(m, u);
 						continue;
 					}
-					m = de(m, n), m !== null && (h[m] = u);
+					m = ce(m, n), m !== null && (h[m] = u);
 				}
-				if (T) for (i = 0, s = r.length; i < s; i++) m = de(r[i++], n), u = r[i], m !== null && (h[m] = u);
-				return ue = h;
+				if (E) for (i = 0, s = r.length; i < s; i++) m = ce(r[i++], n), u = r[i], m !== null && (h[m] = u);
+				return se = h;
 			}
-			function pe() {
-				for (var t = /(\r\n|\r|\n)/g, n = 0, r = 0, i = 0, a = w, o, s; C >= i && (o = t.exec(e), !(!o || (a = o[0].length + o.index, a > C)));) n += 1, i = a;
-				return C == -1 ? (r = a, s = e.substring(w)) : w === 0 ? s = e.substring(w, C) : (r = C - i, s = w == -1 ? e.substring(C) : e.substring(C, w + 1)), {
+			function ue() {
+				for (var t = /(\r\n|\r|\n)/g, n = 0, r = 0, i = 0, a = T, o, s; C >= i && (o = t.exec(e), !(!o || (a = o[0].length + o.index, a > C)));) n += 1, i = a;
+				return C == -1 ? (r = a, s = e.substring(T)) : T === 0 ? s = e.substring(T, C) : (r = C - i, s = T == -1 ? e.substring(C) : e.substring(C, T + 1)), {
 					data: s,
 					line: n,
 					column: r
 				};
 			}
-			for (S = pe, t && (ce = Object.create({}, {
+			for (S = ue, t && (ae = Object.create({}, {
 				name: u(function() {
-					return F;
+					return R;
 				}),
 				originalName: u(function() {
-					return se;
+					return ie;
 				}),
-				attrs: u(fe),
+				attrs: u(le),
 				ns: u(function() {
-					return k;
+					return A;
 				})
-			})); w !== -1;) {
-				if (C = e.charCodeAt(w) === 60 ? w : e.indexOf("<", w), C === -1) {
-					if (c) return e.substring(w);
-					if (re.length) return A("unexpected end of file");
-					if (!te) return A("missing start tag");
-					w < e.length && e.substring(w).trim() && j(s);
+			})); T !== -1;) {
+				if (C = e.charCodeAt(T) === 60 ? T : e.indexOf("<", T), C === -1) {
+					if (c) return e.substring(T);
+					if (j.length) return M("unexpected end of file");
+					if (!w) return M("missing start tag");
+					T < e.length && e.substring(T).trim() && N(s);
 					return;
 				}
-				if (te ||= !0, w !== C) {
-					if (re.length) {
-						if (n && (n(e.substring(w, C), o, S), O)) return;
-					} else if (e.substring(w, C).trim() && (j(s), O)) return;
+				if (w ||= !0, T !== C) {
+					if (j.length) {
+						if (n && (n(e.substring(T, C), o, S), k)) return;
+					} else if (e.substring(T, C).trim() && (N(s), k)) return;
 				}
-				if (N = e.charCodeAt(C + 1), N === 33) {
-					if (M = e.charCodeAt(C + 2), M === 91 && e.substr(C + 3, 6) === "CDATA[") {
-						if (w = e.indexOf("]]>", C), w === -1) return c ? e.substring(C) : A("unclosed cdata");
-						if (a && (a(e.substring(C + 9, w), S), O)) return;
-						w += 3;
+				if (F = e.charCodeAt(C + 1), F === 33) {
+					if (P = e.charCodeAt(C + 2), P === 91 && e.substr(C + 3, 6) === "CDATA[") {
+						if (T = e.indexOf("]]>", C), T === -1) return c ? e.substring(C) : M("unclosed cdata");
+						if (a && (a(e.substring(C + 9, T), S), k)) return;
+						T += 3;
 						continue;
 					}
-					if (M === 45 && e.charCodeAt(C + 3) === 45) {
-						if (w = e.indexOf("-->", C), w === -1) return c ? e.substring(C) : A("unclosed comment");
-						if (b && (b(e.substring(C + 4, w), o, S), O)) return;
-						w += 3;
+					if (P === 45 && e.charCodeAt(C + 3) === 45) {
+						if (T = e.indexOf("-->", C), T === -1) return c ? e.substring(C) : M("unclosed comment");
+						if (b && (b(e.substring(C + 4, T), o, S), k)) return;
+						T += 3;
 						continue;
 					}
 				}
-				if (N === 63) {
-					if (w = e.indexOf("?>", C), w === -1) return c ? e.substring(C) : A("unclosed question");
-					if (x && (x(e.substring(C, w + 2), S), O)) return;
-					w += 2;
+				if (F === 63) {
+					if (T = e.indexOf("?>", C), T === -1) return c ? e.substring(C) : M("unclosed question");
+					if (x && (x(e.substring(C, T + 2), S), k)) return;
+					T += 2;
 					continue;
 				}
-				for (D = C + 1;; D++) {
-					if (P = e.charCodeAt(D), isNaN(P)) return c ? e.substring(C) : (w = -1, A("unclosed tag"));
-					if (P === 34) M = e.indexOf("\"", D + 1), D = M === -1 ? D : M;
-					else if (P === 39) M = e.indexOf("'", D + 1), D = M === -1 ? D : M;
-					else if (P === 62) {
-						w = D;
+				for (O = C + 1;; O++) {
+					if (I = e.charCodeAt(O), isNaN(I)) return c ? e.substring(C) : (T = -1, M("unclosed tag"));
+					if (I === 34) P = e.indexOf("\"", O + 1), O = P === -1 ? O : P;
+					else if (I === 39) P = e.indexOf("'", O + 1), O = P === -1 ? O : P;
+					else if (I === 62) {
+						T = O;
 						break;
 					}
 				}
-				if (N === 33) {
-					if (ee && (ee(e.substring(C, w + 1), o, S), O)) return;
-					w += 1;
+				if (F === 33) {
+					if (ee && (ee(e.substring(C, T + 1), o, S), k)) return;
+					T += 1;
 					continue;
 				}
-				if (ue = {}, N === 47) {
-					if (v = !1, y = !0, !re.length) return A("missing open tag");
-					if (D = F = re.pop(), M = C + 2 + D.length, e.substring(C + 2, M) !== D) return A("closing tag mismatch");
-					for (; M < w; M++) if (N = e.charCodeAt(M), !(N === 32 || N > 8 && N < 14)) return A("close tag");
+				if (se = {}, F === 47) {
+					if (v = !1, y = !0, !j.length) return M("missing open tag");
+					if (O = R = j.pop(), P = C + 2 + O.length, e.substring(C + 2, P) !== O) return M("closing tag mismatch");
+					for (; P < T; P++) if (F = e.charCodeAt(P), !(F === 32 || F > 8 && F < 14)) return M("close tag");
 				} else {
-					if (e.charCodeAt(w - 1) === 47 ? (D = F = e.substring(C + 1, w - 1), v = !0, y = !0) : (D = F = e.substring(C + 1, w), v = !0, y = !1), !(N > 96 && N < 123 || N > 64 && N < 91 || N === 95 || N === 58)) return A("illegal first char nodeName");
-					for (M = 1, ae = D.length; M < ae; M++) if (N = D.charCodeAt(M), !(N > 96 && N < 123 || N > 64 && N < 91 || N > 47 && N < 59 || N === 45 || N === 95 || N == 46)) {
-						if (N === 32 || N < 14 && N > 8) {
-							F = D.substring(0, M), ue = null;
+					if (e.charCodeAt(T - 1) === 47 ? (O = R = e.substring(C + 1, T - 1), v = !0, y = !0) : (O = R = e.substring(C + 1, T), v = !0, y = !1), !(F > 96 && F < 123 || F > 64 && F < 91 || F === 95 || F === 58)) return M("illegal first char nodeName");
+					for (P = 1, re = O.length; P < re; P++) if (F = O.charCodeAt(P), !(F > 96 && F < 123 || F > 64 && F < 91 || F > 47 && F < 59 || F === 45 || F === 95 || F == 46)) {
+						if (F === 32 || F < 14 && F > 8) {
+							R = O.substring(0, P), se = null;
 							break;
 						}
-						return A("invalid nodeName");
+						return M("invalid nodeName");
 					}
-					y || re.push(F);
+					y || j.push(R);
 				}
-				if (E) {
-					g = k, v && (y || ne.push(g), ue === null && (T = D.indexOf("xmlns", M) !== -1) && (le = M, I = D, fe(), T = !1)), se = F, h !== k && (m = k[f], m === void 0 && (m = k[f] = {}), h = k);
-					var L = m[F];
-					if (L !== void 0) F = L;
+				if (D) {
+					g = A, v && (y || te.push(g), se === null && (E = O.indexOf("xmlns", P) !== -1) && (z = P, oe = O, le(), E = !1)), ie = R, h !== A && (m = A[f], m === void 0 && (m = A[f] = {}), h = A);
+					var de = m[R];
+					if (de !== void 0) R = de;
 					else {
-						if (N = F.indexOf(":"), N !== -1) {
-							if (oe = k[F.substring(0, N)], !oe) return A("missing namespace on <" + se + ">");
-							F = F.substr(N + 1);
-						} else oe = k.xmlns;
-						oe && (F = oe + ":" + F), m[se] = F;
+						if (F = R.indexOf(":"), F !== -1) {
+							if (L = A[R.substring(0, F)], !L) return M("missing namespace on <" + ie + ">");
+							R = R.substr(F + 1);
+						} else L = A.xmlns;
+						L && (R = L + ":" + R), m[ie] = R;
 					}
 				}
-				if (v && (le = M, I = D, r && (t ? r(ce, o, y, S) : r(F, fe, o, y, S), O))) return;
+				if (v && (z = P, oe = O, r && (t ? r(ae, o, y, S) : r(R, le, o, y, S), k))) return;
 				if (y) {
-					if (i && (i(t ? ce : F, o, v, S), O)) return;
-					E && (k = v ? g : ne.pop());
+					if (i && (i(t ? ae : R, o, v, S), k)) return;
+					D && (A = v ? g : te.pop());
 				}
-				w += 1;
+				T += 1;
 			}
 		}
 	}
@@ -2679,10 +3013,10 @@ function Ja(e) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xml/parseXmlStream.saxen.js
-function Ya(e, t, n, r) {
+function Lo(e, t, n, r) {
 	var i = !1, a = function() {
 		if (i) throw Error("Errored");
-	}, o, s = new Ja();
+	}, o, s = new Io();
 	return {
 		promise: new Promise(function(a, c) {
 			o = a, s.on("error", function(e) {
@@ -2692,11 +3026,11 @@ function Ya(e, t, n, r) {
 			}), s.on("openTag", function(n, r, i, a, o) {
 				if (t) {
 					var s = r();
-					for (var c in s) s[Xa(c, !0)] = i(s[c]);
-					t(Xa(n), s, e);
+					for (var c in s) s[Ro(c, !0)] = i(s[c]);
+					t(Ro(n), s, e);
 				}
 			}), s.on("closeTag", function(t) {
-				n && n(Xa(t), e);
+				n && n(Ro(t), e);
 			});
 		}),
 		write: function(e) {
@@ -2707,7 +3041,7 @@ function Ya(e, t, n, r) {
 		}
 	};
 }
-function Xa(e, t) {
+function Ro(e, t) {
 	for (var n = 0; n < e.length;) {
 		if (e[n] === ":" && !(t && n === 5 && e.slice(0, 5) === "xmlns")) return e.slice(n + 1);
 		n++;
@@ -2716,97 +3050,97 @@ function Xa(e, t) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/InvalidSpreadsheetError.js
-function Za(e) {
+function zo(e) {
 	"@babel/helpers - typeof";
-	return Za = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return zo = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, Za(e);
+	}, zo(e);
 }
-function Qa(e, t) {
+function Bo(e, t) {
 	for (var n = 0; n < t.length; n++) {
 		var r = t[n];
-		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, eo(r.key), r);
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Ho(r.key), r);
 	}
 }
-function $a(e, t, n) {
-	return t && Qa(e.prototype, t), n && Qa(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+function Vo(e, t, n) {
+	return t && Bo(e.prototype, t), n && Bo(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function eo(e) {
-	var t = to(e, "string");
-	return Za(t) === "symbol" ? t : String(t);
+function Ho(e) {
+	var t = Uo(e, "string");
+	return zo(t) === "symbol" ? t : String(t);
 }
-function to(e, t) {
-	if (Za(e) !== "object" || e === null) return e;
+function Uo(e, t) {
+	if (zo(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (Za(r) !== "object") return r;
+		if (zo(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function no(e, t) {
+function Wo(e, t) {
 	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function ro(e, t) {
+function Go(e, t) {
 	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
 	e.prototype = Object.create(t && t.prototype, { constructor: {
 		value: e,
 		writable: !0,
 		configurable: !0
-	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && fo(e, t);
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && $o(e, t);
 }
-function io(e) {
-	var t = lo();
+function Ko(e) {
+	var t = Zo();
 	return function() {
-		var n = po(e), r;
+		var n = es(e), r;
 		if (t) {
-			var i = po(this).constructor;
+			var i = es(this).constructor;
 			r = Reflect.construct(n, arguments, i);
 		} else r = n.apply(this, arguments);
-		return ao(this, r);
+		return qo(this, r);
 	};
 }
-function ao(e, t) {
-	if (t && (Za(t) === "object" || typeof t == "function")) return t;
+function qo(e, t) {
+	if (t && (zo(t) === "object" || typeof t == "function")) return t;
 	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
-	return oo(e);
+	return Jo(e);
 }
-function oo(e) {
+function Jo(e) {
 	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
 	return e;
 }
-function so(e) {
+function Yo(e) {
 	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
-	return so = function(e) {
-		if (e === null || !uo(e)) return e;
+	return Yo = function(e) {
+		if (e === null || !Qo(e)) return e;
 		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
 		if (t !== void 0) {
 			if (t.has(e)) return t.get(e);
 			t.set(e, n);
 		}
 		function n() {
-			return co(e, arguments, po(this).constructor);
+			return Xo(e, arguments, es(this).constructor);
 		}
 		return n.prototype = Object.create(e.prototype, { constructor: {
 			value: n,
 			enumerable: !1,
 			writable: !0,
 			configurable: !0
-		} }), fo(n, e);
-	}, so(e);
+		} }), $o(n, e);
+	}, Yo(e);
 }
-function co(e, t, n) {
-	return co = lo() ? Reflect.construct.bind() : function(e, t, n) {
+function Xo(e, t, n) {
+	return Xo = Zo() ? Reflect.construct.bind() : function(e, t, n) {
 		var r = [null];
 		r.push.apply(r, t);
 		var i = new (Function.bind.apply(e, r))();
-		return n && fo(i, n.prototype), i;
-	}, co.apply(null, arguments);
+		return n && $o(i, n.prototype), i;
+	}, Xo.apply(null, arguments);
 }
-function lo() {
+function Zo() {
 	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
 	if (typeof Proxy == "function") return !0;
 	try {
@@ -2815,36 +3149,36 @@ function lo() {
 		return !1;
 	}
 }
-function uo(e) {
+function Qo(e) {
 	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function fo(e, t) {
-	return fo = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+function $o(e, t) {
+	return $o = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
 		return e.__proto__ = t, e;
-	}, fo(e, t);
+	}, $o(e, t);
 }
-function po(e) {
-	return po = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+function es(e) {
+	return es = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
 		return e.__proto__ || Object.getPrototypeOf(e);
-	}, po(e);
+	}, es(e);
 }
-var mo = /*#__PURE__*/ function(e) {
-	ro(n, e);
-	var t = io(n);
+var ts = /*#__PURE__*/ function(e) {
+	Go(n, e);
+	var t = Ko(n);
 	function n(e) {
 		var r;
-		return no(this, n), r = t.call(this, e), r.name = "InvalidSpreadsheetError", r;
+		return Wo(this, n), r = t.call(this, e), r.name = "InvalidSpreadsheetError", r;
 	}
-	return $a(n);
-}(/*#__PURE__*/ so(Error));
+	return Vo(n);
+}(/*#__PURE__*/ Yo(Error));
 //#endregion
 //#region node_modules/read-excel-file/modules/xml/parseXml.js
-function ho(e, t, n, r, i, a) {
-	var o = Ya(t, n, r, i);
+function ns(e, t, n, r, i, a) {
+	var o = Lo(t, n, r, i);
 	return a ? s(o, e, a) : (o.write(e), o.end()), o.promise.then(function(e) {
 		return e;
 	}, function(e) {
-		var t = new mo(e.message);
+		var t = new ts(e.message);
 		throw t.stack = e.stack, t.cause = e, t;
 	});
 	function s(e, t, n, r) {
@@ -2865,29 +3199,29 @@ function ho(e, t, n, r, i, a) {
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/ZipFileError.js
-var go = class extends Error {
+var rs = class extends Error {
 	constructor(e, t) {
 		super(t || e), this.code = e;
 	}
 };
-function _o(e) {
-	let t = new go(e.code, e.message);
-	return e.stack && (t.stack = e.stack), Error.captureStackTrace(t, _o), t.cause = e, t;
+function is(e) {
+	let t = new rs(e.code, e.message);
+	return e.stack && (t.stack = e.stack), Error.captureStackTrace(t, is), t.cause = e, t;
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/PullStream.js
-var vo = "function", yo = function() {
+var as = "function", os = function() {
 	this.buffer = Buffer.from("");
 	let e = this;
 	e.on("finish", function() {
 		e.finished = !0, e.emit("chunk", !1);
 	});
-}, bo = function(e, t, n) {
+}, ss = function(e, t, n) {
 	this.buffer = Buffer.concat([this.buffer, e]), this.cb = n, this.emit("chunk");
-}, xo = function(e, t) {
-	let n = new ne(), r, i = this;
+}, cs = function(e, t) {
+	let n = new A(), r, i = this;
 	function a() {
-		if (typeof i.cb === vo) {
+		if (typeof i.cb === as) {
 			let e = i.cb;
 			return i.cb = void 0, e();
 		}
@@ -2910,18 +3244,18 @@ var vo = "function", yo = function() {
 		}
 		if (r) i.removeListener("chunk", o), n.end();
 		else if (i.finished) {
-			i.removeListener("chunk", o), i.emit("error", new go("FILE_ENDED"));
+			i.removeListener("chunk", o), i.emit("error", new rs("FILE_ENDED"));
 			return;
 		}
 	}
 	return i.on("chunk", o), o(), n;
-}, So = function(e, t) {
+}, ls = function(e, t) {
 	if (e === 0) return Promise.resolve("");
 	if (!isNaN(e) && this.buffer.length > e) {
 		let t = this.buffer.slice(0, e);
 		return this.buffer = this.buffer.slice(e), Promise.resolve(t);
 	}
-	let n = Buffer.from(""), r = this, i = new k({ transform: a });
+	let n = Buffer.from(""), r = this, i = new j({ transform: a });
 	function a(e, t, r) {
 		n = Buffer.concat([n, e]), r();
 	}
@@ -2929,40 +3263,40 @@ var vo = "function", yo = function() {
 	return new Promise(function(a, c) {
 		if (o = c, s = function(e) {
 			r.__emittedError = e, c(e);
-		}, r.finished) return c(new go("FILE_ENDED"));
+		}, r.finished) return c(new rs("FILE_ENDED"));
 		r.once("error", s), r.stream(e, t).on("error", c).pipe(i).on("finish", function() {
 			a(n);
 		}).on("error", c);
 	}).finally(function() {
 		r.removeListener("error", o), r.removeListener("error", s);
 	});
-}, Co = class extends O {
+}, us = class extends te {
 	constructor() {
 		super({
 			decodeStrings: !1,
 			objectMode: !0
-		}), yo.call(this);
+		}), os.call(this);
 	}
 	_write(e, t, n) {
-		return bo.call(this, e, t, n);
+		return ss.call(this, e, t, n);
 	}
 	stream(e, t) {
-		return xo.call(this, e, t);
+		return cs.call(this, e, t);
 	}
 	pull(e, t) {
-		return So.call(this, e, t);
+		return ls.call(this, e, t);
 	}
 	_read() {}
-}, wo = class extends k {
+}, ds = class extends j {
 	_transform(e, t, n) {
 		n();
 	}
 };
 //#endregion
 //#region node_modules/unzipper-esm/lib/BufferStream.js
-function To(e) {
+function fs(e) {
 	return new Promise(function(t, n) {
-		let r = [], i = new k({ transform: a }).on("finish", function() {
+		let r = [], i = new j({ transform: a }).on("finish", function() {
 			t(Buffer.concat(r));
 		}).on("error", n);
 		function a(e, t, n) {
@@ -2973,7 +3307,7 @@ function To(e) {
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parseBuffer.js
-function Eo(e, t, n) {
+function ps(e, t, n) {
 	let r;
 	switch (n) {
 		case 1:
@@ -2992,38 +3326,38 @@ function Eo(e, t, n) {
 	}
 	return r;
 }
-function Do(e, t) {
+function ms(e, t) {
 	let n = {}, r = 0;
-	for (let [i, a] of t) n[i] = e.length >= r + a ? Eo(e, r, a) : null, r += a;
+	for (let [i, a] of t) n[i] = e.length >= r + a ? ps(e, r, a) : null, r += a;
 	return n;
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parseExtraField.js
-function Oo(e, t) {
+function hs(e, t) {
 	let n;
 	for (; !n && e && e.length;) {
-		let r = Do(e, [["signature", 2], ["partSize", 2]]);
+		let r = ms(e, [["signature", 2], ["partSize", 2]]);
 		if (r.signature === 1) {
 			let r = [];
-			t.uncompressedSize === 4294967295 && r.push(["uncompressedSize", 8]), t.compressedSize === 4294967295 && r.push(["compressedSize", 8]), t.offsetToLocalFileHeader === 4294967295 && r.push(["offsetToLocalFileHeader", 8]), n = Do(e.slice(4), r);
+			t.uncompressedSize === 4294967295 && r.push(["uncompressedSize", 8]), t.compressedSize === 4294967295 && r.push(["compressedSize", 8]), t.offsetToLocalFileHeader === 4294967295 && r.push(["offsetToLocalFileHeader", 8]), n = ms(e.slice(4), r);
 		} else e = e.slice(r.partSize + 4);
 	}
 	return n ||= {}, t.compressedSize === 4294967295 && (t.compressedSize = n.compressedSize), t.uncompressedSize === 4294967295 && (t.uncompressedSize = n.uncompressedSize), t.offsetToLocalFileHeader === 4294967295 && (t.offsetToLocalFileHeader = n.offsetToLocalFileHeader), n;
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parseDateTime.js
-function ko(e, t) {
+function gs(e, t) {
 	let n = e & 31, r = e >> 5 & 15, i = (e >> 9 & 127) + 1980, a = t ? (t & 31) * 2 : 0, o = t ? t >> 5 & 63 : 0, s = t ? t >> 11 : 0;
 	return new Date(Date.UTC(i, r - 1, n, s, o, a));
 }
 //#endregion
 //#region node_modules/unzipper-esm/lib/parse.js
-var Ao = Buffer.alloc(4);
-Ao.writeUInt32LE(101010256, 0);
-function jo(e) {
-	return new Bo(e);
+var _s = Buffer.alloc(4);
+_s.writeUInt32LE(101010256, 0);
+function vs(e) {
+	return new Ds(e);
 }
-var Mo = function(e) {
+var ys = function(e) {
 	this._opts = e;
 	let t = this;
 	t.on("finish", function() {
@@ -3031,7 +3365,7 @@ var Mo = function(e) {
 	}), t._readRecord().catch(function(e) {
 		(!t.__emittedError || t.__emittedError !== e) && t.emit("error", e);
 	});
-}, No = function() {
+}, bs = function() {
 	let e = this;
 	return e.pull(4).then(function(t) {
 		if (t.length === 0) return;
@@ -3040,17 +3374,17 @@ var Mo = function(e) {
 		if (n === 67324752) return e._readFile();
 		if (n === 33639248) return e.reachedCD = !0, e._readCentralDirectoryFileHeader();
 		if (n === 101010256) return e._readEndOfCentralDirectoryRecord();
-		if (e.reachedCD) return e.pull(Ao, !0).then(function() {
+		if (e.reachedCD) return e.pull(_s, !0).then(function() {
 			return e._readEndOfCentralDirectoryRecord();
 		});
-		e.emit("error", new go("INVALID_SIGNATURE", "invalid signature: 0x" + n.toString(16)));
+		e.emit("error", new rs("INVALID_SIGNATURE", "invalid signature: 0x" + n.toString(16)));
 	}).then((function(t) {
 		if (t) return e._readRecord();
 	}));
-}, Po = function() {
+}, xs = function() {
 	let e = this;
 	return e.pull(12).then(function(t) {
-		return e.crxHeader = Do(t, [
+		return e.crxHeader = ms(t, [
 			["version", 4],
 			["pubKeyLength", 4],
 			["signatureLength", 4]
@@ -3058,10 +3392,10 @@ var Mo = function(e) {
 	}).then(function(t) {
 		return e.crxHeader.publicKey = t.slice(0, e.crxHeader.pubKeyLength), e.crxHeader.signature = t.slice(e.crxHeader.pubKeyLength), e.emit("crx-header", e.crxHeader), !0;
 	});
-}, Fo = function() {
+}, Ss = function() {
 	let e = this;
 	return e.pull(26).then(function(t) {
-		let n = Do(t, [
+		let n = ms(t, [
 			["versionsNeededToExtract", 2],
 			["flags", 2],
 			["compressionMethod", 2],
@@ -3073,20 +3407,20 @@ var Mo = function(e) {
 			["fileNameLength", 2],
 			["extraFieldLength", 2]
 		]);
-		return n.lastModifiedDateTime = ko(n.lastModifiedDate, n.lastModifiedTime), e.crxHeader && (n.crxHeader = e.crxHeader), e.pull(n.fileNameLength).then(function(t) {
-			let r = t.toString("utf8"), i = new ne(), a = !1;
+		return n.lastModifiedDateTime = gs(n.lastModifiedDate, n.lastModifiedTime), e.crxHeader && (n.crxHeader = e.crxHeader), e.pull(n.fileNameLength).then(function(t) {
+			let r = t.toString("utf8"), i = new A(), a = !1;
 			return i.autodrain = function() {
 				a = !0;
-				let e = i.pipe(new wo());
+				let e = i.pipe(new ds());
 				return e.promise = function() {
 					return new Promise(function(t, n) {
 						e.on("finish", t), e.on("error", n);
 					});
 				}, e;
 			}, i.buffer = function() {
-				return To(i);
+				return fs(i);
 			}, i.path = r, i.props = {}, i.props.path = r, i.props.pathBuffer = t, i.props.flags = { isUnicode: !!(n.flags & 2048) }, i.type = n.uncompressedSize === 0 && /[/\\]$/.test(r) ? "Directory" : "File", e._opts.verbose && (i.type === "Directory" ? console.log("   creating:", r) : i.type === "File" && (n.compressionMethod === 0 ? console.log(" extracting:", r) : console.log("  inflating:", r))), e.pull(n.extraFieldLength).then(function(t) {
-				let o = Oo(t, n);
+				let o = hs(t, n);
 				i.vars = n, i.extra = o, e._opts.forceStream ? e.push(i) : (e.emit("entry", i), (e._readableState.pipesCount || e._readableState.pipes && e._readableState.pipes.length) && e.push(i)), e._opts.verbose && console.log({
 					filename: r,
 					vars: n,
@@ -3094,28 +3428,28 @@ var Mo = function(e) {
 				});
 				let s = !(n.flags & 8) || n.compressedSize > 0, c;
 				i.__autodraining = a;
-				let l = n.compressionMethod && !a ? D.createInflateRaw() : ne();
+				let l = n.compressionMethod && !a ? k.createInflateRaw() : A();
 				return s ? (i.size = n.uncompressedSize, c = n.compressedSize) : (c = Buffer.alloc(4), c.writeUInt32LE(134695760, 0)), new Promise(function(t, n) {
-					re(e.stream(c), l, i, function(r) {
-						return r ? (r.code === "Z_DATA_ERROR" && (r = _o(r)), n(r)) : s ? t(s) : e._processDataDescriptor(i).then(t).catch(n);
+					ne(e.stream(c), l, i, function(r) {
+						return r ? (r.code === "Z_DATA_ERROR" && (r = is(r)), n(r)) : s ? t(s) : e._processDataDescriptor(i).then(t).catch(n);
 					});
 				});
 			});
 		});
 	});
-}, Io = function(e) {
+}, Cs = function(e) {
 	return this.pull(16).then(function(t) {
-		return e.size = Do(t, [
+		return e.size = ms(t, [
 			["dataDescriptorSignature", 4],
 			["crc32", 4],
 			["compressedSize", 4],
 			["uncompressedSize", 4]
 		]).uncompressedSize, !0;
 	});
-}, Lo = function() {
+}, ws = function() {
 	let e = this;
 	return e.pull(42).then(function(t) {
-		let n = Do(t, [
+		let n = ms(t, [
 			["versionMadeBy", 2],
 			["versionsNeededToExtract", 2],
 			["flags", 2],
@@ -3141,10 +3475,10 @@ var Mo = function(e) {
 			return !0;
 		});
 	});
-}, Ro = function() {
+}, Ts = function() {
 	let e = this;
 	return e.pull(18).then(function(t) {
-		let n = Do(t, [
+		let n = ms(t, [
 			["diskNumber", 2],
 			["diskStart", 2],
 			["numberOfRecordsOnDisk", 2],
@@ -3157,38 +3491,38 @@ var Mo = function(e) {
 			e.end(), e.push(null);
 		});
 	});
-}, zo = function() {
+}, Es = function() {
 	let e = this;
 	return new Promise(function(t, n) {
 		e.on("finish", t), e.on("error", n);
 	});
-}, Bo = class extends Co {
+}, Ds = class extends us {
 	constructor(e = { verbose: !1 }) {
-		super(e), Mo.call(this, e);
+		super(e), ys.call(this, e);
 	}
 	_readRecord() {
-		return No.call(this);
+		return bs.call(this);
 	}
 	_readCrxHeader() {
-		return Po.call(this);
+		return xs.call(this);
 	}
 	_readFile() {
-		return Fo.call(this);
+		return Ss.call(this);
 	}
 	_processDataDescriptor(e) {
-		return Io.call(this, e);
+		return Cs.call(this, e);
 	}
 	_readCentralDirectoryFileHeader() {
-		return Lo.call(this);
+		return ws.call(this);
 	}
 	_readEndOfCentralDirectoryRecord() {
-		return Ro.call(this);
+		return Ts.call(this);
 	}
 	promise() {
-		return zo.call(this);
+		return Es.call(this);
 	}
-}, Vo = /* @__PURE__ */ N(((e, t) => {
-	var n = P("constants"), r = process.cwd, i = null, a = process.env.GRACEFUL_FS_PLATFORM || process.platform;
+}, Os = /* @__PURE__ */ I(((e, t) => {
+	var n = L("constants"), r = process.cwd, i = null, a = process.env.GRACEFUL_FS_PLATFORM || process.platform;
 	process.cwd = function() {
 		return i ||= r.call(process), i;
 	};
@@ -3354,8 +3688,8 @@ var Mo = function(e) {
 			return !(e && e.code !== "ENOSYS" && (process.getuid && process.getuid() === 0 || e.code !== "EINVAL" && e.code !== "EPERM"));
 		}
 	}
-})), Ho = /* @__PURE__ */ N(((e, t) => {
-	var n = P("stream").Stream;
+})), ks = /* @__PURE__ */ I(((e, t) => {
+	var n = L("stream").Stream;
 	t.exports = r;
 	function r(e) {
 		return {
@@ -3413,7 +3747,7 @@ var Mo = function(e) {
 			]), this.flush());
 		}
 	}
-})), Uo = /* @__PURE__ */ N(((e, t) => {
+})), As = /* @__PURE__ */ I(((e, t) => {
 	t.exports = r;
 	var n = Object.getPrototypeOf || function(e) {
 		return e.__proto__;
@@ -3426,8 +3760,8 @@ var Mo = function(e) {
 			Object.defineProperty(t, n, Object.getOwnPropertyDescriptor(e, n));
 		}), t;
 	}
-})), Wo = /* @__PURE__ */ N(((e, t) => {
-	var n = P("fs"), r = Vo(), i = Ho(), a = Uo(), o = P("util"), s, c;
+})), js = /* @__PURE__ */ I(((e, t) => {
+	var n = L("fs"), r = Os(), i = ks(), a = As(), o = L("util"), s, c;
 	/* istanbul ignore else - node 0.x polyfill */
 	typeof Symbol == "function" && typeof Symbol.for == "function" ? (s = Symbol.for("graceful-fs.queue"), c = Symbol.for("graceful-fs.previous")) : (s = "___graceful-fs.queue", c = "___graceful-fs.previous");
 	function l() {}
@@ -3453,10 +3787,10 @@ var Mo = function(e) {
 		}
 		return Object.defineProperty(t, c, { value: e }), t;
 	})(n.closeSync), /\bgfs4\b/i.test(process.env.NODE_DEBUG || "") && process.on("exit", function() {
-		d(n[s]), P("assert").equal(n[s].length, 0);
+		d(n[s]), L("assert").equal(n[s].length, 0);
 	})), global[s] || u(global, n[s]), t.exports = f(a(n)), process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !n.__patched && (t.exports = f(n), n.__patched = !0);
 	function f(e) {
-		r(e), e.gracefulify = f, e.createReadStream = te, e.createWriteStream = w;
+		r(e), e.gracefulify = f, e.createReadStream = w, e.createWriteStream = T;
 		var t = e.readFile;
 		e.readFile = n;
 		function n(e, n, r) {
@@ -3620,7 +3954,7 @@ var Mo = function(e) {
 		}
 		function ee() {
 			var e = this;
-			E(e.path, e.flags, e.mode, function(t, n) {
+			D(e.path, e.flags, e.mode, function(t, n) {
 				t ? (e.autoClose && e.destroy(), e.emit("error", t)) : (e.fd = n, e.emit("open", n), e.read());
 			});
 		}
@@ -3629,22 +3963,22 @@ var Mo = function(e) {
 		}
 		function C() {
 			var e = this;
-			E(e.path, e.flags, e.mode, function(t, n) {
+			D(e.path, e.flags, e.mode, function(t, n) {
 				t ? (e.destroy(), e.emit("error", t)) : (e.fd = n, e.emit("open", n));
 			});
 		}
-		function te(t, n) {
+		function w(t, n) {
 			return new e.ReadStream(t, n);
 		}
-		function w(t, n) {
+		function T(t, n) {
 			return new e.WriteStream(t, n);
 		}
-		var T = e.open;
-		e.open = E;
-		function E(e, t, n, r) {
+		var E = e.open;
+		e.open = D;
+		function D(e, t, n, r) {
 			return typeof n == "function" && (r = n, n = null), i(e, t, n, r);
 			function i(e, t, n, r, a) {
-				return T(e, t, n, function(o, s) {
+				return E(e, t, n, function(o, s) {
 					o && (o.code === "EMFILE" || o.code === "ENFILE") ? p([
 						i,
 						[
@@ -3686,7 +4020,7 @@ var Mo = function(e) {
 		}
 	}
 }));
-(/* @__PURE__ */ N(((e, t) => {
+(/* @__PURE__ */ I(((e, t) => {
 	for (var n = 4294967296, r = [], i = 0; i < 256; i++) r[i] = (i > 15 ? "" : "0") + i.toString(16);
 	var a = t.exports = function(e, t) {
 		e instanceof Buffer ? (this.buffer = e, this.offset = t || 0) : Object.prototype.toString.call(e) == "[object Uint8Array]" ? (this.buffer = new Buffer(e), this.offset = t || 0) : (this.buffer = this.buffer || new Buffer(8), this.offset = 0, this.setValue.apply(this, arguments));
@@ -3748,100 +4082,100 @@ var Mo = function(e) {
 			return "[Int64 value:" + this + " octets:" + this.toOctetString(" ") + "]";
 		}
 	};
-})))(), Buffer.alloc(4).writeUInt32LE(101010256, 0), Wo();
+})))(), Buffer.alloc(4).writeUInt32LE(101010256, 0), js();
 //#endregion
 //#region node_modules/read-excel-file/modules/zip/UnzipError.js
-function Go(e) {
+function Ms(e) {
 	"@babel/helpers - typeof";
-	return Go = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return Ms = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, Go(e);
+	}, Ms(e);
 }
-function Ko(e, t) {
+function Ns(e, t) {
 	for (var n = 0; n < t.length; n++) {
 		var r = t[n];
-		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Jo(r.key), r);
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Fs(r.key), r);
 	}
 }
-function qo(e, t, n) {
-	return t && Ko(e.prototype, t), n && Ko(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+function Ps(e, t, n) {
+	return t && Ns(e.prototype, t), n && Ns(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function Jo(e) {
-	var t = Yo(e, "string");
-	return Go(t) === "symbol" ? t : String(t);
+function Fs(e) {
+	var t = Is(e, "string");
+	return Ms(t) === "symbol" ? t : String(t);
 }
-function Yo(e, t) {
-	if (Go(e) !== "object" || e === null) return e;
+function Is(e, t) {
+	if (Ms(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (Go(r) !== "object") return r;
+		if (Ms(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function Xo(e, t) {
+function Ls(e, t) {
 	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function Zo(e, t) {
+function Rs(e, t) {
 	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
 	e.prototype = Object.create(t && t.prototype, { constructor: {
 		value: e,
 		writable: !0,
 		configurable: !0
-	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && as(e, t);
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Ks(e, t);
 }
-function Qo(e) {
-	var t = rs();
+function zs(e) {
+	var t = Ws();
 	return function() {
-		var n = os(e), r;
+		var n = qs(e), r;
 		if (t) {
-			var i = os(this).constructor;
+			var i = qs(this).constructor;
 			r = Reflect.construct(n, arguments, i);
 		} else r = n.apply(this, arguments);
-		return $o(this, r);
+		return Bs(this, r);
 	};
 }
-function $o(e, t) {
-	if (t && (Go(t) === "object" || typeof t == "function")) return t;
+function Bs(e, t) {
+	if (t && (Ms(t) === "object" || typeof t == "function")) return t;
 	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
-	return es(e);
+	return Vs(e);
 }
-function es(e) {
+function Vs(e) {
 	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
 	return e;
 }
-function ts(e) {
+function Hs(e) {
 	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
-	return ts = function(e) {
-		if (e === null || !is(e)) return e;
+	return Hs = function(e) {
+		if (e === null || !Gs(e)) return e;
 		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
 		if (t !== void 0) {
 			if (t.has(e)) return t.get(e);
 			t.set(e, n);
 		}
 		function n() {
-			return ns(e, arguments, os(this).constructor);
+			return Us(e, arguments, qs(this).constructor);
 		}
 		return n.prototype = Object.create(e.prototype, { constructor: {
 			value: n,
 			enumerable: !1,
 			writable: !0,
 			configurable: !0
-		} }), as(n, e);
-	}, ts(e);
+		} }), Ks(n, e);
+	}, Hs(e);
 }
-function ns(e, t, n) {
-	return ns = rs() ? Reflect.construct.bind() : function(e, t, n) {
+function Us(e, t, n) {
+	return Us = Ws() ? Reflect.construct.bind() : function(e, t, n) {
 		var r = [null];
 		r.push.apply(r, t);
 		var i = new (Function.bind.apply(e, r))();
-		return n && as(i, n.prototype), i;
-	}, ns.apply(null, arguments);
+		return n && Ks(i, n.prototype), i;
+	}, Us.apply(null, arguments);
 }
-function rs() {
+function Ws() {
 	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
 	if (typeof Proxy == "function") return !0;
 	try {
@@ -3850,42 +4184,42 @@ function rs() {
 		return !1;
 	}
 }
-function is(e) {
+function Gs(e) {
 	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function as(e, t) {
-	return as = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+function Ks(e, t) {
+	return Ks = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
 		return e.__proto__ = t, e;
-	}, as(e, t);
+	}, Ks(e, t);
 }
-function os(e) {
-	return os = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+function qs(e) {
+	return qs = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
 		return e.__proto__ || Object.getPrototypeOf(e);
-	}, os(e);
+	}, qs(e);
 }
-var ss = /*#__PURE__*/ function(e) {
-	Zo(n, e);
-	var t = Qo(n);
+var Js = /*#__PURE__*/ function(e) {
+	Rs(n, e);
+	var t = zs(n);
 	function n() {
-		return Xo(this, n), t.apply(this, arguments);
+		return Ls(this, n), t.apply(this, arguments);
 	}
-	return qo(n);
-}(/*#__PURE__*/ ts(Error));
-function cs(e) {
-	var t = new ss(e.message);
-	return e.stack && (t.stack = e.stack), Error.captureStackTrace && Error.captureStackTrace(t, cs), t.cause = e, t;
+	return Ps(n);
+}(/*#__PURE__*/ Hs(Error));
+function Ys(e) {
+	var t = new Js(e.message);
+	return e.stack && (t.stack = e.stack), Error.captureStackTrace && Error.captureStackTrace(t, Ys), t.cause = e, t;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/zip/unzipFromStream.unzipper.js
-var ls = void 0;
-function us(e, t, n, r) {
+var Xs = void 0;
+function Zs(e, t, n, r) {
 	return new Promise(function(i, a) {
 		var o = [], s = !1, c = function(e) {
-			e instanceof go && (e = cs(e)), s || (s = !0, a(e));
+			e instanceof rs && (e = Ys(e)), s || (s = !0, a(e));
 		};
-		e.on("error", c).pipe(jo()).on("error", c).on("finish", function() {
+		e.on("error", c).pipe(vs()).on("error", c).on("finish", function() {
 			s || Promise.all(o).then(function() {
-				i(ls);
+				i(Xs);
 			}, c);
 		}).on("entry", function(e) {
 			var i = !1;
@@ -3909,10 +4243,10 @@ function us(e, t, n, r) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/zip/unzipFromStream.js
-function ds(e, t) {
+function Qs(e, t) {
 	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
 	if (n) return (n = n.call(e)).next.bind(n);
-	if (Array.isArray(e) || (n = fs(e)) || t && e && typeof e.length == "number") {
+	if (Array.isArray(e) || (n = $s(e)) || t && e && typeof e.length == "number") {
 		n && (e = n);
 		var r = 0;
 		return function() {
@@ -3924,22 +4258,22 @@ function ds(e, t) {
 	}
 	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function fs(e, t) {
+function $s(e, t) {
 	if (e) {
-		if (typeof e == "string") return ps(e, t);
+		if (typeof e == "string") return ec(e, t);
 		var n = Object.prototype.toString.call(e).slice(8, -1);
 		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
-		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return ps(e, t);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return ec(e, t);
 	}
 }
-function ps(e, t) {
+function ec(e, t) {
 	(t == null || t > e.length) && (t = e.length);
 	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
 	return r;
 }
-function ms(e) {
+function tc(e) {
 	var t = (arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : {}).filter, n = {}, r = {};
-	return us(e, function(e, n) {
+	return Zs(e, function(e, n) {
 		if (t && !t({ path: e })) return !1;
 		r[e] = {
 			size: n,
@@ -3950,15 +4284,15 @@ function ms(e) {
 	}, function(e, t) {
 		r[e].size === void 0 ? r[e].chunks.push(t) : r[e].position += t.copy(r[e].buffer, r[e].position);
 	}, function(e) {
-		n[e] = r[e].size === void 0 ? hs(r[e].chunks) : r[e].buffer, delete r[e];
+		n[e] = r[e].size === void 0 ? nc(r[e].chunks) : r[e].buffer, delete r[e];
 	}).then(function() {
 		return n;
 	});
 }
-function hs(e) {
+function nc(e) {
 	for (var t = e.reduce(function(e, t) {
 		return e + t.length;
-	}, 0), n = Buffer.allocUnsafeSlow(t), r = 0, i = ds(e), a; !(a = i()).done;) {
+	}, 0), n = Buffer.allocUnsafeSlow(t), r = 0, i = Qs(e), a; !(a = i()).done;) {
 		var o = a.value;
 		o.copy(n, r), r += o.length;
 	}
@@ -3966,97 +4300,97 @@ function hs(e) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/InvalidInputError.js
-function gs(e) {
+function rc(e) {
 	"@babel/helpers - typeof";
-	return gs = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return rc = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, gs(e);
+	}, rc(e);
 }
-function _s(e, t) {
+function ic(e, t) {
 	for (var n = 0; n < t.length; n++) {
 		var r = t[n];
-		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, ys(r.key), r);
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, oc(r.key), r);
 	}
 }
-function vs(e, t, n) {
-	return t && _s(e.prototype, t), n && _s(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+function ac(e, t, n) {
+	return t && ic(e.prototype, t), n && ic(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function ys(e) {
-	var t = bs(e, "string");
-	return gs(t) === "symbol" ? t : String(t);
+function oc(e) {
+	var t = sc(e, "string");
+	return rc(t) === "symbol" ? t : String(t);
 }
-function bs(e, t) {
-	if (gs(e) !== "object" || e === null) return e;
+function sc(e, t) {
+	if (rc(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (gs(r) !== "object") return r;
+		if (rc(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function xs(e, t) {
+function cc(e, t) {
 	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function Ss(e, t) {
+function lc(e, t) {
 	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
 	e.prototype = Object.create(t && t.prototype, { constructor: {
 		value: e,
 		writable: !0,
 		configurable: !0
-	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && As(e, t);
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && _c(e, t);
 }
-function Cs(e) {
-	var t = Os();
+function uc(e) {
+	var t = hc();
 	return function() {
-		var n = js(e), r;
+		var n = vc(e), r;
 		if (t) {
-			var i = js(this).constructor;
+			var i = vc(this).constructor;
 			r = Reflect.construct(n, arguments, i);
 		} else r = n.apply(this, arguments);
-		return ws(this, r);
+		return dc(this, r);
 	};
 }
-function ws(e, t) {
-	if (t && (gs(t) === "object" || typeof t == "function")) return t;
+function dc(e, t) {
+	if (t && (rc(t) === "object" || typeof t == "function")) return t;
 	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
-	return Ts(e);
+	return fc(e);
 }
-function Ts(e) {
+function fc(e) {
 	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
 	return e;
 }
-function Es(e) {
+function pc(e) {
 	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
-	return Es = function(e) {
-		if (e === null || !ks(e)) return e;
+	return pc = function(e) {
+		if (e === null || !gc(e)) return e;
 		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
 		if (t !== void 0) {
 			if (t.has(e)) return t.get(e);
 			t.set(e, n);
 		}
 		function n() {
-			return Ds(e, arguments, js(this).constructor);
+			return mc(e, arguments, vc(this).constructor);
 		}
 		return n.prototype = Object.create(e.prototype, { constructor: {
 			value: n,
 			enumerable: !1,
 			writable: !0,
 			configurable: !0
-		} }), As(n, e);
-	}, Es(e);
+		} }), _c(n, e);
+	}, pc(e);
 }
-function Ds(e, t, n) {
-	return Ds = Os() ? Reflect.construct.bind() : function(e, t, n) {
+function mc(e, t, n) {
+	return mc = hc() ? Reflect.construct.bind() : function(e, t, n) {
 		var r = [null];
 		r.push.apply(r, t);
 		var i = new (Function.bind.apply(e, r))();
-		return n && As(i, n.prototype), i;
-	}, Ds.apply(null, arguments);
+		return n && _c(i, n.prototype), i;
+	}, mc.apply(null, arguments);
 }
-function Os() {
+function hc() {
 	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
 	if (typeof Proxy == "function") return !0;
 	try {
@@ -4065,103 +4399,103 @@ function Os() {
 		return !1;
 	}
 }
-function ks(e) {
+function gc(e) {
 	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function As(e, t) {
-	return As = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+function _c(e, t) {
+	return _c = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
 		return e.__proto__ = t, e;
-	}, As(e, t);
+	}, _c(e, t);
 }
-function js(e) {
-	return js = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+function vc(e) {
+	return vc = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
 		return e.__proto__ || Object.getPrototypeOf(e);
-	}, js(e);
+	}, vc(e);
 }
-var Ms = {
+var yc = {
 	XLS_FILE_NOT_SUPPORTED: "You passed a legacy `.xls` file. Only `.xlsx` files are supported",
 	FILE_NOT_SUPPORTED: "Doesn't look like an `.xlsx` file",
 	INVALID_ZIP: "Couldn't unzip `.xlsx` file contents",
 	NO_DATA: "No data"
-}, Ns = /*#__PURE__*/ function(e) {
-	Ss(n, e);
-	var t = Cs(n);
+}, bc = /*#__PURE__*/ function(e) {
+	lc(n, e);
+	var t = uc(n);
 	function n(e, r) {
 		var i;
-		return xs(this, n), i = t.call(this, Ms[e] || e), i.code = e, i.name = "InvalidInputError", i.cause = r, i;
+		return cc(this, n), i = t.call(this, yc[e] || e), i.code = e, i.name = "InvalidInputError", i.cause = r, i;
 	}
-	return vs(n);
-}(/*#__PURE__*/ Es(Error));
+	return ac(n);
+}(/*#__PURE__*/ pc(Error));
 //#endregion
 //#region node_modules/read-excel-file/modules/export/convertInputToNodeStream.js
-function Ps(e) {
-	return e instanceof A ? e : e instanceof Buffer ? Fs(e) : e instanceof ie ? Is(e) : l.createReadStream(e);
+function xc(e) {
+	return e instanceof N ? e : e instanceof Buffer ? Sc(e) : e instanceof M ? Cc(e) : l.createReadStream(e);
 }
-function Fs(e) {
-	return j.from(e);
+function Sc(e) {
+	return re.from(e);
 }
-function Is(e) {
-	return j.fromWeb(e.stream());
+function Cc(e) {
+	return re.fromWeb(e.stream());
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/export/filterZipArchiveEntry.js
-function Ls(e) {
+function wc(e) {
 	var t = e.path;
 	return t.endsWith(".xml") || t.endsWith(".xml.rels");
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/createFileTypeDetector.js
-var Rs = [80, 75], zs = [
+var Tc = [80, 75], Ec = [
 	208,
 	207,
 	17,
 	224
-], Bs = [Rs, zs];
-Bs.indexOf(Rs);
-var Vs = Bs.indexOf(zs);
-function Hs() {
-	var e, t = Us(Bs), n = 0;
+], Dc = [Tc, Ec];
+Dc.indexOf(Tc);
+var Oc = Dc.indexOf(Ec);
+function kc() {
+	var e, t = Ac(Dc), n = 0;
 	return function(r) {
 		if (isNaN(e)) {
 			var i;
 			t = t.filter(function(e) {
-				if (r === Bs[e][n]) return Bs[e].length === n + 1 && (i = e), !0;
+				if (r === Dc[e][n]) return Dc[e].length === n + 1 && (i = e), !0;
 			}), t.length === 1 ? e = i : t.length === 0 && (e = -1);
 		}
 		return n++, e;
 	};
 }
-function Us(e) {
+function Ac(e) {
 	for (var t = [], n = 0; n < e.length;) t.push(n), n++;
 	return t;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/validateLeadingBytes.js
-function Ws(e, t) {
+function jc(e, t) {
 	var n = t(e);
 	if (n !== void 0) {
-		if (n === Vs) throw new Ns("XLS_FILE_NOT_SUPPORTED");
-		if (n < 0) throw new Ns("FILE_NOT_SUPPORTED");
+		if (n === Oc) throw new bc("XLS_FILE_NOT_SUPPORTED");
+		if (n < 0) throw new bc("FILE_NOT_SUPPORTED");
 		return !0;
 	}
 }
-function Gs(e) {
-	throw new Ns(e === 0 ? "NO_DATA" : "FILE_NOT_SUPPORTED");
+function Mc(e) {
+	throw new bc(e === 0 ? "NO_DATA" : "FILE_NOT_SUPPORTED");
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/file/InputValidationStream.js
-function Ks(e) {
+function Nc(e) {
 	"@babel/helpers - typeof";
-	return Ks = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return Nc = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, Ks(e);
+	}, Nc(e);
 }
-function qs(e, t) {
+function Pc(e, t) {
 	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
 	if (n) return (n = n.call(e)).next.bind(n);
-	if (Array.isArray(e) || (n = Js(e)) || t && e && typeof e.length == "number") {
+	if (Array.isArray(e) || (n = Fc(e)) || t && e && typeof e.length == "number") {
 		n && (e = n);
 		var r = 0;
 		return function() {
@@ -4173,79 +4507,79 @@ function qs(e, t) {
 	}
 	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function Js(e, t) {
+function Fc(e, t) {
 	if (e) {
-		if (typeof e == "string") return Ys(e, t);
+		if (typeof e == "string") return Ic(e, t);
 		var n = Object.prototype.toString.call(e).slice(8, -1);
 		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
-		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Ys(e, t);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Ic(e, t);
 	}
 }
-function Ys(e, t) {
+function Ic(e, t) {
 	(t == null || t > e.length) && (t = e.length);
 	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
 	return r;
 }
-function Xs(e, t) {
+function Lc(e, t) {
 	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function Zs(e, t) {
+function Rc(e, t) {
 	for (var n = 0; n < t.length; n++) {
 		var r = t[n];
-		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, $s(r.key), r);
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, Bc(r.key), r);
 	}
 }
-function Qs(e, t, n) {
-	return t && Zs(e.prototype, t), n && Zs(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+function zc(e, t, n) {
+	return t && Rc(e.prototype, t), n && Rc(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function $s(e) {
-	var t = ec(e, "string");
-	return Ks(t) === "symbol" ? t : String(t);
+function Bc(e) {
+	var t = Vc(e, "string");
+	return Nc(t) === "symbol" ? t : String(t);
 }
-function ec(e, t) {
-	if (Ks(e) !== "object" || e === null) return e;
+function Vc(e, t) {
+	if (Nc(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (Ks(r) !== "object") return r;
+		if (Nc(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function tc(e, t) {
+function Hc(e, t) {
 	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
 	e.prototype = Object.create(t && t.prototype, { constructor: {
 		value: e,
 		writable: !0,
 		configurable: !0
-	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && nc(e, t);
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Uc(e, t);
 }
-function nc(e, t) {
-	return nc = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+function Uc(e, t) {
+	return Uc = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
 		return e.__proto__ = t, e;
-	}, nc(e, t);
+	}, Uc(e, t);
 }
-function rc(e) {
-	var t = oc();
+function Wc(e) {
+	var t = qc();
 	return function() {
-		var n = sc(e), r;
+		var n = Jc(e), r;
 		if (t) {
-			var i = sc(this).constructor;
+			var i = Jc(this).constructor;
 			r = Reflect.construct(n, arguments, i);
 		} else r = n.apply(this, arguments);
-		return ic(this, r);
+		return Gc(this, r);
 	};
 }
-function ic(e, t) {
-	if (t && (Ks(t) === "object" || typeof t == "function")) return t;
+function Gc(e, t) {
+	if (t && (Nc(t) === "object" || typeof t == "function")) return t;
 	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
-	return ac(e);
+	return Kc(e);
 }
-function ac(e) {
+function Kc(e) {
 	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
 	return e;
 }
-function oc() {
+function qc() {
 	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
 	if (typeof Proxy == "function") return !0;
 	try {
@@ -4254,27 +4588,27 @@ function oc() {
 		return !1;
 	}
 }
-function sc(e) {
-	return sc = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+function Jc(e) {
+	return Jc = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
 		return e.__proto__ || Object.getPrototypeOf(e);
-	}, sc(e);
+	}, Jc(e);
 }
-var cc = /*#__PURE__*/ function(e) {
-	tc(n, e);
-	var t = rc(n);
+var Yc = /*#__PURE__*/ function(e) {
+	Hc(n, e);
+	var t = Wc(n);
 	function n() {
 		var e;
-		return Xs(this, n), e = t.call(this), e.d = Hs(), e.i = 0, e.chunks = [], e;
+		return Lc(this, n), e = t.call(this), e.d = kc(), e.i = 0, e.chunks = [], e;
 	}
-	return Qs(n, [{
+	return zc(n, [{
 		key: "_transform",
 		value: function(e, t, n) {
 			if (this.d) {
 				this.chunks.push(e);
-				for (var r = qs(e), i; !(i = r()).done;) {
+				for (var r = Pc(e), i; !(i = r()).done;) {
 					var a = i.value;
 					try {
-						if (Ws(a, this.d)) {
+						if (jc(a, this.d)) {
 							this.d = void 0, e = Buffer.concat(this.chunks), this.chunks = void 0;
 							break;
 						}
@@ -4291,35 +4625,35 @@ var cc = /*#__PURE__*/ function(e) {
 		key: "_flush",
 		value: function(e) {
 			if (this.d) try {
-				Gs(this.i);
+				Mc(this.i);
 			} catch (t) {
 				return e(t);
 			}
 			e();
 		}
 	}]), n;
-}(ae), lc;
-function uc(e) {
+}(P), Xc;
+function Zc(e) {
 	var t = Date.now();
-	(typeof global < "u" ? global.READ_EXCEL_FILE_CHECKPOINTS : typeof window < "u" && window.READ_EXCEL_FILE_CHECKPOINTS) && (lc && console.log("  -", t - lc, "ms"), console.log("*", e)), lc = t;
+	(typeof global < "u" ? global.READ_EXCEL_FILE_CHECKPOINTS : typeof window < "u" && window.READ_EXCEL_FILE_CHECKPOINTS) && (Xc && console.log("  -", t - Xc, "ms"), console.log("*", e)), Xc = t;
 }
-function dc() {
-	lc = void 0;
+function Qc() {
+	Xc = void 0;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/export/unpackXlsxFileNode.js
-function fc(e) {
-	dc(), uc("unpack files");
-	var t = Ps(e);
+function $c(e) {
+	Qc(), Zc("unpack files");
+	var t = xc(e);
 	return new Promise(function(e, n) {
-		ms(t.on("error", n).pipe(new cc()), { filter: Ls }).then(e, function(e) {
-			e instanceof ss ? n(new Ns("INVALID_ZIP", e.cause)) : n(e);
+		tc(t.on("error", n).pipe(new Yc()), { filter: wc }).then(e, function(e) {
+			e instanceof Js ? n(new bc("INVALID_ZIP", e.cause)) : n(e);
 		});
 	});
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSpreadsheetInfo.js
-function pc(e, t) {
+function el(e, t) {
 	var n = r();
 	return t(e, n, a, null, null).then(function() {
 		return i(n);
@@ -4346,7 +4680,7 @@ function pc(e, t) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseFilePaths.js
-function mc(e, t) {
+function tl(e, t) {
 	var n = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/", r = "http://purl.oclc.org/ooxml/officeDocument/relationships/", i = a();
 	return t(e, i, s, null, null).then(function() {
 		return o(i);
@@ -4384,16 +4718,16 @@ function mc(e, t) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseStyles.js
-function hc(e) {
+function nl(e) {
 	"@babel/helpers - typeof";
-	return hc = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return nl = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, hc(e);
+	}, nl(e);
 }
-var gc = ["xfId"];
-function _c(e, t) {
+var rl = ["xfId"];
+function il(e, t) {
 	var n = Object.keys(e);
 	if (Object.getOwnPropertySymbols) {
 		var r = Object.getOwnPropertySymbols(e);
@@ -4403,54 +4737,54 @@ function _c(e, t) {
 	}
 	return n;
 }
-function vc(e) {
+function al(e) {
 	for (var t = 1; t < arguments.length; t++) {
 		var n = arguments[t] == null ? {} : arguments[t];
-		t % 2 ? _c(Object(n), !0).forEach(function(t) {
-			yc(e, t, n[t]);
-		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : _c(Object(n)).forEach(function(t) {
+		t % 2 ? il(Object(n), !0).forEach(function(t) {
+			ol(e, t, n[t]);
+		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : il(Object(n)).forEach(function(t) {
 			Object.defineProperty(e, t, Object.getOwnPropertyDescriptor(n, t));
 		});
 	}
 	return e;
 }
-function yc(e, t, n) {
-	return t = bc(t), t in e ? Object.defineProperty(e, t, {
+function ol(e, t, n) {
+	return t = sl(t), t in e ? Object.defineProperty(e, t, {
 		value: n,
 		enumerable: !0,
 		configurable: !0,
 		writable: !0
 	}) : e[t] = n, e;
 }
-function bc(e) {
-	var t = xc(e, "string");
-	return hc(t) === "symbol" ? t : String(t);
+function sl(e) {
+	var t = cl(e, "string");
+	return nl(t) === "symbol" ? t : String(t);
 }
-function xc(e, t) {
-	if (hc(e) !== "object" || e === null) return e;
+function cl(e, t) {
+	if (nl(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (hc(r) !== "object") return r;
+		if (nl(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function Sc(e, t) {
+function ll(e, t) {
 	if (e == null) return {};
-	var n = Cc(e, t), r, i;
+	var n = ul(e, t), r, i;
 	if (Object.getOwnPropertySymbols) {
 		var a = Object.getOwnPropertySymbols(e);
 		for (i = 0; i < a.length; i++) r = a[i], !(t.indexOf(r) >= 0) && Object.prototype.propertyIsEnumerable.call(e, r) && (n[r] = e[r]);
 	}
 	return n;
 }
-function Cc(e, t) {
+function ul(e, t) {
 	if (e == null) return {};
 	for (var n = {}, r = Object.keys(e), i, a = 0; a < r.length; a++) i = r[a], !(t.indexOf(i) >= 0) && (n[i] = e[i]);
 	return n;
 }
-function wc(e, t) {
+function dl(e, t) {
 	var n = r();
 	return t(e, n, a, o, null).then(function() {
 		return i(n);
@@ -4467,8 +4801,8 @@ function wc(e, t) {
 	function i(e) {
 		return e.styles.map(function(t) {
 			if (t.xfId) {
-				var n = t.xfId, r = Sc(t, gc);
-				return vc(vc({}, e.baseStyles[n]), r);
+				var n = t.xfId, r = ll(t, rl);
+				return al(al({}, e.baseStyles[n]), r);
 			}
 			return t;
 		});
@@ -4501,7 +4835,7 @@ function wc(e, t) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSharedStrings.js
-function Tc(e, t) {
+function fl(e, t) {
 	var n = r();
 	return t(e, n, a, o, s).then(function() {
 		return i(n);
@@ -4544,7 +4878,7 @@ function Tc(e, t) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseExcelTimestamp.js
-function Ec(e, t) {
+function pl(e, t) {
 	var n = 17, r = 1, i = 1, a = 864e5, o = 365;
 	t && (e += 4 * o + r + i);
 	var s = r + i + 70 * o + n;
@@ -4552,30 +4886,30 @@ function Ec(e, t) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/isDateFormat.js
-var Dc = /;@$/, Oc = /[^a-z0#\?%]+/;
-function kc(e, t, n) {
+var ml = /;@$/, hl = /[^a-z0#\?%]+/;
+function gl(e, t, n) {
 	var r = n[e];
-	return r === void 0 ? n[e] = Ac(t) : r;
+	return r === void 0 ? n[e] = _l(t) : r;
 }
-function Ac(e) {
-	return e = e.toLowerCase(), e = e.replace(Dc, ""), e = e.replace(/\\./g, " "), e.split(";").some(t);
+function _l(e) {
+	return e = e.toLowerCase(), e = e.replace(ml, ""), e = e.replace(/\\./g, " "), e.split(";").some(t);
 	function t(e) {
 		e = e.replace(/"[^"]*"/g, " "), e = e.replace(/(\[?[smhd]{1,2}\]?)[\.\,]00?0?/g, "$1"), e = e.replace(/\[([smhd]{1,2})\]/g, "$1"), e = e.replace(/\[[^\]]*\]/g, "");
-		var t = e.split(Oc).filter(function(e) {
+		var t = e.split(hl).filter(function(e) {
 			return e;
 		});
 		return t.length !== 0 && t.every(function(e) {
-			return jc.indexOf(e) >= 0;
+			return vl.indexOf(e) >= 0;
 		});
 	}
 }
-var jc = /* @__PURE__ */ "s.ss.m.mm.h.hh.am.pm.a.p.d.dd.ddd.dddd.aaa.aaaa.aaaaa.m.mm.mmm.mmmm.mmmmm.y.yy.yyyy.e.ee.eeee".split(".");
+var vl = /* @__PURE__ */ "s.ss.m.mm.h.hh.am.pm.a.p.d.dd.ddd.dddd.aaa.aaaa.aaaaa.m.mm.mmm.mmmm.mmmmm.y.yy.yyyy.e.ee.eeee".split(".");
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/isDateFormatStyle.js
-function Mc(e, t, n, r) {
-	return e.numberFormat ? !!(Ic.indexOf(e.numberFormat.id) >= 0 || t && e.numberFormat.template === t || n && e.numberFormat.template && kc(e.numberFormat.id, e.numberFormat.template, r)) : !1;
+function yl(e, t, n, r) {
+	return e.numberFormat ? !!(Cl.indexOf(e.numberFormat.id) >= 0 || t && e.numberFormat.template === t || n && e.numberFormat.template && gl(e.numberFormat.id, e.numberFormat.template, r)) : !1;
 }
-var Nc = [
+var bl = [
 	14,
 	15,
 	16,
@@ -4588,7 +4922,7 @@ var Nc = [
 	45,
 	46,
 	47
-], Pc = [
+], xl = [
 	27,
 	28,
 	29,
@@ -4608,7 +4942,7 @@ var Nc = [
 	56,
 	57,
 	58
-], Fc = [
+], Sl = [
 	27,
 	28,
 	29,
@@ -4628,8 +4962,8 @@ var Nc = [
 	56,
 	57,
 	58
-], Ic = Nc.concat(Pc).concat(Fc.filter(function(e) {
-	return Pc.indexOf(e) < 0;
+], Cl = bl.concat(xl).concat(Sl.filter(function(e) {
+	return xl.indexOf(e) < 0;
 })).concat([
 	71,
 	72,
@@ -4643,32 +4977,32 @@ var Nc = [
 	80,
 	81
 ].filter(function(e) {
-	return Pc.indexOf(e) < 0;
+	return xl.indexOf(e) < 0;
 }).filter(function(e) {
-	return Fc.indexOf(e) < 0;
+	return Sl.indexOf(e) < 0;
 }));
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseCell.js
-function Lc(e, t) {
-	return Hc(e) || Vc(e, t) || zc(e, t) || Rc();
+function wl(e, t) {
+	return kl(e) || Ol(e, t) || El(e, t) || Tl();
 }
-function Rc() {
+function Tl() {
 	throw TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function zc(e, t) {
+function El(e, t) {
 	if (e) {
-		if (typeof e == "string") return Bc(e, t);
+		if (typeof e == "string") return Dl(e, t);
 		var n = Object.prototype.toString.call(e).slice(8, -1);
 		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
-		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Bc(e, t);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Dl(e, t);
 	}
 }
-function Bc(e, t) {
+function Dl(e, t) {
 	(t == null || t > e.length) && (t = e.length);
 	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
 	return r;
 }
-function Vc(e, t) {
+function Ol(e, t) {
 	var n = e == null ? null : typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
 	if (n != null) {
 		var r, i, a, o, s = [], c = !0, l = !1;
@@ -4689,14 +5023,14 @@ function Vc(e, t) {
 		return s;
 	}
 }
-function Hc(e) {
+function kl(e) {
 	if (Array.isArray(e)) return e;
 }
-var Uc = [null, null];
-function Wc(e, t, n, r, i) {
-	var a = Lc(i, 7), o = a[0], s = a[1], c = a[2], l = a[3], u = a[4], d = a[5], f = a[6];
+var Al = [null, null];
+function jl(e, t, n, r, i) {
+	var a = wl(i, 7), o = a[0], s = a[1], c = a[2], l = a[3], u = a[4], d = a[5], f = a[6];
 	switch (e || "n") {
-		case "str": return n === void 0 ? "VALUE_MISSING" : n ? ["s", n] : Uc;
+		case "str": return n === void 0 ? "VALUE_MISSING" : n ? ["s", n] : Al;
 		case "inlineStr": return r === void 0 ? "VALUE_MISSING" : ["s", r];
 		case "s":
 			if (!n) return "VALUE_MISSING";
@@ -4705,17 +5039,17 @@ function Wc(e, t, n, r, i) {
 		case "b": return n ? n === "1" ? ["b", !0] : n === "0" ? ["b", !1] : "VALUE_INVALID" : "VALUE_MISSING";
 		case "e": return n ? ["e", n] : "VALUE_MISSING";
 		case "d":
-			if (!n) return Uc;
+			if (!n) return Al;
 			var m = new Date(n);
 			return isNaN(m.valueOf()) ? "VALUE_INVALID" : ["d", m.getTime()];
 		case "n":
-			if (!n) return Uc;
+			if (!n) return Al;
 			if (t) {
 				var h = Number(t);
 				if (isNaN(h) || s[h] === void 0) return "FORMAT_INVALID";
-				if (Mc(s[h], u, d, l)) {
+				if (yl(s[h], u, d, l)) {
 					var g = Number(n);
-					return isNaN(g) ? "VALUE_INVALID" : ["d", Ec(g, c)];
+					return isNaN(g) ? "VALUE_INVALID" : ["d", pl(g, c)];
 				}
 			}
 			if (f) return ["n", n];
@@ -4726,29 +5060,29 @@ function Wc(e, t, n, r, i) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseCellAddress.js
-function Gc(e) {
+function Ml(e) {
 	for (var t = 0, n = 0; n < e.length;) {
 		var r = e.charCodeAt(n);
 		if (r >= 48 && r <= 57) {
 			var i = Number(e.slice(n));
-			return isNaN(i) && Kc(e), [i, t];
+			return isNaN(i) && Nl(e), [i, t];
 		}
 		t *= 26, t += e.charCodeAt(n) - 64, n++;
 	}
-	Kc(e);
+	Nl(e);
 }
-function Kc(e) {
+function Nl(e) {
 	throw Error(`<c r="${e}">`);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSheet.js
-function qc(e, t) {
-	return Xc(e) || Yc(e, t) || Qc(e, t) || Jc();
+function Pl(e, t) {
+	return Ll(e) || Il(e, t) || zl(e, t) || Fl();
 }
-function Jc() {
+function Fl() {
 	throw TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function Yc(e, t) {
+function Il(e, t) {
 	var n = e == null ? null : typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
 	if (n != null) {
 		var r, i, a, o, s = [], c = !0, l = !1;
@@ -4769,13 +5103,13 @@ function Yc(e, t) {
 		return s;
 	}
 }
-function Xc(e) {
+function Ll(e) {
 	if (Array.isArray(e)) return e;
 }
-function Zc(e, t) {
+function Rl(e, t) {
 	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
 	if (n) return (n = n.call(e)).next.bind(n);
-	if (Array.isArray(e) || (n = Qc(e)) || t && e && typeof e.length == "number") {
+	if (Array.isArray(e) || (n = zl(e)) || t && e && typeof e.length == "number") {
 		n && (e = n);
 		var r = 0;
 		return function() {
@@ -4787,21 +5121,21 @@ function Zc(e, t) {
 	}
 	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function Qc(e, t) {
+function zl(e, t) {
 	if (e) {
-		if (typeof e == "string") return $c(e, t);
+		if (typeof e == "string") return Bl(e, t);
 		var n = Object.prototype.toString.call(e).slice(8, -1);
 		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
-		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return $c(e, t);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Bl(e, t);
 	}
 }
-function $c(e, t) {
+function Bl(e, t) {
 	(t == null || t > e.length) && (t = e.length);
 	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
 	return r;
 }
-var el = null;
-function tl(e, t, n) {
+var Vl = null;
+function Hl(e, t, n) {
 	var r = n.sharedStrings, i = n.styles, a = n.epoch1904, o = n.dateFormatDetectionCache, s = n.options, c = [
 		r,
 		i,
@@ -4814,7 +5148,7 @@ function tl(e, t, n) {
 	return t(e, d, y, b, x, v).then(function() {
 		var e = d.sheetData, t = e.rowCount, n = e.columnCount, r = e.dataRowCount, i = e.dataColumnCount;
 		if (r < t && (l = l.slice(0, r)), i < n) for (var a = 0; a < l.length;) l[a].length > i && (l[a] = l[a].slice(0, i)), a++;
-		for (var o = Zc(l), s; !(s = o()).done;) for (var c = s.value; c.length < i;) c.push(el);
+		for (var o = Rl(l), s; !(s = o()).done;) for (var c = s.value; c.length < i;) c.push(Vl);
 		return l;
 	});
 	function f() {
@@ -4837,7 +5171,7 @@ function tl(e, t, n) {
 	}
 	function _(e) {
 		var t = e.row, n = e.column, r = e.error;
-		throw new mo(`<c/> at row ${t}, col ${n}: ${r}`);
+		throw new ts(`<c/> at row ${t}, col ${n}: ${r}`);
 	}
 	function v(e) {
 		if (d.sheetData) {
@@ -4853,13 +5187,13 @@ function tl(e, t, n) {
 		e === "dimension" ? n.dimension = ee(t.ref) : e === "sheetData" ? n.sheetData = S() : n.sheetData && C(e, t, n.sheetData);
 	}
 	function b(e, t) {
-		t.sheetData && te(e, t.sheetData);
-	}
-	function x(e, t) {
 		t.sheetData && w(e, t.sheetData);
 	}
+	function x(e, t) {
+		t.sheetData && T(e, t.sheetData);
+	}
 	function ee(e) {
-		var t = e.split(":").map(Gc);
+		var t = e.split(":").map(Ml);
 		return t.length === 1 && (t = [t[0], t[0]]), t;
 	}
 	function S() {
@@ -4878,32 +5212,32 @@ function tl(e, t, n) {
 		};
 	}
 	function C(e, t, n) {
-		e === "row" ? (t.r && (n.rowNumber = Number(t.r)), n.row = []) : e === "c" ? (n.c = ne(), n.c.attributes = t) : n.c && k(e, t, n.c);
+		e === "row" ? (t.r && (n.rowNumber = Number(t.r)), n.row = []) : e === "c" ? (n.c = te(), n.c.attributes = t) : n.c && A(e, t, n.c);
 	}
-	function te(e, t) {
+	function w(e, t) {
 		if (e === "row") {
 			if (t.rowNumber) {
 				var n = t.rowIndexShift + t.rows.length;
-				if (t.rowNumber <= n) throw new mo(`Out-of-place <row/> number ${t.rowNumber} follows <row/> number ${n}`);
+				if (t.rowNumber <= n) throw new ts(`Out-of-place <row/> number ${t.rowNumber} follows <row/> number ${n}`);
 				for (; t.rowNumber > t.rowIndexShift + t.rows.length + 1;) t.rows.push([]);
 			}
 			t.rows.push(t.row), t.row.length > 0 && (t.dataRowCount = t.rowNumber), t.rowNumber > t.rowCount && (t.rowCount = t.rowNumber), t.row = void 0, t.rowNumber = void 0;
 		} else if (e === "c") {
-			var r = T(t.c);
-			if (r.row < t.cursor[0] || r.row === t.cursor[0] && r.column <= t.cursor[1]) throw new mo(`Out-of-place <c/> at row ${r.row} col ${r.column} follows <c/> at row ${t.cursor[0]} col ${t.cursor[1]}`);
-			if (t.cursor[0] = r.row, t.cursor[1] = r.column, t.rowNumber ||= r.row, r.error) A && _(r), t.errors.push(r);
-			else if (r.value !== el) {
-				for (; r.column > t.row.length + 1;) t.row.push(el);
+			var r = E(t.c);
+			if (r.row < t.cursor[0] || r.row === t.cursor[0] && r.column <= t.cursor[1]) throw new ts(`Out-of-place <c/> at row ${r.row} col ${r.column} follows <c/> at row ${t.cursor[0]} col ${t.cursor[1]}`);
+			if (t.cursor[0] = r.row, t.cursor[1] = r.column, t.rowNumber ||= r.row, r.error) M && _(r), t.errors.push(r);
+			else if (r.value !== Vl) {
+				for (; r.column > t.row.length + 1;) t.row.push(Vl);
 				t.row.push(r.value), r.column > t.dataColumnCount && (t.dataColumnCount = r.column);
 			}
 			r.column > t.columnCount && (t.columnCount = r.column), t.c = void 0;
-		} else t.c && re(e, t.c);
+		} else t.c && j(e, t.c);
 	}
-	function w(e, t) {
-		t.c && ie(e, t.c);
+	function T(e, t) {
+		t.c && ne(e, t.c);
 	}
-	function T(e) {
-		var t = e.attributes, n = e.inlineString, r = e.vText, i = qc(Gc(t.r), 2), a = i[0], o = i[1], l = E(t.t, t.s, r, n, c, s.trim !== !1);
+	function E(e) {
+		var t = e.attributes, n = e.inlineString, r = e.vText, i = Pl(Ml(t.r), 2), a = i[0], o = i[1], l = D(t.t, t.s, r, n, c, s.trim !== !1);
 		return typeof l == "string" ? {
 			row: a,
 			column: o,
@@ -4911,27 +5245,27 @@ function tl(e, t, n) {
 		} : {
 			row: a,
 			column: o,
-			value: O(l[1], l[0])
+			value: k(l[1], l[0])
 		};
 	}
-	function E(e, t, n, r, i, a) {
-		var o = D(e, t, n, r, i);
-		return Array.isArray(o) && o[0] === "s" && (a && (o[1] = o[1].trim()), o[1] === "") ? Uc : o;
+	function D(e, t, n, r, i, a) {
+		var o = O(e, t, n, r, i);
+		return Array.isArray(o) && o[0] === "s" && (a && (o[1] = o[1].trim()), o[1] === "") ? Al : o;
 	}
-	function D(e, t, n, r, i) {
-		var a = Wc(e, t, n, r, i);
+	function O(e, t, n, r, i) {
+		var a = jl(e, t, n, r, i);
 		if (a === "VALUE_MISSING") switch (e || "n") {
 			case "str":
 			case "inlineStr":
 			case "s":
-			case "b": return Uc;
+			case "b": return Al;
 		}
-		return e === "e" ? Uc : a;
+		return e === "e" ? Al : a;
 	}
-	function O(e, t) {
+	function k(e, t) {
 		return t === "n" ? s.parseNumber ? s.parseNumber(e) : e : t === "d" ? new Date(e) : e;
 	}
-	function ne() {
+	function te() {
 		return {
 			v: !1,
 			is: !1,
@@ -4943,24 +5277,24 @@ function tl(e, t, n) {
 			attributes: void 0
 		};
 	}
-	function k(e, t, n) {
+	function A(e, t, n) {
 		e === "v" ? n.v = !0 : e === "is" ? (n.is = !0, n.inlineString = "") : e === "t" ? n.t = !0 : e === "r" ? n.r = !0 : e === "rPh" && (n.rPh = !0);
 	}
-	function re(e, t) {
+	function j(e, t) {
 		e === "v" ? (t.v = !1, t.vText ||= "") : e === "is" ? t.is = !1 : e === "t" ? t.t = !1 : e === "r" ? t.r = !1 : e === "rPh" && (t.rPh = !1);
 	}
-	function ie(e, t) {
+	function ne(e, t) {
 		t.v ? t.vText = e : t.is && (t.rPh || t.t && (t.r ? t.inlineString += e : t.inlineString = e));
 	}
-	var A;
+	var M;
 }
 //#endregion
 //#region node_modules/fflate/esm/index.mjs
-var nl = M("/"), rl;
+var Ul = F("/"), Wl;
 try {
-	rl = nl("worker_threads"), rl.Worker, rl.isMarkedAsUntransferable;
+	Wl = Ul("worker_threads"), Wl.Worker, Wl.isMarkedAsUntransferable;
 } catch {}
-var il = Uint8Array, al = Uint16Array, ol = Int32Array, sl = new il([
+var Gl = Uint8Array, Kl = Uint16Array, ql = Int32Array, Jl = new Gl([
 	0,
 	0,
 	0,
@@ -4993,7 +5327,7 @@ var il = Uint8Array, al = Uint16Array, ol = Int32Array, sl = new il([
 	0,
 	0,
 	0
-]), cl = new il([
+]), Yl = new Gl([
 	0,
 	0,
 	0,
@@ -5027,7 +5361,7 @@ var il = Uint8Array, al = Uint16Array, ol = Int32Array, sl = new il([
 	0,
 	0
 ]);
-new il([
+new Gl([
 	16,
 	17,
 	18,
@@ -5048,29 +5382,29 @@ new il([
 	1,
 	15
 ]);
-var ll = function(e, t) {
-	for (var n = new al(31), r = 0; r < 31; ++r) n[r] = t += 1 << e[r - 1];
-	for (var i = new ol(n[30]), r = 1; r < 30; ++r) for (var a = n[r]; a < n[r + 1]; ++a) i[a] = a - n[r] << 5 | r;
+var Xl = function(e, t) {
+	for (var n = new Kl(31), r = 0; r < 31; ++r) n[r] = t += 1 << e[r - 1];
+	for (var i = new ql(n[30]), r = 1; r < 30; ++r) for (var a = n[r]; a < n[r + 1]; ++a) i[a] = a - n[r] << 5 | r;
 	return {
 		b: n,
 		r: i
 	};
-}, rl = ll(sl, 2), ul = rl.b, dl = rl.r;
-ul[28] = 258, dl[258] = 28;
-var fl = ll(cl, 0);
-fl.b, fl.r;
-for (var pl = new al(32768), X = 0; X < 32768; ++X) {
-	var ml = (X & 43690) >> 1 | (X & 21845) << 1;
-	ml = (ml & 52428) >> 2 | (ml & 13107) << 2, ml = (ml & 61680) >> 4 | (ml & 3855) << 4, pl[X] = ((ml & 65280) >> 8 | (ml & 255) << 8) >> 1;
+}, Wl = Xl(Jl, 2), Zl = Wl.b, Ql = Wl.r;
+Zl[28] = 258, Ql[258] = 28;
+var $l = Xl(Yl, 0);
+$l.b, $l.r;
+for (var eu = new Kl(32768), X = 0; X < 32768; ++X) {
+	var tu = (X & 43690) >> 1 | (X & 21845) << 1;
+	tu = (tu & 52428) >> 2 | (tu & 13107) << 2, tu = (tu & 61680) >> 4 | (tu & 3855) << 4, eu[X] = ((tu & 65280) >> 8 | (tu & 255) << 8) >> 1;
 }
-for (var hl = new il(288), X = 0; X < 144; ++X) hl[X] = 8;
-for (var X = 144; X < 256; ++X) hl[X] = 9;
-for (var X = 256; X < 280; ++X) hl[X] = 7;
-for (var X = 280; X < 288; ++X) hl[X] = 8;
-for (var gl = new il(32), X = 0; X < 32; ++X) gl[X] = 5;
-var _l = function(e, t, n) {
-	return (t == null || t < 0) && (t = 0), (n == null || n > e.length) && (n = e.length), new il(e.subarray(t, n));
-}, vl = [
+for (var nu = new Gl(288), X = 0; X < 144; ++X) nu[X] = 8;
+for (var X = 144; X < 256; ++X) nu[X] = 9;
+for (var X = 256; X < 280; ++X) nu[X] = 7;
+for (var X = 280; X < 288; ++X) nu[X] = 8;
+for (var ru = new Gl(32), X = 0; X < 32; ++X) ru[X] = 5;
+var iu = function(e, t, n) {
+	return (t == null || t < 0) && (t = 0), (n == null || n > e.length) && (n = e.length), new Gl(e.subarray(t, n));
+}, au = [
 	"unexpected EOF",
 	"invalid block type",
 	"invalid length/literal",
@@ -5085,152 +5419,152 @@ var _l = function(e, t, n) {
 	"filename too long",
 	"stream finishing",
 	"invalid zip data"
-], yl = function(e, t, n) {
-	var r = Error(t || vl[e]);
-	if (r.code = e, Error.captureStackTrace && Error.captureStackTrace(r, yl), !n) throw r;
+], ou = function(e, t, n) {
+	var r = Error(t || au[e]);
+	if (r.code = e, Error.captureStackTrace && Error.captureStackTrace(r, ou), !n) throw r;
 	return r;
-}, bl = /*#__PURE__*/ new il(0), xl = typeof TextDecoder < "u" && /*#__PURE__*/ new TextDecoder();
+}, su = /*#__PURE__*/ new Gl(0), cu = typeof TextDecoder < "u" && /*#__PURE__*/ new TextDecoder();
 try {
-	xl.decode(bl, { stream: !0 });
+	cu.decode(su, { stream: !0 });
 } catch {}
-var Sl = function(e) {
+var lu = function(e) {
 	for (var t = "", n = 0;;) {
 		var r = e[n++], i = (r > 127) + (r > 223) + (r > 239);
 		if (n + i > e.length) return {
 			s: t,
-			r: _l(e, n - 1)
+			r: iu(e, n - 1)
 		};
 		i ? i == 3 ? (r = ((r & 15) << 18 | (e[n++] & 63) << 12 | (e[n++] & 63) << 6 | e[n++] & 63) - 65536, t += String.fromCharCode(55296 | r >> 10, 56320 | r & 1023)) : i & 1 ? t += String.fromCharCode((r & 31) << 6 | e[n++] & 63) : t += String.fromCharCode((r & 15) << 12 | (e[n++] & 63) << 6 | e[n++] & 63) : t += String.fromCharCode(r);
 	}
 };
-function Cl(e, t) {
+function uu(e, t) {
 	if (t) {
 		for (var n = "", r = 0; r < e.length; r += 16384) n += String.fromCharCode.apply(null, e.subarray(r, r + 16384));
 		return n;
 	}
-	if (xl) return xl.decode(e);
-	var i = Sl(e), a = i.s, n = i.r;
-	return n.length && yl(8), a;
+	if (cu) return cu.decode(e);
+	var i = lu(e), a = i.s, n = i.r;
+	return n.length && ou(8), a;
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/utility/convertValuesFromUint8ArraysToStrings.js
-function wl(e) {
-	uc("convert files to strings");
+function du(e) {
+	Zc("convert files to strings");
 	for (var t = {}, n = 0, r = Object.keys(e); n < r.length; n++) {
 		var i = r[n];
-		t[i] = Tl(e[i]);
+		t[i] = fu(e[i]);
 	}
 	return t;
 }
-function Tl(e) {
-	return typeof TextDecoder < "u" ? new TextDecoder().decode(e) : Cl(e);
+function fu(e) {
+	return typeof TextDecoder < "u" ? new TextDecoder().decode(e) : uu(e);
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/utility/isPromise.js
-function El(e) {
+function pu(e) {
 	"@babel/helpers - typeof";
-	return El = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return pu = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, El(e);
+	}, pu(e);
 }
-function Dl(e) {
-	return El(e) === "object" && typeof e.then == "function";
+function mu(e) {
+	return pu(e) === "object" && typeof e.then == "function";
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/SheetNotFoundError.js
-function Ol(e) {
+function hu(e) {
 	"@babel/helpers - typeof";
-	return Ol = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return hu = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, Ol(e);
+	}, hu(e);
 }
-function kl(e, t) {
+function gu(e, t) {
 	for (var n = 0; n < t.length; n++) {
 		var r = t[n];
-		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, jl(r.key), r);
+		r.enumerable = r.enumerable || !1, r.configurable = !0, "value" in r && (r.writable = !0), Object.defineProperty(e, vu(r.key), r);
 	}
 }
-function Al(e, t, n) {
-	return t && kl(e.prototype, t), n && kl(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
+function _u(e, t, n) {
+	return t && gu(e.prototype, t), n && gu(e, n), Object.defineProperty(e, "prototype", { writable: !1 }), e;
 }
-function jl(e) {
-	var t = Ml(e, "string");
-	return Ol(t) === "symbol" ? t : String(t);
+function vu(e) {
+	var t = yu(e, "string");
+	return hu(t) === "symbol" ? t : String(t);
 }
-function Ml(e, t) {
-	if (Ol(e) !== "object" || e === null) return e;
+function yu(e, t) {
+	if (hu(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (Ol(r) !== "object") return r;
+		if (hu(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function Nl(e, t) {
+function bu(e, t) {
 	if (!(e instanceof t)) throw TypeError("Cannot call a class as a function");
 }
-function Pl(e, t) {
+function xu(e, t) {
 	if (typeof t != "function" && t !== null) throw TypeError("Super expression must either be null or a function");
 	e.prototype = Object.create(t && t.prototype, { constructor: {
 		value: e,
 		writable: !0,
 		configurable: !0
-	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && Hl(e, t);
+	} }), Object.defineProperty(e, "prototype", { writable: !1 }), t && ku(e, t);
 }
-function Fl(e) {
-	var t = Bl();
+function Su(e) {
+	var t = Du();
 	return function() {
-		var n = Ul(e), r;
+		var n = Au(e), r;
 		if (t) {
-			var i = Ul(this).constructor;
+			var i = Au(this).constructor;
 			r = Reflect.construct(n, arguments, i);
 		} else r = n.apply(this, arguments);
-		return Il(this, r);
+		return Cu(this, r);
 	};
 }
-function Il(e, t) {
-	if (t && (Ol(t) === "object" || typeof t == "function")) return t;
+function Cu(e, t) {
+	if (t && (hu(t) === "object" || typeof t == "function")) return t;
 	if (t !== void 0) throw TypeError("Derived constructors may only return object or undefined");
-	return Ll(e);
+	return wu(e);
 }
-function Ll(e) {
+function wu(e) {
 	if (e === void 0) throw ReferenceError("this hasn't been initialised - super() hasn't been called");
 	return e;
 }
-function Rl(e) {
+function Tu(e) {
 	var t = typeof Map == "function" ? /* @__PURE__ */ new Map() : void 0;
-	return Rl = function(e) {
-		if (e === null || !Vl(e)) return e;
+	return Tu = function(e) {
+		if (e === null || !Ou(e)) return e;
 		if (typeof e != "function") throw TypeError("Super expression must either be null or a function");
 		if (t !== void 0) {
 			if (t.has(e)) return t.get(e);
 			t.set(e, n);
 		}
 		function n() {
-			return zl(e, arguments, Ul(this).constructor);
+			return Eu(e, arguments, Au(this).constructor);
 		}
 		return n.prototype = Object.create(e.prototype, { constructor: {
 			value: n,
 			enumerable: !1,
 			writable: !0,
 			configurable: !0
-		} }), Hl(n, e);
-	}, Rl(e);
+		} }), ku(n, e);
+	}, Tu(e);
 }
-function zl(e, t, n) {
-	return zl = Bl() ? Reflect.construct.bind() : function(e, t, n) {
+function Eu(e, t, n) {
+	return Eu = Du() ? Reflect.construct.bind() : function(e, t, n) {
 		var r = [null];
 		r.push.apply(r, t);
 		var i = new (Function.bind.apply(e, r))();
-		return n && Hl(i, n.prototype), i;
-	}, zl.apply(null, arguments);
+		return n && ku(i, n.prototype), i;
+	}, Eu.apply(null, arguments);
 }
-function Bl() {
+function Du() {
 	if (typeof Reflect > "u" || !Reflect.construct || Reflect.construct.sham) return !1;
 	if (typeof Proxy == "function") return !0;
 	try {
@@ -5239,42 +5573,42 @@ function Bl() {
 		return !1;
 	}
 }
-function Vl(e) {
+function Ou(e) {
 	return Function.toString.call(e).indexOf("[native code]") !== -1;
 }
-function Hl(e, t) {
-	return Hl = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
+function ku(e, t) {
+	return ku = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(e, t) {
 		return e.__proto__ = t, e;
-	}, Hl(e, t);
+	}, ku(e, t);
 }
-function Ul(e) {
-	return Ul = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
+function Au(e) {
+	return Au = Object.setPrototypeOf ? Object.getPrototypeOf.bind() : function(e) {
 		return e.__proto__ || Object.getPrototypeOf(e);
-	}, Ul(e);
+	}, Au(e);
 }
-var Wl = /*#__PURE__*/ function(e) {
-	Pl(n, e);
-	var t = Fl(n);
+var ju = /*#__PURE__*/ function(e) {
+	xu(n, e);
+	var t = Su(n);
 	function n(e, r) {
 		var i;
-		return Nl(this, n), i = t.call(this, `Sheet not found: ${typeof e == "number" ? e + ". Sheet count: " + r.length : e + ". Available sheets: " + r.join(", ")}`), i.name = "SheetNotFoundError", i.sheet = e, i.sheets = r, i;
+		return bu(this, n), i = t.call(this, `Sheet not found: ${typeof e == "number" ? e + ". Sheet count: " + r.length : e + ". Available sheets: " + r.join(", ")}`), i.name = "SheetNotFoundError", i.sheet = e, i.sheets = r, i;
 	}
-	return Al(n);
-}(/*#__PURE__*/ Rl(Error));
+	return _u(n);
+}(/*#__PURE__*/ Tu(Error));
 //#endregion
 //#region node_modules/read-excel-file/modules/xlsx/parseSpreadsheetContents.js
-function Gl(e) {
+function Mu(e) {
 	"@babel/helpers - typeof";
-	return Gl = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
+	return Mu = typeof Symbol == "function" && typeof Symbol.iterator == "symbol" ? function(e) {
 		return typeof e;
 	} : function(e) {
 		return e && typeof Symbol == "function" && e.constructor === Symbol && e !== Symbol.prototype ? "symbol" : typeof e;
-	}, Gl(e);
+	}, Mu(e);
 }
-function Kl(e, t) {
+function Nu(e, t) {
 	var n = typeof Symbol < "u" && e[Symbol.iterator] || e["@@iterator"];
 	if (n) return (n = n.call(e)).next.bind(n);
-	if (Array.isArray(e) || (n = ql(e)) || t && e && typeof e.length == "number") {
+	if (Array.isArray(e) || (n = Pu(e)) || t && e && typeof e.length == "number") {
 		n && (e = n);
 		var r = 0;
 		return function() {
@@ -5286,20 +5620,20 @@ function Kl(e, t) {
 	}
 	throw TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
 }
-function ql(e, t) {
+function Pu(e, t) {
 	if (e) {
-		if (typeof e == "string") return Jl(e, t);
+		if (typeof e == "string") return Fu(e, t);
 		var n = Object.prototype.toString.call(e).slice(8, -1);
 		if (n === "Object" && e.constructor && (n = e.constructor.name), n === "Map" || n === "Set") return Array.from(e);
-		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Jl(e, t);
+		if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return Fu(e, t);
 	}
 }
-function Jl(e, t) {
+function Fu(e, t) {
 	(t == null || t > e.length) && (t = e.length);
 	for (var n = 0, r = Array(t); n < t; n++) r[n] = e[n];
 	return r;
 }
-function Yl(e, t) {
+function Iu(e, t) {
 	var n = Object.keys(e);
 	if (Object.getOwnPropertySymbols) {
 		var r = Object.getOwnPropertySymbols(e);
@@ -5309,59 +5643,59 @@ function Yl(e, t) {
 	}
 	return n;
 }
-function Xl(e) {
+function Lu(e) {
 	for (var t = 1; t < arguments.length; t++) {
 		var n = arguments[t] == null ? {} : arguments[t];
-		t % 2 ? Yl(Object(n), !0).forEach(function(t) {
-			Zl(e, t, n[t]);
-		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : Yl(Object(n)).forEach(function(t) {
+		t % 2 ? Iu(Object(n), !0).forEach(function(t) {
+			Ru(e, t, n[t]);
+		}) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(n)) : Iu(Object(n)).forEach(function(t) {
 			Object.defineProperty(e, t, Object.getOwnPropertyDescriptor(n, t));
 		});
 	}
 	return e;
 }
-function Zl(e, t, n) {
-	return t = Ql(t), t in e ? Object.defineProperty(e, t, {
+function Ru(e, t, n) {
+	return t = zu(t), t in e ? Object.defineProperty(e, t, {
 		value: n,
 		enumerable: !0,
 		configurable: !0,
 		writable: !0
 	}) : e[t] = n, e;
 }
-function Ql(e) {
-	var t = $l(e, "string");
-	return Gl(t) === "symbol" ? t : String(t);
+function zu(e) {
+	var t = Bu(e, "string");
+	return Mu(t) === "symbol" ? t : String(t);
 }
-function $l(e, t) {
-	if (Gl(e) !== "object" || e === null) return e;
+function Bu(e, t) {
+	if (Mu(e) !== "object" || e === null) return e;
 	var n = e[Symbol.toPrimitive];
 	if (n !== void 0) {
 		var r = n.call(e, t || "default");
-		if (Gl(r) !== "object") return r;
+		if (Mu(r) !== "object") return r;
 		throw TypeError("@@toPrimitive must return a primitive value.");
 	}
 	return (t === "string" ? String : Number)(e);
 }
-function eu(e, t) {
-	var n = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, r = wl(t);
-	return uc("parse spreadsheet info and file paths"), su(iu(), r, e).then(function(t) {
+function Vu(e, t) {
+	var n = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : {}, r = du(t);
+	return Zc("parse spreadsheet info and file paths"), Ju(Gu(), r, e).then(function(t) {
 		var i = t.spreadsheetInfo, a = t.filePaths;
-		return uc("parse \"shared strings\" and \"styles\""), su(au(a), r, e).then(function(t) {
+		return Zc("parse \"shared strings\" and \"styles\""), Ju(Ku(a), r, e).then(function(t) {
 			var o = t.sharedStrings, s = t.styles, c = n.sheets ? n.sheets.map(function(e) {
-				return nu(e, i.sheets);
+				return Uu(e, i.sheets);
 			}) : i.sheets.map(function(e) {
 				return e.relationId;
 			});
-			return uc(`parse sheet${c.length === 1 ? "" : "s"} data`), su(ou(a, c, {
+			return Zc(`parse sheet${c.length === 1 ? "" : "s"} data`), Ju(qu(a, c, {
 				sharedStrings: o,
 				styles: s,
 				epoch1904: i.epoch1904,
 				dateFormatDetectionCache: [],
 				options: n
 			}), r, e).then(function(e) {
-				return uc("end"), c.map(function(t) {
+				return Zc("end"), c.map(function(t) {
 					return {
-						sheet: ru(t, i.sheets),
+						sheet: Wu(t, i.sheets),
 						data: e[t]
 					};
 				});
@@ -5369,72 +5703,72 @@ function eu(e, t) {
 		});
 	});
 }
-function tu(e, t, n, r) {
-	return r && r.parseNumber || (r = Xl(Xl({}, r), {}, { parseNumber: null })), eu(t, n, r);
+function Hu(e, t, n, r) {
+	return r && r.parseNumber || (r = Lu(Lu({}, r), {}, { parseNumber: null })), Vu(t, n, r);
 }
-function nu(e, t) {
-	if (typeof e == "string") for (var n = Kl(t), r; !(r = n()).done;) {
+function Uu(e, t) {
+	if (typeof e == "string") for (var n = Nu(t), r; !(r = n()).done;) {
 		var i = r.value;
 		if (i.name === e) return i.relationId;
 	}
 	else if (e <= t.length) return t[e - 1].relationId;
-	throw new Wl(e, t.map(function(e) {
+	throw new ju(e, t.map(function(e) {
 		return e.name;
 	}));
 }
-function ru(e, t) {
-	for (var n = Kl(t), r; !(r = n()).done;) {
+function Wu(e, t) {
+	for (var n = Nu(t), r; !(r = n()).done;) {
 		var i = r.value;
 		if (i.relationId === e) return i.name;
 	}
 	throw Error(`Sheet relation ID not found: ${e}`);
 }
-function iu() {
+function Gu() {
 	return {
 		"xl/_rels/workbook.xml.rels": {
 			name: "filePaths",
-			parse: mc
+			parse: tl
 		},
 		"xl/workbook.xml": {
 			name: "spreadsheetInfo",
-			parse: pc
+			parse: el
 		}
 	};
 }
-function au(e) {
+function Ku(e) {
 	var t = {};
-	return Zl(t, e.sharedStrings || "xl/sharedStrings.xml", {
+	return Ru(t, e.sharedStrings || "xl/sharedStrings.xml", {
 		name: "sharedStrings",
-		parse: Tc,
+		parse: fl,
 		fallback: Promise.resolve([])
-	}), Zl(t, e.styles || "xl/styles.xml", {
+	}), Ru(t, e.styles || "xl/styles.xml", {
 		name: "styles",
-		parse: wc,
+		parse: dl,
 		fallback: {}
 	}), t;
 }
-function ou(e, t, n) {
+function qu(e, t, n) {
 	return Object.keys(e.sheets).filter(function(e) {
 		return t.includes(e);
 	}).reduce(function(t, r) {
-		return Xl(Xl({}, t), {}, Zl({}, e.sheets[r], {
+		return Lu(Lu({}, t), {}, Ru({}, e.sheets[r], {
 			name: r,
 			parse: function(e, t) {
-				return tl(e, t, n);
+				return Hl(e, t, n);
 			}
 		}));
 	}, {});
 }
-function su(e, t, n) {
+function Ju(e, t, n) {
 	for (var r = {}, i = function() {
 		var i = o[a], s = e[i];
 		r[s.name] = t[i] === void 0 ? s.fallback === void 0 ? function() {
-			throw new mo(`"${i}" file not found inside the \`.xlsx\` file`);
+			throw new ts(`"${i}" file not found inside the \`.xlsx\` file`);
 		}() : s.fallback : s.parse(t[i], n);
 	}, a = 0, o = Object.keys(e); a < o.length; a++) i();
 	for (var s = [], c = function() {
 		var e = u[l];
-		Dl(r[e]) && s.push(r[e].then(function(t) {
+		mu(r[e]) && s.push(r[e].then(function(t) {
 			r[e] = t;
 		}));
 	}, l = 0, u = Object.keys(r); l < u.length; l++) c();
@@ -5444,9 +5778,9 @@ function su(e, t, n) {
 }
 //#endregion
 //#region node_modules/read-excel-file/modules/export/readXlsxFileNode.js
-function cu(e, t) {
-	return fc(e).then(function(e) {
-		return tu(Ka, ho, e, t);
+function Yu(e, t) {
+	return $c(e).then(function(e) {
+		return Hu(Po, ns, e, t);
 	});
 }
 //#endregion
@@ -5491,7 +5825,7 @@ var Z = {
 	testigo_3: 39,
 	testigo_4: 40,
 	fecha_ingreso: 42
-}, lu = "feligres", uu = "parroquialibros", du = [
+}, Xu = "feligres", Zu = "parroquialibros", Qu = [
 	"COD PARROQUIA",
 	"TIPO LIBRO",
 	"NUM LIBRO",
@@ -5537,23 +5871,23 @@ var Z = {
 	"FECHA INGRESO DATOS",
 	"ULTIMA MODIFICACION",
 	"ULTIMA IMPRESION"
-], fu = [
+], $u = [
 	"COD PARROQUIA",
 	"TIPO DE LIBRO",
 	"NUM LIBRO",
 	"NOMBRE DE LIBRO",
 	"RANGO DE AÑOS DEL LIBRO"
-], pu = {
+], ed = {
 	codigo_parroquia: 0,
 	tipo_libro: 1,
 	num_libro: 2,
 	nombre_libro: 3
-}, mu = class extends Error {}, hu = {
+}, td = class extends Error {}, nd = {
 	B: "bautismo",
 	C: "confirmacion",
 	M: "matrimonio"
 };
-function gu(e, t) {
+function rd(e, t) {
 	return `${e.trim().toUpperCase()}|${t.trim()}`;
 }
 function Q(e) {
@@ -5561,20 +5895,20 @@ function Q(e) {
 	let t = String(e).trim();
 	return t === "" || /^-+$/.test(t) ? null : t;
 }
-function _u(e) {
+function id(e) {
 	return String(e).padStart(2, "0");
 }
-function vu(e) {
-	if (e instanceof Date && !Number.isNaN(e.getTime())) return `${e.getUTCFullYear()}-${_u(e.getUTCMonth() + 1)}-${_u(e.getUTCDate())}`;
+function ad(e) {
+	if (e instanceof Date && !Number.isNaN(e.getTime())) return `${e.getUTCFullYear()}-${id(e.getUTCMonth() + 1)}-${id(e.getUTCDate())}`;
 	let t = Q(e);
 	if (!t) return null;
 	let n = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
 	if (n) return `${n[1]}-${n[2]}-${n[3]}`;
 	let r = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
-	return r ? `${r[3]}-${_u(Number(r[2]))}-${_u(Number(r[1]))}` : null;
+	return r ? `${r[3]}-${id(Number(r[2]))}-${id(Number(r[1]))}` : null;
 }
-function yu(e) {
-	let t = vu(e);
+function od(e) {
+	let t = ad(e);
 	return t ? {
 		date: t,
 		text: null
@@ -5583,7 +5917,7 @@ function yu(e) {
 		text: Q(e)
 	};
 }
-var bu = [
+var sd = [
 	"PBRO",
 	"P",
 	"RP",
@@ -5596,14 +5930,14 @@ var bu = [
 	"DIAC",
 	"OBISPO"
 ];
-function xu(e) {
-	return /\.$/.test(e) ? !0 : bu.includes(e.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase());
+function cd(e) {
+	return /\.$/.test(e) ? !0 : sd.includes(e.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase());
 }
-function Su(e) {
+function ld(e) {
 	let t = Q(e);
 	if (!t) return null;
 	let n = t.split(/\s+/), r = null;
-	return n.length > 1 && xu(n[0]) && (r = n.shift()), n.length === 1 ? {
+	return n.length > 1 && cd(n[0]) && (r = n.shift()), n.length === 1 ? {
 		titulo: r,
 		nombre: n[0],
 		apellido_paterno: "",
@@ -5620,21 +5954,21 @@ function Su(e) {
 		apellido_materno: n[n.length - 1]
 	};
 }
-function Cu(e) {
+function ud(e) {
 	let t = e[Z.codigo_parroquia];
 	return typeof t == "string" && !/^\d+$/.test(t.trim());
 }
-function wu(e) {
+function dd(e) {
 	return String(e ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 }
-function Tu(e, t, n) {
-	if (e.length === 0) throw new mu(`La hoja "${t}" está vacía.`);
+function fd(e, t, n) {
+	if (e.length === 0) throw new td(`La hoja "${t}" está vacía.`);
 	let r = [];
 	return e.forEach((e, i) => {
-		if (e.length !== n.length) throw new mu(`La hoja "${t}" debe tener ${n.length} columnas y tiene ${e.length}. El archivo no es el exportado por el sistema anterior.`);
-		if (i === 0 && Cu(e)) {
+		if (e.length !== n.length) throw new td(`La hoja "${t}" debe tener ${n.length} columnas y tiene ${e.length}. El archivo no es el exportado por el sistema anterior.`);
+		if (i === 0 && ud(e)) {
 			n.forEach((n, r) => {
-				if (wu(e[r]) !== wu(n)) throw new mu(`El encabezado de la hoja "${t}" no es el del sistema anterior: la columna ${r + 1} dice "${e[r] ?? ""}" y debería decir "${n ?? ""}".`);
+				if (dd(e[r]) !== dd(n)) throw new td(`El encabezado de la hoja "${t}" no es el del sistema anterior: la columna ${r + 1} dice "${e[r] ?? ""}" y debería decir "${n ?? ""}".`);
 			});
 			return;
 		}
@@ -5644,32 +5978,32 @@ function Tu(e, t, n) {
 		});
 	}), r;
 }
-function Eu(e, t, n, r, i) {
+function pd(e, t, n, r, i) {
 	let a = Q(e[t]);
-	if (!a || !/^\d+$/.test(a)) throw new mu(`La fila ${r} de la hoja "${n}" no tiene un código de parroquia válido.`);
-	if (i !== null && a !== i) throw new mu(`El archivo trae partidas de más de una parroquia (códigos ${i} y ${a}). Debe ser el de una sola parroquia.`);
+	if (!a || !/^\d+$/.test(a)) throw new td(`La fila ${r} de la hoja "${n}" no tiene un código de parroquia válido.`);
+	if (i !== null && a !== i) throw new td(`El archivo trae partidas de más de una parroquia (códigos ${i} y ${a}). Debe ser el de una sola parroquia.`);
 	return a;
 }
-function Du(e, t, n, r) {
+function md(e, t, n, r) {
 	let i = String(e[t] ?? "").trim().toUpperCase();
-	if (!hu[i]) throw new mu(`En la fila ${r} de la hoja "${n}" el tipo de libro no es B, C ni M: las columnas no son las del sistema anterior.`);
+	if (!nd[i]) throw new td(`En la fila ${r} de la hoja "${n}" el tipo de libro no es B, C ni M: las columnas no son las del sistema anterior.`);
 	return i;
 }
-function Ou(e) {
+function hd(e) {
 	let t = /* @__PURE__ */ new Map(), n = null;
-	for (let { row: r, fila: i } of Tu(e, uu, fu)) {
-		n = Eu(r, pu.codigo_parroquia, uu, i, n);
-		let e = Du(r, pu.tipo_libro, uu, i), a = Q(r[pu.num_libro]);
-		if (!a) throw new mu(`La fila ${i} de la hoja "${uu}" no tiene el número del libro.`);
-		t.set(gu(e, a), Q(r[pu.nombre_libro]) ?? a);
+	for (let { row: r, fila: i } of fd(e, Zu, $u)) {
+		n = pd(r, ed.codigo_parroquia, Zu, i, n);
+		let e = md(r, ed.tipo_libro, Zu, i), a = Q(r[ed.num_libro]);
+		if (!a) throw new td(`La fila ${i} de la hoja "${Zu}" no tiene el número del libro.`);
+		t.set(rd(e, a), Q(r[ed.nombre_libro]) ?? a);
 	}
 	return {
 		codigo_parroquia: n,
 		libros: t
 	};
 }
-function ku(e, t) {
-	let n = yu(e[t.fecha_nacimiento]), r = Q(e[t.fecha_aproximada]);
+function gd(e, t) {
+	let n = od(e[t.fecha_nacimiento]), r = Q(e[t.fecha_aproximada]);
 	return {
 		dni: Q(e[t.dni]),
 		nombres: Q(e[t.nombres]) ?? "",
@@ -5682,7 +6016,7 @@ function ku(e, t) {
 		madre: Q(e[t.madre])
 	};
 }
-var Au = {
+var _d = {
 	dni: Z.dni,
 	nombres: Z.nombres,
 	apellido_paterno: Z.apellido_paterno,
@@ -5692,7 +6026,7 @@ var Au = {
 	lugar_nacimiento: Z.lugar_nacimiento,
 	padre: Z.padre,
 	madre: Z.madre
-}, ju = {
+}, vd = {
 	dni: Z.novia_dni,
 	nombres: Z.novia_nombres,
 	apellido_paterno: Z.novia_apellido_paterno,
@@ -5703,12 +6037,12 @@ var Au = {
 	padre: Z.novia_padre,
 	madre: Z.novia_madre
 };
-function Mu(e, t) {
+function yd(e, t) {
 	let n = [], r = Q(e[Z.anotacion_marginal]);
 	return r && r.toUpperCase() !== "NINGUNA" && n.push(r), n.push(...t), n.length === 0 ? null : n.join("\n");
 }
-function Nu(e, t, n) {
-	let r = String(e[Z.tipo_libro] ?? "").trim().toUpperCase(), i = hu[r];
+function bd(e, t, n) {
+	let r = String(e[Z.tipo_libro] ?? "").trim().toUpperCase(), i = nd[r];
 	if (!i) return {
 		fila: t,
 		motivo: "El tipo de libro no es B, C ni M."
@@ -5718,40 +6052,31 @@ function Nu(e, t, n) {
 		fila: t,
 		motivo: "Falta el libro, el folio o el número de registro."
 	};
-	let c = n.get(gu(r, a));
+	let c = n.get(rd(r, a));
 	if (!c) return {
 		fila: t,
-		motivo: `El libro ${r} ${a} no está en la hoja "${uu}".`
+		motivo: `El libro ${r} ${a} no está en la hoja "${Zu}".`
 	};
-	let l = ku(e, Au);
-	if (!l.nombres) return {
-		fila: t,
-		motivo: "Falta el nombre."
-	};
-	let u = [], d = yu(e[Z.fecha_sacramento]), f = Q(e[Z.fecha_sacramento_aprox]) ?? d.text;
+	let l = gd(e, _d), u = [], d = od(e[Z.fecha_sacramento]), f = Q(e[Z.fecha_sacramento_aprox]) ?? d.text;
 	!d.date && f && u.push(`Fecha aproximada del sacramento: ${f}`);
 	let p = [l], m = {
 		padrino_1: Q(e[Z.padrino]),
 		padrino_2: Q(e[Z.madrina])
 	};
 	if (i === "matrimonio") {
-		let n = ku(e, ju);
-		if (!n.nombres) return {
-			fila: t,
-			motivo: "Falta el nombre de la novia."
-		};
-		p.push(n);
-		let r = yu(e[Z.fecha_bautizo_novio]), i = yu(e[Z.fecha_bautizo_novia]), a = Q(e[Z.fecha_bautizo_novio_aprox]) ?? r.text, o = Q(e[Z.fecha_bautizo_novia_aprox]) ?? i.text;
-		!r.date && a && u.push(`Fecha aproximada del bautizo del esposo: ${a}`), !i.date && o && u.push(`Fecha aproximada del bautizo de la esposa: ${o}`), m = {
+		let t = gd(e, vd);
+		p.push(t);
+		let n = od(e[Z.fecha_bautizo_novio]), r = od(e[Z.fecha_bautizo_novia]), i = Q(e[Z.fecha_bautizo_novio_aprox]) ?? n.text, a = Q(e[Z.fecha_bautizo_novia_aprox]) ?? r.text;
+		!n.date && i && u.push(`Fecha aproximada del bautizo del esposo: ${i}`), !r.date && a && u.push(`Fecha aproximada del bautizo de la esposa: ${a}`), m = {
 			lugar: Q(e[Z.lugar_matrimonio]),
 			testigo_1: Q(e[Z.padrino]),
 			testigo_2: Q(e[Z.madrina]),
 			testigo_3: Q(e[Z.testigo_3]),
 			testigo_4: Q(e[Z.testigo_4]),
 			conyuge_1_bautismo_parroquia: Q(e[Z.parroquia_bautizo_novio]),
-			conyuge_1_bautismo_fecha: r.date,
+			conyuge_1_bautismo_fecha: n.date,
 			conyuge_2_bautismo_parroquia: Q(e[Z.parroquia_bautizo_novia]),
-			conyuge_2_bautismo_fecha: i.date
+			conyuge_2_bautismo_fecha: r.date
 		};
 	}
 	return {
@@ -5763,13 +6088,13 @@ function Nu(e, t, n) {
 		numero: s,
 		fecha_emision: d.date,
 		fecha_evento: d.date,
-		anotaciones: Mu(e, u),
-		celebrante: Su(e[Z.celebrante]),
+		anotaciones: yd(e, u),
+		celebrante: ld(e[Z.celebrante]),
 		personas: p,
 		detalle: m
 	};
 }
-function Pu(e) {
+function xd(e) {
 	return [
 		e.tipo,
 		e.libro,
@@ -5777,16 +6102,16 @@ function Pu(e) {
 		e.numero
 	].map((e) => e.trim().toUpperCase()).join("|");
 }
-function Fu(e, t) {
-	let n = [], r = [], i = /* @__PURE__ */ new Map(), a = Tu(e, lu, du), o = t.codigo_parroquia;
-	for (let { row: e, fila: t } of a) o = Eu(e, Z.codigo_parroquia, lu, t, o), Du(e, Z.tipo_libro, lu, t);
+function Sd(e, t) {
+	let n = [], r = [], i = /* @__PURE__ */ new Map(), a = fd(e, Xu, Qu), o = t.codigo_parroquia;
+	for (let { row: e, fila: t } of a) o = pd(e, Z.codigo_parroquia, Xu, t, o), md(e, Z.tipo_libro, Xu, t);
 	for (let { row: e, fila: o } of a) {
-		let a = Nu(e, o, t.libros);
+		let a = bd(e, o, t.libros);
 		if ("motivo" in a) {
 			r.push(a);
 			continue;
 		}
-		let s = Pu(a), c = i.get(s);
+		let s = xd(a), c = i.get(s);
 		if (c !== void 0) {
 			r.push({
 				fila: o,
@@ -5801,37 +6126,37 @@ function Fu(e, t) {
 		errores: r
 	};
 }
-function Iu(e, t) {
+function Cd(e, t) {
 	let n = e.find((e) => e.sheet.trim().toLowerCase() === t);
-	if (!n) throw new mu(`El archivo no tiene la hoja "${t}". Debe ser el Excel exportado por el sistema anterior, sin cambios.`);
+	if (!n) throw new td(`El archivo no tiene la hoja "${t}". Debe ser el Excel exportado por el sistema anterior, sin cambios.`);
 	return n.data;
 }
-function Lu(e) {
-	let t = Ou(Iu(e, uu));
-	return Fu(Iu(e, lu), t);
+function wd(e) {
+	let t = hd(Cd(e, Zu));
+	return Sd(Cd(e, Xu), t);
 }
 //#endregion
 //#region electron/main/controllers/legacy_import.ts
-var Ru = "Solo el administrador de la parroquia puede importar partidas.";
-function zu(e) {
-	if (e.role !== "admin_parroquia" || !e.parish_id) throw new z(Ru, 403);
+var Td = "Solo el administrador de la parroquia puede importar partidas.";
+function Ed(e) {
+	if (e.role !== "admin_parroquia" || !e.parish_id) throw new V(Td, 403);
 	return e.parish_id;
 }
-function Bu(e) {
+function Dd(e) {
 	return [
 		e.nombres,
 		e.apellido_paterno,
 		e.apellido_materno
 	].filter((e) => e).join(" ");
 }
-function Vu(e, t, n) {
-	let r = e.prepare("SELECT tipo, libro, folio, numero FROM sacramentos WHERE parroquia_id = ?").all(t), i = new Set(r.map(Pu)), a = {
+function Od(e, t, n) {
+	let r = e.prepare("SELECT tipo, libro, folio, numero FROM sacramentos WHERE parroquia_id = ?").all(t), i = new Set(r.map(xd)), a = {
 		nuevas: [],
 		existentes: [],
 		errores: n.errores
 	};
 	for (let e of n.partidas) {
-		if (!i.has(Pu(e))) {
+		if (!i.has(xd(e))) {
 			a.nuevas.push(e);
 			continue;
 		}
@@ -5841,43 +6166,43 @@ function Vu(e, t, n) {
 			libro: e.libro,
 			folio: e.folio,
 			numero: e.numero,
-			nombre: e.personas.map(Bu).join(" y ")
+			nombre: e.personas.map(Dd).join(" y ")
 		});
 	}
 	return a;
 }
-function Hu(e) {
+function kd(e) {
 	return e.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 }
-function Uu(e) {
-	return Hu([
+function Ad(e) {
+	return kd([
 		e.nombre,
 		e.apellido_paterno,
 		e.apellido_materno
 	].filter((e) => e).join(" "));
 }
-function Wu(e, t) {
+function jd(e, t) {
 	let n = /* @__PURE__ */ new Map(), r = e.prepare("SELECT id, nombre, apellido_paterno, apellido_materno FROM ministros WHERE parroquia_id = ?").all(t);
-	for (let e of r) n.set(Uu(e), e.id);
+	for (let e of r) n.set(Ad(e), e.id);
 	let i = e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)");
 	return (r) => {
 		if (!r) return null;
-		let a = Uu(r), o = n.get(a);
+		let a = Ad(r), o = n.get(a);
 		if (o !== void 0) return o;
 		let s = crypto.randomUUID();
-		U(e, "ministro", s, null);
+		ut(e, "ministro", s, null);
 		let c = Number(i.run(s, t, r.titulo, r.nombre, r.apellido_paterno, r.apellido_materno).lastInsertRowid);
 		return n.set(a, c), c;
 	};
 }
-function Gu(e) {
+function Md(e) {
 	return {
 		...e,
 		cambios: []
 	};
 }
-function Ku(e, t, n, r, i) {
-	let a = r.personas.map((t) => $e(e, n, Gu(t))), o = {
+function Nd(e, t, n, r, i) {
+	let a = r.personas.map((t) => $e(e, n, Md(t))), o = {
 		tipo: r.tipo,
 		ministro_id: i,
 		libro: r.libro,
@@ -5887,45 +6212,45 @@ function Ku(e, t, n, r, i) {
 		fecha_evento: r.fecha_evento,
 		anotaciones: r.anotaciones
 	}, s = crypto.randomUUID();
-	U(e, r.tipo, s, null);
-	let c = bt(e, s, r.tipo, n, o);
-	H(e, c, t.user_id, "importada", [], `Fila ${r.fila} del Excel del sistema anterior`);
+	ut(e, r.tipo, s, null);
+	let c = Dt(e, s, r.tipo, n, o);
+	W(e, c, t.user_id, "importada", [], `Fila ${r.fila} del Excel del sistema anterior`);
 	let l = r.detalle;
 	if (r.tipo === "matrimonio") {
 		e.prepare("INSERT INTO matrimonios\n				(sacramento_id, conyuge_1_id, conyuge_2_id, lugar, testigo_1, testigo_2, testigo_3, testigo_4,\n				 conyuge_1_bautismo_parroquia, conyuge_1_bautismo_fecha, conyuge_2_bautismo_parroquia, conyuge_2_bautismo_fecha)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(c, a[0], a[1], l.lugar, l.testigo_1, l.testigo_2, l.testigo_3, l.testigo_4, l.conyuge_1_bautismo_parroquia, l.conyuge_1_bautismo_fecha, l.conyuge_2_bautismo_parroquia, l.conyuge_2_bautismo_fecha);
 		return;
 	}
-	e.prepare(`INSERT INTO ${ut(r.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(c, a[0], l.padrino_1, l.padrino_2);
+	e.prepare(`INSERT INTO ${_t(r.tipo)} (sacramento_id, persona_id, padrino_1, padrino_2) VALUES (?, ?, ?, ?)`).run(c, a[0], l.padrino_1, l.padrino_2);
 }
-function qu(e, t, n) {
-	let r = zu(t);
+function Pd(e, t, n) {
+	let r = Ed(t);
 	return e.transaction(() => {
-		let i = Vu(e, r, {
+		let i = Od(e, r, {
 			partidas: n,
 			errores: []
-		}), a = Wu(e, r);
-		for (let n of i.nuevas) Ku(e, t, r, n, a(n.celebrante));
+		}), a = jd(e, r);
+		for (let n of i.nuevas) Nd(e, t, r, n, a(n.celebrante));
 		return {
 			importadas: i.nuevas.length,
 			omitidas: i.existentes.length
 		};
 	})();
 }
-var Ju = null;
-async function Yu(e) {
+var Fd = null;
+async function Id(e) {
 	let t;
 	try {
-		t = await cu(e);
+		t = await Yu(e);
 	} catch {
-		throw new z("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx) exportado del sistema anterior.", 400);
+		throw new V("No se pudo leer el archivo. Verifique que sea un Excel (.xlsx) exportado del sistema anterior.", 400);
 	}
 	try {
-		return Lu(t);
+		return wd(t);
 	} catch (e) {
-		throw e instanceof mu ? new z(e.message, 400) : e;
+		throw e instanceof td ? new V(e.message, 400) : e;
 	}
 }
-function Xu(e, t) {
+function Ld(e, t) {
 	let n = {
 		bautismo: 0,
 		confirmacion: 0,
@@ -5944,9 +6269,9 @@ function Xu(e, t) {
 		errores: t.errores
 	};
 }
-var Zu = {
+var Rd = {
 	"legacyImport.preview": async (e, { db: n, session: i }) => {
-		let a = zu(i), o = t.getFocusedWindow(), s = {
+		let a = Ed(i), o = t.getFocusedWindow(), s = {
 			title: "Elegir el Excel del sistema anterior",
 			properties: ["openFile"],
 			filters: [{
@@ -5955,161 +6280,161 @@ var Zu = {
 			}]
 		}, c = o ? await r.showOpenDialog(o, s) : await r.showOpenDialog(s);
 		if (c.canceled || c.filePaths.length === 0) return { cancelado: !0 };
-		let l = c.filePaths[0], u = Vu(n, a, await Yu(l));
-		return Ju = {
+		let l = c.filePaths[0], u = Od(n, a, await Id(l));
+		return Fd = {
 			token: crypto.randomUUID(),
 			parish_id: a,
 			records: u.nuevas
 		}, {
 			cancelado: !1,
-			token: Ju.token,
-			...Xu(l.split(/[\\/]/).pop() ?? l, u)
+			token: Fd.token,
+			...Ld(l.split(/[\\/]/).pop() ?? l, u)
 		};
 	},
 	"legacyImport.confirm": (e, { db: t, session: n }) => {
-		if (!Ju || e?.token !== Ju.token || Ju.parish_id !== n.parish_id) throw new z("Vuelva a elegir el archivo: la vista previa ya no es válida.", 409);
-		let r = Ju.records;
-		return Ju = null, qu(t, n, r);
+		if (!Fd || e?.token !== Fd.token || Fd.parish_id !== n.parish_id) throw new V("Vuelva a elegir el archivo: la vista previa ya no es válida.", 409);
+		let r = Fd.records;
+		return Fd = null, Pd(t, n, r);
 	}
-}, Qu = "Ministro no encontrado.", $u = {
+}, zd = "Ministro no encontrado.", Bd = {
 	nombres: "nombre",
 	apellido_paterno: "apellido_paterno",
 	apellido_materno: "apellido_materno"
 };
-function ed(e) {
-	let t = B(e?.nombre);
-	if (!t) throw new z("El nombre del ministro es requerido.", 400);
+function Vd(e) {
+	let t = H(e?.nombre);
+	if (!t) throw new V("El nombre del ministro es requerido.", 400);
 	return {
-		titulo: B(e.titulo),
+		titulo: H(e.titulo),
 		nombre: t,
-		apellido_paterno: B(e.apellido_paterno) ?? "",
-		apellido_materno: B(e.apellido_materno) ?? ""
+		apellido_paterno: H(e.apellido_paterno) ?? "",
+		apellido_materno: H(e.apellido_materno) ?? ""
 	};
 }
-function td(e, t, n) {
+function Hd(e, t, n) {
 	let r = e.prepare("SELECT parroquia_id FROM ministros WHERE id = ?").get(n);
-	if (!r) throw new z(Qu, 404);
+	if (!r) throw new V(zd, 404);
 	Ye(t, r.parroquia_id, "No tiene permiso para modificar ministros de otra parroquia.", "Solo el administrador de la parroquia puede modificar ministros.");
 }
-function nd(e, t) {
+function Ud(e, t) {
 	let n = e.prepare("SELECT client_id, version FROM ministros WHERE id = ?").get(t);
-	U(e, "ministro", n.client_id, n.version);
+	ut(e, "ministro", n.client_id, n.version);
 }
-function rd(e, t) {
+function Wd(e, t) {
 	let n = [], r = [];
 	t.nombres && (n.push("nombre LIKE ?"), r.push(`%${t.nombres}%`)), t.apellido_paterno && (n.push("apellido_paterno LIKE ?"), r.push(`%${t.apellido_paterno}%`)), t.apellido_materno && (n.push("apellido_materno LIKE ?"), r.push(`%${t.apellido_materno}%`));
-	let i = (B(t.texto) ?? "").split(/\s+/).filter(Boolean);
+	let i = (H(t.texto) ?? "").split(/\s+/).filter(Boolean);
 	for (let e of i) n.push("(COALESCE(titulo, '') || ' ' || nombre || ' ' || apellido_paterno || ' ' || apellido_materno) LIKE ?"), r.push(`%${e}%`);
 	Number.isInteger(t.parroquia_id) && (n.push("parroquia_id = ?"), r.push(t.parroquia_id));
 	let a = "";
 	n.length > 0 && (a = "WHERE " + n.join(" AND "));
-	let o = we(t, e.prepare(`SELECT COUNT(*) AS total FROM ministros ${a}`).get(...r).total), s = $u[t.orden ?? "nombres"] ?? $u.nombres;
+	let o = we(t, e.prepare(`SELECT COUNT(*) AS total FROM ministros ${a}`).get(...r).total), s = Bd[t.orden ?? "nombres"] ?? Bd.nombres;
 	return {
 		resultados: e.prepare(`SELECT id FROM ministros ${a}
 			 ORDER BY ${s} ${Te(t)}, id
-			 LIMIT ? OFFSET ?`).pluck().all(...r, 20, o.offset).map((t) => ct(e, t)),
+			 LIMIT ? OFFSET ?`).pluck().all(...r, 20, o.offset).map((t) => ht(e, t)),
 		total_paginas: o.total_pages
 	};
 }
-function id(e, t, n) {
-	let r = Ke(t), i = ed(n), a = crypto.randomUUID();
+function Gd(e, t, n) {
+	let r = Ke(t), i = Vd(n), a = crypto.randomUUID();
 	return e.transaction(() => {
-		U(e, "ministro", a, null);
+		ut(e, "ministro", a, null);
 		let t = e.prepare("INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)").run(a, r, i.titulo, i.nombre, i.apellido_paterno, i.apellido_materno);
 		return Number(t.lastInsertRowid);
 	})();
 }
-function ad(e, t, n) {
-	let r = V(n?.id, Qu);
-	td(e, t, r);
-	let i = ed(n);
+function Kd(e, t, n) {
+	let r = U(n?.id, zd);
+	Hd(e, t, r);
+	let i = Vd(n);
 	e.transaction(() => {
-		nd(e, r), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.titulo, i.nombre, i.apellido_paterno, i.apellido_materno, r);
+		Ud(e, r), e.prepare("UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.titulo, i.nombre, i.apellido_paterno, i.apellido_materno, r);
 	})();
 }
-function od(e, t, n) {
-	td(e, t, n), e.transaction(() => {
-		nd(e, n), e.prepare("UPDATE ministros SET activo = NOT activo WHERE id = ?").run(n);
+function qd(e, t, n) {
+	Hd(e, t, n), e.transaction(() => {
+		Ud(e, n), e.prepare("UPDATE ministros SET activo = NOT activo WHERE id = ?").run(n);
 	})();
 }
-var sd = {
-	"ministers.search": (e, { db: t }) => rd(t, e),
-	"ministers.create": (e, { db: t, session: n }) => ({ id: id(t, n, e) }),
-	"ministers.update": (e, { db: t, session: n }) => (ad(t, n, e), { success: !0 }),
-	"ministers.toggleActive": (e, { db: t, session: n }) => (od(t, n, V(e.id, Qu)), { success: !0 })
-}, cd = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
-function ld(e) {
-	return e.prepare("SELECT id, nombre FROM parroquias WHERE activa = 1 ORDER BY nombre ASC").all();
+var Jd = {
+	"ministers.search": (e, { db: t }) => Wd(t, e),
+	"ministers.create": (e, { db: t, session: n }) => ({ id: Gd(t, n, e) }),
+	"ministers.update": (e, { db: t, session: n }) => (Kd(t, n, e), { success: !0 }),
+	"ministers.toggleActive": (e, { db: t, session: n }) => (qd(t, n, U(e.id, zd)), { success: !0 })
+}, Yd = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+function Xd(e) {
+	return e.prepare("SELECT id, nombre, ubicacion FROM parroquias WHERE activa = 1 ORDER BY nombre ASC").all();
 }
-function ud(e, t) {
+function Zd(e, t) {
 	return s.join(e, Se.logos_folder, `parroquia-${t}.txt`);
 }
-function dd(e, t) {
+function Qd(e, t) {
 	try {
-		return f(ud(e, t), "utf8");
+		return f(Zd(e, t), "utf8");
 	} catch {
 		return null;
 	}
 }
-function fd(e, t, n, r) {
+function $d(e, t, n, r) {
 	Ye(t, n, "Solo puede cambiar el logo de su propia parroquia.", "Solo el administrador de la parroquia puede cambiar el logo.");
-	let i = ud(e, n);
+	let i = Zd(e, n);
 	if (r === null) {
 		h(i, { force: !0 });
 		return;
 	}
-	if (typeof r != "string" || r.length > 4e5 || !cd.test(r)) throw new z("El logo debe ser una imagen PNG, JPG o WEBP de hasta 300 KB.", 400);
+	if (typeof r != "string" || r.length > 4e5 || !Yd.test(r)) throw new V("El logo debe ser una imagen PNG, JPG o WEBP de hasta 300 KB.", 400);
 	d(s.dirname(i), { recursive: !0 });
 	let a = `${i}.tmp`;
 	_(a, r, "utf8"), m(a, i);
 }
-var pd = {
-	"parishes.list": (e, { db: t }) => ({ parroquias: ld(t) }),
-	"parishes.logo": (e, { user_data_folder: t }) => ({ logo: dd(t, V(e.parroquia_id)) }),
-	"parishes.saveLogo": (e, { session: t, user_data_folder: n }) => (fd(n, t, V(e.parroquia_id), e.logo), { success: !0 })
-}, md = { "app.server": () => ({ servidor: mr() }) }, hd = new Intl.Collator("es", {
+var ef = {
+	"parishes.list": (e, { db: t }) => ({ parroquias: Xd(t) }),
+	"parishes.logo": (e, { user_data_folder: t }) => ({ logo: Qd(t, U(e.parroquia_id)) }),
+	"parishes.saveLogo": (e, { session: t, user_data_folder: n }) => ($d(n, t, U(e.parroquia_id), e.logo), { success: !0 })
+}, tf = { "app.server": () => ({ servidor: yr() }) }, nf = new Intl.Collator("es", {
 	sensitivity: "base",
 	numeric: !0
 }).compare;
-function gd(e, t, n) {
-	if (!lt(t)) throw new z("Tipo de sacramento no válido.", 404);
-	if (!Number.isInteger(n) || n <= 0) throw new z("Debe especificar la parroquia.", 400);
+function rf(e, t, n) {
+	if (!gt(t)) throw new V("Tipo de sacramento no válido.", 404);
+	if (!Number.isInteger(n) || n <= 0) throw new V("Debe especificar la parroquia.", 400);
 	Je(e, n, "No tiene permiso para imprimir el índice de otra parroquia.");
 }
-function _d(e, t, n, r) {
-	return gd(t, n, r), e.prepare("SELECT DISTINCT libro FROM sacramentos WHERE tipo = ? AND parroquia_id = ? AND estado = 'vigente'").pluck().all(n, r).sort(hd);
+function af(e, t, n, r) {
+	return rf(t, n, r), e.prepare("SELECT DISTINCT libro FROM sacramentos WHERE tipo = ? AND parroquia_id = ? AND estado = 'vigente'").pluck().all(n, r).sort(nf);
 }
-function vd(e, t, n, r, i) {
-	return gd(t, n, r), e.prepare(`SELECT pe.nombres, pe.apellido_paterno, pe.apellido_materno, s.libro, s.folio, s.numero
-			 FROM (${ft(n)}) sub
+function of(e, t, n, r, i) {
+	return rf(t, n, r), e.prepare(`SELECT pe.nombres, pe.apellido_paterno, pe.apellido_materno, s.libro, s.folio, s.numero
+			 FROM (${yt(n)}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND (? IS NULL OR s.libro = ?)`).all(r, i, i).sort((e, t) => hd(e.apellido_paterno, t.apellido_paterno) || hd(e.apellido_materno, t.apellido_materno) || hd(e.nombres, t.nombres) || hd(e.libro, t.libro) || hd(e.folio, t.folio) || hd(e.numero, t.numero));
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND (? IS NULL OR s.libro = ?)`).all(r, i, i).sort((e, t) => nf(e.apellido_paterno, t.apellido_paterno) || nf(e.apellido_materno, t.apellido_materno) || nf(e.nombres, t.nombres) || nf(e.libro, t.libro) || nf(e.folio, t.folio) || nf(e.numero, t.numero));
 }
-var yd = {
-	"sacramentIndex.books": (e, { db: t, session: n }) => ({ libros: _d(t, n, e.tipo, e.parroquia_id) }),
-	"sacramentIndex.entries": (e, { db: t, session: n }) => ({ entradas: vd(t, n, e.tipo, e.parroquia_id, e.libro) })
-}, bd = [
+var sf = {
+	"sacramentIndex.books": (e, { db: t, session: n }) => ({ libros: af(t, n, e.tipo, e.parroquia_id) }),
+	"sacramentIndex.entries": (e, { db: t, session: n }) => ({ entradas: of(t, n, e.tipo, e.parroquia_id, e.libro) })
+}, cf = [
 	"nombres",
 	"apellido_paterno",
 	"apellido_materno"
 ];
-function xd(e) {
-	if (!lt(e)) throw new z("Tipo de sacramento inválido.", 400);
+function lf(e) {
+	if (!gt(e)) throw new V("Tipo de sacramento inválido.", 400);
 	return e;
 }
-var Sd = /^\d{4}-\d{2}-\d{2}$/, Cd = /^\d+$/;
-function wd(e, t, n, r) {
-	let i = B(n);
+var uf = /^\d{4}-\d{2}-\d{2}$/, df = /^\d+$/;
+function ff(e, t, n, r) {
+	let i = H(n);
 	if (!i) return;
 	e.push(`(${r})`);
 	let a = r.split("?").length - 1;
 	for (let e = 0; e < a; e++) t.push(`%${i}%`);
 }
-function Td(e, t, n) {
+function pf(e, t, n) {
 	if (!e || typeof e != "object") return null;
-	let { operador: r, valor: i, hasta: a } = e, o = B(i), s = B(a);
-	if (!o || n === "fecha" && !Sd.test(o)) return null;
+	let { operador: r, valor: i, hasta: a } = e, o = H(i), s = H(a);
+	if (!o || n === "fecha" && !uf.test(o)) return null;
 	if (r === "=") return n === "fecha" ? {
 		sql: `${t} = ?`,
 		values: [o]
@@ -6120,13 +6445,13 @@ function Td(e, t, n) {
 	let c = [];
 	if (r === "desde") c.push([">=", o]);
 	else if (r === "hasta") c.push(["<=", o]);
-	else if (r === "entre") c.push([">=", o]), s && (n === "registro" || Sd.test(s)) && c.push(["<=", s]);
+	else if (r === "entre") c.push([">=", o]), s && (n === "registro" || uf.test(s)) && c.push(["<=", s]);
 	else return null;
 	let l = c.map(([e]) => e), u = c.map(([, e]) => e);
 	return n === "fecha" ? {
 		sql: l.map((e) => `${t} ${e} ?`).join(" AND "),
 		values: u
-	} : u.every((e) => Cd.test(e)) ? {
+	} : u.every((e) => df.test(e)) ? {
 		sql: `${t} <> '' AND ${t} NOT GLOB '*[^0-9]*' AND ${l.map((e) => `CAST(${t} AS INTEGER) ${e} ?`).join(" AND ")}`,
 		values: u.map((e) => Number(e))
 	} : {
@@ -6134,138 +6459,138 @@ function Td(e, t, n) {
 		values: u
 	};
 }
-function Ed(e, t, n, r, i) {
+function mf(e, t, n, r, i) {
 	let a = [];
 	for (let e of r) {
-		let t = Td(n, e, i);
+		let t = pf(n, e, i);
 		if (!t) return;
 		a.push(t);
 	}
 	e.push(`(${a.map((e) => `(${e.sql})`).join(" OR ")})`);
 	for (let e of a) t.push(...e.values);
 }
-function Dd(e, t, n, r, i) {
+function hf(e, t, n, r, i) {
 	for (let t of [
 		"libro",
 		"folio",
 		"numero"
-	]) Ed(r, i, e[t], [`TRIM(s.${t})`], "registro");
-	Ed(r, i, e.fecha_evento, ["s.fecha_evento"], "fecha"), Ed(r, i, e.fecha_nacimiento, n.map((e) => `${e}.fecha_nacimiento`), "fecha"), Ed(r, i, e.fecha_cambio, ["date(s.created_at, 'localtime')", "date(s.updated_at, 'localtime')"], "fecha"), wd(r, i, e.celebrante, "EXISTS (SELECT 1 FROM ministros mi WHERE mi.id = s.ministro_id\n			AND (COALESCE(mi.titulo, '') || ' ' || mi.nombre || ' ' || mi.apellido_paterno || ' ' || mi.apellido_materno) LIKE ?)");
+	]) mf(r, i, e[t], [`TRIM(s.${t})`], "registro");
+	mf(r, i, e.fecha_evento, ["s.fecha_evento"], "fecha"), mf(r, i, e.fecha_nacimiento, n.map((e) => `${e}.fecha_nacimiento`), "fecha"), mf(r, i, e.fecha_cambio, ["date(s.created_at, 'localtime')", "date(s.updated_at, 'localtime')"], "fecha"), ff(r, i, e.celebrante, "EXISTS (SELECT 1 FROM ministros mi WHERE mi.id = s.ministro_id\n			AND (COALESCE(mi.titulo, '') || ' ' || mi.nombre || ' ' || mi.apellido_paterno || ' ' || mi.apellido_materno) LIKE ?)");
 	for (let t of [
 		"padre",
 		"madre",
 		"dni"
-	]) wd(r, i, e[t], n.map((e) => `${e}.${t} LIKE ?`).join(" OR "));
-	t === "matrimonio" ? wd(r, i, e.padrino, "m.testigo_1 LIKE ? OR m.testigo_2 LIKE ? OR m.testigo_3 LIKE ? OR m.testigo_4 LIKE ?") : wd(r, i, e.padrino, "sub.padrino_1 LIKE ? OR sub.padrino_2 LIKE ?"), (e.estado === "vigente" || e.estado === "anulado") && (r.push("s.estado = ?"), i.push(e.estado)), e.con_anotaciones === !0 ? r.push("TRIM(COALESCE(s.anotaciones, '')) <> ''") : e.con_anotaciones === !1 && r.push("TRIM(COALESCE(s.anotaciones, '')) = ''");
+	]) ff(r, i, e[t], n.map((e) => `${e}.${t} LIKE ?`).join(" OR "));
+	t === "matrimonio" ? ff(r, i, e.padrino, "m.testigo_1 LIKE ? OR m.testigo_2 LIKE ? OR m.testigo_3 LIKE ? OR m.testigo_4 LIKE ?") : ff(r, i, e.padrino, "sub.padrino_1 LIKE ? OR sub.padrino_2 LIKE ?"), (e.estado === "vigente" || e.estado === "anulado") && (r.push("s.estado = ?"), i.push(e.estado)), e.con_anotaciones === !0 ? r.push("TRIM(COALESCE(s.anotaciones, '')) <> ''") : e.con_anotaciones === !1 && r.push("TRIM(COALESCE(s.anotaciones, '')) = ''");
 }
-function Od(e, t, n) {
+function gf(e, t, n) {
 	let r = [], i = [], a = [];
 	Array.isArray(e.parroquias) && (a = e.parroquias.filter((e) => Number.isInteger(e))), a.length > 0 ? (r.push(`s.parroquia_id IN (${a.map(() => "?").join(", ")})`), i.push(...a)) : Number.isInteger(e.parroquia_id) && (r.push("s.parroquia_id = ?"), i.push(e.parroquia_id));
-	for (let t of bd) {
+	for (let t of cf) {
 		let a = e[t];
 		if (a) {
 			r.push(`(${n.map((e) => rt(e, t)).join(" OR ")})`);
 			for (let e = 0; e < n.length; e++) i.push(`%${a}%`, `%${a}%`);
 		}
 	}
-	Dd(e, t, n, r, i);
+	hf(e, t, n, r, i);
 	let o = "";
 	return r.length > 0 && (o = "WHERE " + r.join(" AND ")), {
 		where: o,
 		values: i
 	};
 }
-function kd(e, t, n) {
-	let r = `FROM ${ut(t)} sub
+function _f(e, t, n) {
+	let r = `FROM ${_t(t)} sub
 		JOIN sacramentos s ON s.id = sub.sacramento_id
 		JOIN personas pe ON pe.id = sub.persona_id`, i = ["pe"];
 	t === "matrimonio" && (r = "FROM matrimonios m\n			JOIN sacramentos s ON s.id = m.sacramento_id\n			JOIN personas c1 ON c1.id = m.conyuge_1_id\n			JOIN personas c2 ON c2.id = m.conyuge_2_id", i = ["c1", "c2"]);
-	let { where: a, values: o } = Od(n, t, i), s = we(n, e.prepare(`SELECT COUNT(*) AS total ${r} ${a}`).get(...o).total), c = "nombres";
-	return n.orden && bd.includes(n.orden) && (c = n.orden), {
+	let { where: a, values: o } = gf(n, t, i), s = we(n, e.prepare(`SELECT COUNT(*) AS total ${r} ${a}`).get(...o).total), c = "nombres";
+	return n.orden && cf.includes(n.orden) && (c = n.orden), {
 		resultados: e.prepare(`SELECT s.id ${r} ${a}
 			 ORDER BY ${i[0]}.${c} ${Te(n)}, s.id
-			 LIMIT ? OFFSET ?`).pluck().all(...o, 20, s.offset).map((t) => Et(e, t)),
+			 LIMIT ? OFFSET ?`).pluck().all(...o, 20, s.offset).map((t) => Nt(e, t)),
 		total_paginas: s.total_pages
 	};
 }
-function Ad(e, t) {
-	let n = B(e?.sacramento?.anotaciones);
-	if (n !== null && n !== t && n.length > 350) throw new z("La anotación marginal puede tener hasta 350 caracteres, para que entre en la impresión.", 400);
+function vf(e, t) {
+	let n = H(e?.sacramento?.anotaciones);
+	if (n !== null && n !== t && n.length > 350) throw new V("La anotación marginal puede tener hasta 350 caracteres, para que entre en la impresión.", 400);
 }
-function jd(e, t, n) {
-	let r = xd(n?.sacramento?.tipo), i = Ke(t);
-	Mt(n, null), Ad(n, null);
+function yf(e, t, n) {
+	let r = lf(n?.sacramento?.tipo), i = Ke(t);
+	It(n), vf(n, null);
 	let a = t.role === "usuario";
 	return e.transaction(() => {
-		let o = It(e, i, n, !a), s = crypto.randomUUID();
-		U(e, r, s, null);
-		let c = bt(e, s, r, i, n.sacramento);
-		Rt(e, c, n, o.map((e) => e.id)), H(e, c, t.user_id, "registrada");
-		let l = Lt(o);
+		let o = Bt(e, i, n, !a), s = crypto.randomUUID();
+		ut(e, r, s, null);
+		let c = Dt(e, s, r, i, n.sacramento);
+		Ht(e, c, n, o.map((e) => e.id)), W(e, c, t.user_id, "registrada");
+		let l = Vt(o);
 		if (l.length === 0) return c;
 		if (a) {
 			let n = l.map((e) => ({
 				...e,
 				tipo: "nota_marginal"
 			}));
-			return Ne(e, c, t.user_id, n), H(e, c, t.user_id, "cambio_pedido", n), c;
+			return Ne(e, c, t.user_id, n), W(e, c, t.user_id, "cambio_pedido", n), c;
 		}
 		for (let n of o) nt(e, t, n.id, c, n.corrections);
-		return H(e, c, t.user_id, "correccion", l), c;
+		return W(e, c, t.user_id, "correccion", l), c;
 	})();
 }
-function Md(e, t, n) {
-	let r = V(n.sacramento?.id);
-	vt(e, t, r, n.sacramento.tipo);
-	let i = Et(e, r);
+function bf(e, t, n) {
+	let r = U(n.sacramento?.id);
+	Tt(e, t, r, n.sacramento.tipo);
+	let i = Nt(e, r);
 	e.transaction(() => {
-		Nt(e, r);
-		let a = Bt(e, t, i, n);
-		a.fields.length > 0 && H(e, r, t.user_id, "editada", a.fields), a.corrections.length > 0 && H(e, r, t.user_id, "correccion", a.corrections), Qt(e, t, r, n);
+		Lt(e, r);
+		let a = Wt(e, t, i, n);
+		a.fields.length > 0 && W(e, r, t.user_id, "editada", a.fields), a.corrections.length > 0 && W(e, r, t.user_id, "correccion", a.corrections), nn(e, t, r, n);
 	})();
 }
-function Nd(e, t, n) {
-	xd(n?.sacramento?.tipo);
-	let r = V(n.sacramento?.id);
-	Ad(n, e.prepare("SELECT anotaciones FROM sacramentos WHERE id = ?").pluck().get(r) ?? null), t.role === "usuario" ? qt(e, t, n) : Md(e, t, n);
+function xf(e, t, n) {
+	lf(n?.sacramento?.tipo);
+	let r = U(n.sacramento?.id);
+	vf(n, e.prepare("SELECT anotaciones FROM sacramentos WHERE id = ?").pluck().get(r) ?? null), t.role === "usuario" ? Zt(e, t, n) : bf(e, t, n);
 }
-function Pd(e, t, n, r) {
+function Sf(e, t, n, r) {
 	let i = e.prepare("SELECT tipo, estado FROM sacramentos WHERE id = ?").get(n);
-	if (!i) throw new z(St, 404);
-	if (vt(e, t, n, i.tipo), i.estado === "anulado") throw new z("La partida ya está anulada.", 400);
-	let a = B(r);
-	if (!a) throw new z("El motivo de anulación es requerido.", 400);
+	if (!i) throw new V(kt, 404);
+	if (Tt(e, t, n, i.tipo), i.estado === "anulado") throw new V("La partida ya está anulada.", 400);
+	let a = H(r);
+	if (!a) throw new V("El motivo de anulación es requerido.", 400);
 	e.transaction(() => {
-		Nt(e, n), e.prepare("UPDATE sacramentos\n			 SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?\n			 WHERE id = ?").run(t.user_id, (/* @__PURE__ */ new Date()).toISOString(), a, n), H(e, n, t.user_id, "anulada", [], a);
+		Lt(e, n), e.prepare("UPDATE sacramentos\n			 SET estado = 'anulado', anulado_por_usuario_id = ?, anulado_en = ?, motivo_anulacion = ?\n			 WHERE id = ?").run(t.user_id, (/* @__PURE__ */ new Date()).toISOString(), a, n), W(e, n, t.user_id, "anulada", [], a);
 	})();
 }
-function Fd(e, t, n, r) {
+function Cf(e, t, n, r) {
 	let i = e.prepare("SELECT tipo, estado FROM sacramentos WHERE id = ?").get(n);
-	if (!i) throw new z(St, 404);
-	if (vt(e, t, n, i.tipo), i.estado !== "anulado") throw new z("La partida no está anulada.", 400);
-	let a = B(r);
-	if (!a) throw new z("El motivo para rehabilitar la partida es requerido.", 400);
+	if (!i) throw new V(kt, 404);
+	if (Tt(e, t, n, i.tipo), i.estado !== "anulado") throw new V("La partida no está anulada.", 400);
+	let a = H(r);
+	if (!a) throw new V("El motivo para rehabilitar la partida es requerido.", 400);
 	e.transaction(() => {
-		Nt(e, n), e.prepare("UPDATE sacramentos\n			 SET estado = 'vigente', anulado_por_usuario_id = NULL, anulado_en = NULL, motivo_anulacion = NULL\n			 WHERE id = ?").run(n), H(e, n, t.user_id, "rehabilitada", [], a);
+		Lt(e, n), e.prepare("UPDATE sacramentos\n			 SET estado = 'vigente', anulado_por_usuario_id = NULL, anulado_en = NULL, motivo_anulacion = NULL\n			 WHERE id = ?").run(n), W(e, n, t.user_id, "rehabilitada", [], a);
 	})();
 }
-function Id(e, t, n) {
-	if (t.role === "usuario") throw new z("Solo un administrador puede ver el historial de una partida.", 403);
-	return Je(t, Et(e, n).sacramento.parroquia_id, "Solo puede ver el historial de las partidas de su parroquia."), Be(e, n);
+function wf(e, t, n) {
+	if (t.role === "usuario") throw new V("Solo un administrador puede ver el historial de una partida.", 403);
+	return Je(t, Nt(e, n).sacramento.parroquia_id, "Solo puede ver el historial de las partidas de su parroquia."), Be(e, n);
 }
-var Ld = {
-	"sacraments.search": (e, { db: t }) => kd(t, xd(e.tipo), e),
-	"sacraments.get": (e, { db: t }) => Et(t, V(e.id)),
-	"sacraments.create": (e, { db: t, session: n }) => ({ id: jd(t, n, e) }),
-	"sacraments.update": (e, { db: t, session: n }) => (Nd(t, n, e), { success: !0 }),
-	"sacraments.annul": (e, { db: t, session: n }) => (Pd(t, n, V(e.id), e.motivo_anulacion), { success: !0 }),
-	"sacraments.restore": (e, { db: t, session: n }) => (Fd(t, n, V(e.id), e.motivo), { success: !0 }),
-	"sacraments.history": (e, { db: t, session: n }) => ({ historial: Id(t, n, V(e.id)) })
-}, Rd = [
+var Tf = {
+	"sacraments.search": (e, { db: t }) => _f(t, lf(e.tipo), e),
+	"sacraments.get": (e, { db: t }) => Nt(t, U(e.id)),
+	"sacraments.create": (e, { db: t, session: n }) => ({ id: yf(t, n, e) }),
+	"sacraments.update": (e, { db: t, session: n }) => (xf(t, n, e), { success: !0 }),
+	"sacraments.annul": (e, { db: t, session: n }) => (Sf(t, n, U(e.id), e.motivo_anulacion), { success: !0 }),
+	"sacraments.restore": (e, { db: t, session: n }) => (Cf(t, n, U(e.id), e.motivo), { success: !0 }),
+	"sacraments.history": (e, { db: t, session: n }) => ({ historial: wf(t, n, U(e.id)) })
+}, Ef = [
 	"bautismo",
 	"confirmacion",
 	"matrimonio"
-], zd = 10, Bd = 8, $ = "COALESCE(s.fecha_evento, s.fecha_emision)", Vd = `${$} GLOB '[0-9][0-9][0-9][0-9]*'`, Hd = `${$} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'`, Ud = `${$} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'`, Wd = [
+], Df = 10, Of = 8, $ = "COALESCE(s.fecha_evento, s.fecha_emision)", kf = `${$} GLOB '[0-9][0-9][0-9][0-9]*'`, Af = `${$} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'`, jf = `${$} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'`, Mf = [
 	{
 		label: "0 a 1 año",
 		to: 1
@@ -6290,9 +6615,9 @@ var Ld = {
 		label: "Más de 50 años",
 		to: Infinity
 	}
-], Gd = {
-	bautismo: Wd,
-	confirmacion: Wd,
+], Nf = {
+	bautismo: Mf,
+	confirmacion: Mf,
 	matrimonio: [
 		{
 			label: "18 años o menos",
@@ -6320,45 +6645,45 @@ var Ld = {
 		}
 	]
 };
-function Kd() {
+function Pf() {
 	return {
 		bautismo: 0,
 		confirmacion: 0,
 		matrimonio: 0
 	};
 }
-function qd(e) {
+function Ff(e) {
 	return String(e).padStart(2, "0");
 }
-var Jd = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/;
-function Yd(e, t) {
+var If = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?/;
+function Lf(e, t) {
 	let [, , n, r] = e, [, , i, a] = t;
 	return !n || !i ? null : i === n ? !r || !a ? null : a >= r : i > n;
 }
-function Xd(e, t) {
-	let n = Jd.exec(e ?? ""), r = Jd.exec(t);
+function Rf(e, t) {
+	let n = If.exec(e ?? ""), r = If.exec(t);
 	if (!n || !r || n[0] !== e) return null;
-	let i = Yd(n, r);
+	let i = Lf(n, r);
 	if (i === null) return null;
 	let a = Number(r[1]) - Number(n[1]);
 	return i || --a, a < 0 || a > 130 ? null : a;
 }
-function Zd(e, t, n, r = /* @__PURE__ */ new Date()) {
-	let i = r.getFullYear(), a = qd(r.getMonth() + 1), o = `${a}-${qd(r.getDate())}`, s = e.prepare(`SELECT DISTINCT CAST(substr(${$}, 1, 4) AS INTEGER) AS year
+function zf(e, t, n, r = /* @__PURE__ */ new Date()) {
+	let i = r.getFullYear(), a = Ff(r.getMonth() + 1), o = `${a}-${Ff(r.getDate())}`, s = e.prepare(`SELECT DISTINCT CAST(substr(${$}, 1, 4) AS INTEGER) AS year
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Vd}`).pluck().all(t), c = Math.min(...s, i), l = Math.max(...s, i), u = [];
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${kf}`).pluck().all(t), c = Math.min(...s, i), l = Math.max(...s, i), u = [];
 	for (let e = l; e >= c; e--) u.push(e);
 	let d = i;
 	u.includes(n) && (d = n);
 	let f = d === i, p = (n, ...r) => {
-		let i = Kd(), a = e.prepare(`SELECT s.tipo, COUNT(*) AS total
+		let i = Pf(), a = e.prepare(`SELECT s.tipo, COUNT(*) AS total
 				 FROM sacramentos s
 				 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${n}
 				 GROUP BY s.tipo`).all(t, ...r);
 		for (let e of a) i[e.tipo] = e.total;
 		return i;
-	}, m = `${Vd} AND substr(${$}, 1, 4) = ?`, h = f ? p(`${Ud} AND substr(${$}, 1, 10) BETWEEN ? AND ?`, `${d - 1}-01-01`, `${d - 1}-${o}`) : p(m, String(d - 1)), g = p(m, String(d)), _ = p(`substr(${$}, 1, 7) = ?`, `${i}-${a}`), v = p(Vd), y = {};
-	for (let e of Rd) y[e] = {
+	}, m = `${kf} AND substr(${$}, 1, 4) = ?`, h = f ? p(`${jf} AND substr(${$}, 1, 10) BETWEEN ? AND ?`, `${d - 1}-01-01`, `${d - 1}-${o}`) : p(m, String(d - 1)), g = p(m, String(d)), _ = p(`substr(${$}, 1, 7) = ?`, `${i}-${a}`), v = p(kf), y = {};
+	for (let e of Ef) y[e] = {
 		anio: g[e],
 		anterior: h[e],
 		mes: _[e],
@@ -6367,61 +6692,61 @@ function Zd(e, t, n, r = /* @__PURE__ */ new Date()) {
 	let b = [];
 	for (let e = 1; e <= 12; e++) b.push({
 		mes: e,
-		...Kd()
+		...Pf()
 	});
 	let x = e.prepare(`SELECT s.tipo, CAST(substr(${$}, 6, 2) AS INTEGER) AS mes, COUNT(*) AS total
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Hd} AND substr(${$}, 1, 4) = ?
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Af} AND substr(${$}, 1, 4) = ?
 			 GROUP BY s.tipo, mes`).all(t, String(d));
 	for (let e of x) b[e.mes - 1] && (b[e.mes - 1][e.tipo] = e.total);
-	let ee = Math.max(Math.min(...u), d - zd + 1), S = [];
+	let ee = Math.max(Math.min(...u), d - Df + 1), S = [];
 	for (let e = ee; e <= d; e++) S.push({
 		anio: e,
-		...Kd()
+		...Pf()
 	});
 	let C = e.prepare(`SELECT s.tipo, CAST(substr(${$}, 1, 4) AS INTEGER) AS anio, COUNT(*) AS total
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Vd}
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${kf}
 			 GROUP BY s.tipo, anio`).all(t);
 	for (let e of C) {
 		let t = S.find((t) => t.anio === e.anio);
 		t && (t[e.tipo] = e.total);
 	}
-	let te = e.prepare(`SELECT s.tipo, ${$} AS fecha, pe.fecha_nacimiento
-			 FROM (${pt}) sub
+	let w = e.prepare(`SELECT s.tipo, ${$} AS fecha, pe.fecha_nacimiento
+			 FROM (${bt}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id
 			 JOIN personas pe ON pe.id = sub.persona_id
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Vd} AND substr(${$}, 1, 4) = ?`).all(t, String(d)), w = {};
-	for (let e of Rd) {
-		let t = Gd[e].map(() => 0), n = 0, r = 0, i = 0;
-		for (let a of te) {
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${kf} AND substr(${$}, 1, 4) = ?`).all(t, String(d)), T = {};
+	for (let e of Ef) {
+		let t = Nf[e].map(() => 0), n = 0, r = 0, i = 0;
+		for (let a of w) {
 			if (a.tipo !== e) continue;
-			let o = Xd(a.fecha_nacimiento, a.fecha);
+			let o = Rf(a.fecha_nacimiento, a.fecha);
 			if (o === null) {
 				i += 1;
 				continue;
 			}
-			let s = Gd[e].findIndex((e) => o <= e.to);
+			let s = Nf[e].findIndex((e) => o <= e.to);
 			t[s] += 1, n += o, r += 1;
 		}
 		let a = null;
-		r > 0 && (a = Math.round(n / r * 10) / 10), w[e] = {
+		r > 0 && (a = Math.round(n / r * 10) / 10), T[e] = {
 			bandas: t,
 			sinDato: i,
 			promedio: a
 		};
 	}
-	let T = e.prepare(`SELECT min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS nombre, COUNT(*) AS total
+	let E = e.prepare(`SELECT min.nombre || ' ' || min.apellido_paterno || ' ' || min.apellido_materno AS nombre, COUNT(*) AS total
 			 FROM sacramentos s
 			 JOIN ministros min ON min.id = s.ministro_id
-			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${Vd} AND substr(${$}, 1, 4) = ?
+			 WHERE s.parroquia_id = ? AND s.estado = 'vigente' AND ${kf} AND substr(${$}, 1, 4) = ?
 			 GROUP BY min.id
 			 ORDER BY total DESC, nombre
-			 LIMIT ?`).all(t, String(d), Bd), E = e.prepare(`SELECT
+			 LIMIT ?`).all(t, String(d), Of), D = e.prepare(`SELECT
 				COALESCE(SUM(s.estado = 'anulado'), 0) AS anuladas,
 				COALESCE(SUM(s.estado = 'vigente' AND EXISTS (SELECT 1 FROM cambios_persona c WHERE c.sacramento_id = s.id AND c.estado = 'aprobado')), 0) AS conCorrecciones
 			 FROM sacramentos s
-			 WHERE s.parroquia_id = ? AND ${Vd} AND substr(${$}, 1, 4) = ?`).get(t, String(d));
+			 WHERE s.parroquia_id = ? AND ${kf} AND substr(${$}, 1, 4) = ?`).get(t, String(d));
 	return {
 		anios: u,
 		anio: d,
@@ -6429,92 +6754,88 @@ function Zd(e, t, n, r = /* @__PURE__ */ new Date()) {
 		totales: y,
 		mensual: b,
 		tendencia: S,
-		bandasEdad: Object.fromEntries(Rd.map((e) => [e, Gd[e].map((e) => e.label)])),
-		edades: w,
-		ministros: T,
-		registro: E
+		bandasEdad: Object.fromEntries(Ef.map((e) => [e, Nf[e].map((e) => e.label)])),
+		edades: T,
+		ministros: E,
+		registro: D
 	};
 }
-var Qd = { "statistics.get": (e, { db: t }) => Zd(t, V(e.parroquia_id), e.anio) }, $d = {
-	"sync.status": () => Ti(),
-	"sync.run": async () => (await J(), Ti()),
-	"sync.resolve": async (e) => (await Ei(e.entidad, e.client_id, e.eleccion), Ti()),
-	"sync.dismissNotice": () => (Di(), { success: !0 })
-}, ef = [
-	"admin_general",
-	"admin_parroquia",
-	"usuario"
-], tf = /^[A-Za-z0-9._-]{3,50}$/;
-function nf(e) {
+var Bf = { "statistics.get": (e, { db: t }) => zf(t, U(e.parroquia_id), e.anio) }, Vf = {
+	"sync.status": () => Ai(),
+	"sync.run": async () => (await J(), Ai()),
+	"sync.resolve": async (e) => (await ji(e.entidad, e.client_id, e.eleccion), Ai()),
+	"sync.dismissNotice": () => (Mi(), { success: !0 })
+}, Hf = /^[A-Za-z0-9._-]{3,50}$/;
+function Uf(e) {
 	return e.length < 6 ? "La contraseña debe tener al menos 6 caracteres." : /\s/.test(e) ? "La contraseña no puede tener espacios." : null;
 }
-function rf(e) {
-	return ef.includes(e);
+function Wf(e) {
+	return Wi.includes(e);
 }
-function af(e) {
+function Gf(e) {
 	return e.rol === "admin_general" && e.parroquia_id !== null ? "Un administrador general no pertenece a ninguna parroquia." : e.rol !== "admin_general" && e.parroquia_id === null ? "Debe seleccionar una parroquia." : null;
 }
-function of(e, t, n) {
+function Kf(e, t, n) {
 	return t.parroquia_id === e.parroquia_id ? t.otras_parroquias ? `Esta cuenta también trabaja en otras parroquias: solo el administrador general puede ${n}la.` : t.rol === "usuario" || t.rol === "admin_parroquia" && e.principal ? null : t.rol === "admin_parroquia" ? `Solo el administrador principal de la parroquia puede ${n} a otros administradores.` : "El administrador de una parroquia no gestiona administradores generales." : `Solo puede ${n} cuentas de su propia parroquia.`;
 }
-function sf(e, t) {
-	return e.rol === "admin_general" ? t.rol === "admin_general" && !e.principal ? "Solo el administrador principal puede crear administradores generales." : null : e.rol === "admin_parroquia" ? of(e, t, "crear") : "No tiene permiso para gestionar usuarios.";
+function qf(e, t) {
+	return e.rol === "admin_general" ? t.rol === "admin_general" && !e.principal ? "Solo el administrador principal puede crear administradores generales." : null : e.rol === "admin_parroquia" ? Kf(e, t, "crear") : "No tiene permiso para gestionar usuarios.";
 }
-function cf(e, t) {
-	return t.id === e.id ? null : e.rol === "admin_general" ? t.rol === "admin_general" && !e.principal ? "Solo el administrador principal puede modificar a otros administradores generales." : null : e.rol === "admin_parroquia" ? of(e, t, "modificar") : "No tiene permiso para gestionar usuarios.";
+function Jf(e, t) {
+	return t.id === e.id ? null : e.rol === "admin_general" ? t.rol === "admin_general" && !e.principal ? "Solo el administrador principal puede modificar a otros administradores generales." : null : e.rol === "admin_parroquia" ? Kf(e, t, "modificar") : "No tiene permiso para gestionar usuarios.";
 }
-function lf(e) {
+function Yf(e) {
 	return e.principal || e.principal_en_otra ? "No se puede deshabilitar al administrador principal: primero pase la marca de principal a otro administrador." : null;
 }
-function uf(e, t) {
+function Xf(e, t) {
 	return e.rol === "admin_general" ? t.rol === "admin_general" ? "Un administrador general no pertenece a ninguna parroquia." : null : "Solo el administrador general puede agregar o quitar parroquias de una cuenta.";
 }
-function df(e) {
+function Zf(e) {
 	return e === "admin_general" || e === "admin_parroquia";
 }
 //#endregion
 //#region electron/main/controllers/users.ts
-var ff = "Usuario no encontrado.", pf = "Agregar o quitar parroquias necesita conexión a internet: la cuenta tiene que estar en el servidor.", mf = {
+var Qf = "Usuario no encontrado.", $f = "Agregar o quitar parroquias necesita conexión a internet: la cuenta tiene que estar en el servidor.", ep = {
 	nombres: "nombre",
 	apellido_paterno: "apellido_paterno",
 	apellido_materno: "apellido_materno"
 };
-function hf(e) {
-	if (!df(e.role)) throw new z("Solo un administrador puede gestionar usuarios.", 403);
+function tp(e) {
+	if (!Zf(e.role)) throw new V("Solo un administrador puede gestionar usuarios.", 403);
 }
-function gf(e, t) {
-	return $n(e, t.user_id, t.role, t.parish_id);
+function np(e, t) {
+	return rr(e, t.user_id, t.role, t.parish_id);
 }
-function _f(e, t, n) {
-	let r = er(e, n, t.parish_id);
-	if (!r) throw new z(ff, 404);
+function rp(e, t, n) {
+	let r = ir(e, n, t.parish_id);
+	if (!r) throw new V(Qf, 404);
 	return r;
 }
-function vf(e, t, n) {
+function ip(e, t, n) {
 	return t === "admin_parroquia" ? +(e.prepare("SELECT 1 FROM membresias WHERE principal = 1 AND parroquia_id = ?").get(n) === void 0) : 0;
 }
-function yf(e, t) {
+function ap(e, t) {
 	if (!e && !t) return;
-	let n = nf(e);
-	if (n) throw new z(n, 400);
+	let n = Uf(e);
+	if (n) throw new V(n, 400);
 }
-function bf(e) {
-	let t = B(e?.nombre), n = B(e?.apellido_paterno);
-	if (!t || !n) throw new z("Nombre y apellido paterno son requeridos.", 400);
+function op(e) {
+	let t = H(e?.nombre), n = H(e?.apellido_paterno);
+	if (!t || !n) throw new V("Nombre y apellido paterno son requeridos.", 400);
 	return {
 		nombre: t,
 		apellido_paterno: n,
-		apellido_materno: B(e.apellido_materno) ?? ""
+		apellido_materno: H(e.apellido_materno) ?? ""
 	};
 }
-function xf(e, t, n) {
+function sp(e, t, n) {
 	e.prepare("UPDATE usuarios SET password_hash_pendiente = ? WHERE id = ?").run(n, t), e.prepare("INSERT INTO credenciales_locales (usuario_id, verificador) VALUES (?, ?)\n		 ON CONFLICT (usuario_id) DO UPDATE SET\n			verificador = excluded.verificador,\n			actualizado_en = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')").run(t, n);
 }
-function Sf(e, t) {
+function cp(e, t) {
 	return e.prepare("SELECT up.parroquia_id, p.nombre AS parroquia_nombre, up.rol, up.principal\n			 FROM usuario_parroquias up\n			 JOIN parroquias p ON p.id = up.parroquia_id\n			 WHERE up.usuario_id = ?\n			 ORDER BY p.nombre").all(t);
 }
-function Cf(e, t, n) {
-	hf(t);
+function lp(e, t, n) {
+	tp(t);
 	let r = [], i = [], a = n.parroquia_id;
 	t.role === "admin_parroquia" && (a = t.parish_id ?? -1);
 	let o = "FROM usuarios u LEFT JOIN parroquias p ON p.id = u.parroquia_id", s = "u.rol, u.parroquia_id, u.principal";
@@ -6525,85 +6846,85 @@ function Cf(e, t, n) {
 		"apellido_materno"
 	]) {
 		let t = n[e];
-		t && (r.push(`u.${mf[e]} LIKE ?`), i.push(`%${t}%`));
+		t && (r.push(`u.${ep[e]} LIKE ?`), i.push(`%${t}%`));
 	}
 	let c = "";
 	r.length > 0 && (c = "WHERE " + r.join(" AND "));
-	let l = we(n, e.prepare(`SELECT COUNT(*) AS total ${o} ${c}`).get(...i).total), u = mf[n.orden ?? "nombres"] ?? mf.nombres, d = e.prepare(`SELECT u.id, u.username, ${s}, u.parroquia_id AS parroquia_origen_id,
+	let l = we(n, e.prepare(`SELECT COUNT(*) AS total ${o} ${c}`).get(...i).total), u = ep[n.orden ?? "nombres"] ?? ep.nombres, d = e.prepare(`SELECT u.id, u.username, ${s}, u.parroquia_id AS parroquia_origen_id,
 				u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, p.nombre AS parroquia_nombre
 			 ${o}
 			 ${c}
 			 ORDER BY u.${u} ${Te(n)}, u.id
 			 LIMIT ? OFFSET ?`).all(...i, 20, l.offset);
-	for (let t of d) t.parroquias_adicionales = Sf(e, t.id);
+	for (let t of d) t.parroquias_adicionales = cp(e, t.id);
 	return {
 		resultados: d,
 		total_paginas: l.total_pages
 	};
 }
-async function wf(e, t, n) {
-	hf(t);
-	let r = bf(n), i = B(n?.username) ?? "", a = typeof n?.password == "string" ? n.password : "", o = n?.rol ?? "usuario";
-	if (!tf.test(i)) throw new z("El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.", 400);
-	if (yf(a, !0), !rf(o)) throw new z("El rol no es válido.", 400);
+async function up(e, t, n) {
+	tp(t);
+	let r = op(n), i = H(n?.username) ?? "", a = typeof n?.password == "string" ? n.password : "", o = n?.rol ?? "usuario";
+	if (!Hf.test(i)) throw new V("El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.", 400);
+	if (ap(a, !0), !Wf(o)) throw new V("El rol no es válido.", 400);
 	let s = null;
 	o !== "admin_general" && (s = t.role === "admin_parroquia" ? t.parish_id : Number.isInteger(n.parroquia_id) ? n.parroquia_id : null);
 	let c = {
 		rol: o,
 		parroquia_id: s
-	}, l = af(c);
-	if (l) throw new z(l, 400);
-	let u = sf(gf(e, t), c);
-	if (u) throw new z(u, 403);
-	if (s !== null && !e.prepare("SELECT 1 FROM parroquias WHERE id = ? AND activa = 1").get(s)) throw new z("La parroquia seleccionada no existe.", 400);
-	if (e.prepare("SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE").get(i)) throw new z("Ese nombre de usuario ya existe.", 409);
-	let d = await fn(a), f = crypto.randomUUID();
+	}, l = Gf(c);
+	if (l) throw new V(l, 400);
+	let u = qf(np(e, t), c);
+	if (u) throw new V(u, 403);
+	if (s !== null && !e.prepare("SELECT 1 FROM parroquias WHERE id = ? AND activa = 1").get(s)) throw new V("La parroquia seleccionada no existe.", 400);
+	if (e.prepare("SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE").get(i)) throw new V("Ese nombre de usuario ya existe.", 409);
+	let d = await gn(a), f = crypto.randomUUID();
 	return e.transaction(() => {
 		let t = e.prepare("SELECT MIN(id) FROM usuarios").pluck().get(), n = Math.min(t ?? 0, 0) - 1;
-		return U(e, "usuario", f, null), e.prepare("INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)").run(n, f, s, i, o, r.nombre, r.apellido_paterno, r.apellido_materno, vf(e, o, s)), xf(e, n, d), n;
+		return ut(e, "usuario", f, null), e.prepare("INSERT INTO usuarios (id, client_id, parroquia_id, username, rol, nombre, apellido_paterno, apellido_materno, activo, principal)\n			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)").run(n, f, s, i, o, r.nombre, r.apellido_paterno, r.apellido_materno, ip(e, o, s)), sp(e, n, d), n;
 	})();
 }
-function Tf(e, t, n) {
-	let r = B(n), i = e.prepare("SELECT username FROM usuarios WHERE id = ?").pluck().get(t);
+function dp(e, t, n) {
+	let r = H(n), i = e.prepare("SELECT username FROM usuarios WHERE id = ?").pluck().get(t);
 	if (!r || r === i) return null;
-	if (t > 0) throw new z("El nombre de usuario no se puede cambiar: la cuenta ya está en el servidor.", 400);
-	if (!tf.test(r)) throw new z("El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.", 400);
-	if (e.prepare("SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE AND id <> ?").get(r, t)) throw new z("Ese nombre de usuario ya existe.", 409);
+	if (t > 0) throw new V("El nombre de usuario no se puede cambiar: la cuenta ya está en el servidor.", 400);
+	if (!Hf.test(r)) throw new V("El nombre de usuario debe tener entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo.", 400);
+	if (e.prepare("SELECT 1 FROM usuarios WHERE username = ? COLLATE NOCASE AND id <> ?").get(r, t)) throw new V("Ese nombre de usuario ya existe.", 409);
 	return r;
 }
-async function Ef(e, t, n) {
-	let r = Nf(n?.id);
-	r !== t.user_id && hf(t);
-	let i = bf(n), a = typeof n.password == "string" ? n.password : "";
-	yf(a, !1);
-	let o = _f(e, t, r), s = cf(gf(e, t), o);
-	if (s) throw new z(s, 403);
-	let c = a ? await fn(a) : null, l = Tf(e, r, n?.username);
+async function fp(e, t, n) {
+	let r = yp(n?.id);
+	r !== t.user_id && tp(t);
+	let i = op(n), a = typeof n.password == "string" ? n.password : "";
+	ap(a, !1);
+	let o = rp(e, t, r), s = Jf(np(e, t), o);
+	if (s) throw new V(s, 403);
+	let c = a ? await gn(a) : null, l = dp(e, r, n?.username);
 	e.transaction(() => {
-		U(e, "usuario", o.client_id, o.version), e.prepare("UPDATE usuarios SET nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.nombre, i.apellido_paterno, i.apellido_materno, r), c && xf(e, r, c), l && (e.prepare("UPDATE usuarios SET username = ? WHERE id = ?").run(l, r), e.prepare("UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE entidad = 'usuario' AND client_id = ? AND estado = 'rechazado'").run(o.client_id));
+		ut(e, "usuario", o.client_id, o.version), e.prepare("UPDATE usuarios SET nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?").run(i.nombre, i.apellido_paterno, i.apellido_materno, r), c && sp(e, r, c), l && (e.prepare("UPDATE usuarios SET username = ? WHERE id = ?").run(l, r), e.prepare("UPDATE sync_cola SET estado = 'pendiente', motivo = NULL WHERE entidad = 'usuario' AND client_id = ? AND estado = 'rechazado'").run(o.client_id));
 	})();
 }
-function Df(e, t, n) {
-	if (hf(t), n === t.user_id) throw new z("No puede deshabilitar su propia cuenta.", 400);
-	let r = _f(e, t, n), i = cf(gf(e, t), r);
-	if (i) throw new z(i, 403);
-	let a = r.activo === 1 ? lf(r) : null;
-	if (a) throw new z(a, 400);
+function pp(e, t, n) {
+	if (tp(t), n === t.user_id) throw new V("No puede deshabilitar su propia cuenta.", 400);
+	let r = rp(e, t, n), i = Jf(np(e, t), r);
+	if (i) throw new V(i, 403);
+	let a = r.activo === 1 ? Yf(r) : null;
+	if (a) throw new V(a, 400);
 	e.transaction(() => {
-		U(e, "usuario", r.client_id, r.version), e.prepare("UPDATE usuarios SET activo = NOT activo WHERE id = ?").run(n), r.activo === 1 && e.prepare("DELETE FROM credenciales_locales WHERE usuario_id = ?").run(n);
+		ut(e, "usuario", r.client_id, r.version), e.prepare("UPDATE usuarios SET activo = NOT activo WHERE id = ?").run(n), r.activo === 1 && e.prepare("DELETE FROM credenciales_locales WHERE usuario_id = ?").run(n);
 	})();
 }
-async function Of(e, t, n, r) {
-	if (typeof t != "string" || !e.prepare("SELECT 1 FROM usuarios WHERE username = ?").get(t)) throw new z(ff, 404);
+async function mp(e, t, n, r) {
+	if (typeof t != "string" || !e.prepare("SELECT 1 FROM usuarios WHERE username = ?").get(t)) throw new V(Qf, 404);
 	await J();
-	let i = e.prepare("SELECT id FROM usuarios WHERE username = ?").pluck().get(t), a = K()?.token;
-	if (!a || i < 0) throw new z(n, 503);
+	let i = e.prepare("SELECT id FROM usuarios WHERE username = ?").pluck().get(t), a = sr()?.token;
+	if (!a || i < 0) throw new V(n, 503);
 	await r(i, a), await J();
 }
-async function kf(e, t, n, r = null) {
-	hf(t);
+async function hp(e, t, n, r = null) {
+	tp(t);
 	let i = t.role === "admin_general" ? null : t.parish_id;
-	Number.isInteger(r) && (i = r), await Of(e, n, "Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.", async (e, t) => {
+	Number.isInteger(r) && (i = r), await mp(e, n, "Pasar la marca de principal necesita conexión a internet: la cuenta tiene que estar en el servidor.", async (e, t) => {
 		await q(`/api/users/${e}/make-principal`, {
 			method: "PATCH",
 			token: t,
@@ -6611,18 +6932,18 @@ async function kf(e, t, n, r = null) {
 		});
 	});
 }
-function Af(e, t, n, r) {
-	let i = _f(e, t, Nf(n)), a = uf(gf(e, t), i);
-	if (a) throw new z(a, 403);
-	if (!Number.isInteger(r)) throw new z("Debe seleccionar una parroquia.", 400);
+function gp(e, t, n, r) {
+	let i = rp(e, t, yp(n)), a = Xf(np(e, t), i);
+	if (a) throw new V(a, 403);
+	if (!Number.isInteger(r)) throw new V("Debe seleccionar una parroquia.", 400);
 	return {
 		username: e.prepare("SELECT username FROM usuarios WHERE id = ?").pluck().get(i.id),
 		parish_id: r
 	};
 }
-async function jf(e, t, n, r, i) {
-	let a = Af(e, t, n, r);
-	await Of(e, a.username, pf, async (e, t) => {
+async function _p(e, t, n, r, i) {
+	let a = gp(e, t, n, r);
+	await mp(e, a.username, $f, async (e, t) => {
 		await q(`/api/users/${e}/parishes/${a.parish_id}`, {
 			method: "PUT",
 			token: t,
@@ -6630,57 +6951,57 @@ async function jf(e, t, n, r, i) {
 		});
 	});
 }
-async function Mf(e, t, n, r) {
-	let i = Af(e, t, n, r);
-	await Of(e, i.username, pf, async (e, t) => {
+async function vp(e, t, n, r) {
+	let i = gp(e, t, n, r);
+	await mp(e, i.username, $f, async (e, t) => {
 		await q(`/api/users/${e}/parishes/${i.parish_id}`, {
 			method: "DELETE",
 			token: t
 		});
 	});
 }
-function Nf(e) {
-	if (!Number.isInteger(e) || e === 0) throw new z(ff, 404);
+function yp(e) {
+	if (!Number.isInteger(e) || e === 0) throw new V(Qf, 404);
 	return e;
 }
-var Pf = {
-	"users.search": (e, { db: t, session: n }) => Cf(t, n, e ?? {}),
+var bp = {
+	"users.search": (e, { db: t, session: n }) => lp(t, n, e ?? {}),
 	"users.create": async (e, { db: t, session: n }) => {
-		let r = await wf(t, n, e);
+		let r = await up(t, n, e);
 		return J(), { id: r };
 	},
-	"users.update": async (e, { db: t, session: n }) => (await Ef(t, n, e), J(), { success: !0 }),
-	"users.toggleActive": (e, { db: t, session: n }) => (Df(t, n, Nf(e?.id)), J(), { success: !0 }),
-	"users.makePrincipal": async (e, { db: t, session: n }) => (await kf(t, n, e?.username, e?.parroquia_id ?? null), { success: !0 }),
-	"users.setParish": async (e, { db: t, session: n }) => (await jf(t, n, e?.id, e?.parroquia_id, e?.rol), { success: !0 }),
-	"users.removeParish": async (e, { db: t, session: n }) => (await Mf(t, n, e?.id, e?.parroquia_id), { success: !0 }),
-	"users.me": (e, { db: t, session: n }) => ({ principal: df(n.role) && gf(t, n).principal })
+	"users.update": async (e, { db: t, session: n }) => (await fp(t, n, e), J(), { success: !0 }),
+	"users.toggleActive": (e, { db: t, session: n }) => (pp(t, n, yp(e?.id)), J(), { success: !0 }),
+	"users.makePrincipal": async (e, { db: t, session: n }) => (await hp(t, n, e?.username, e?.parroquia_id ?? null), { success: !0 }),
+	"users.setParish": async (e, { db: t, session: n }) => (await _p(t, n, e?.id, e?.parroquia_id, e?.rol), { success: !0 }),
+	"users.removeParish": async (e, { db: t, session: n }) => (await vp(t, n, e?.id, e?.parroquia_id), { success: !0 }),
+	"users.me": (e, { db: t, session: n }) => ({ principal: Zf(n.role) && np(t, n).principal })
 };
 //#endregion
 //#region electron/main/utils/middleware.ts
-async function Ff(e, t, r, i) {
+async function xp(e, t, r, i) {
 	if (Object.hasOwn(t, r)) return t[r](i);
-	if (!Object.hasOwn(e, r)) throw new z("Operación no reconocida.", 404);
+	if (!Object.hasOwn(e, r)) throw new V("Operación no reconocida.", 404);
 	let a = {
-		session: nr(),
-		db: W(),
+		session: or(),
+		db: G(),
 		user_data_folder: n.getPath("userData")
 	};
 	return e[r](i, a);
 }
-function If(e, t) {
-	i.handle(Yn, async (n, r, i) => {
+function Sp(e, t) {
+	i.handle($n, async (n, r, i) => {
 		try {
 			return {
 				ok: !0,
-				data: await Ff(e, t, r, i)
+				data: await xp(e, t, r, i)
 			};
 		} catch (e) {
-			return e instanceof z ? {
+			return e instanceof V ? {
 				ok: !1,
 				message: e.message,
 				status: e.status
-			} : (lr(`Error en ${r}:`, e), {
+			} : (mr(`Error en ${r}:`, e), {
 				ok: !1,
 				message: "Ocurrió un error inesperado.",
 				status: 500
@@ -6690,76 +7011,76 @@ function If(e, t) {
 }
 //#endregion
 //#region electron/main/app.ts
-function Lf() {
-	If({
-		...Li,
-		...pd,
-		...sd,
-		...Ld,
-		...Ma,
-		...Qd,
-		...yd,
-		...$d,
-		...Pf,
-		...en,
-		...Zu,
-		...Xi,
-		..._a
-	}, {
-		...Ri,
-		...Yi,
+function Cp() {
+	Sp({
 		...va,
-		...md
+		...ef,
+		...Jd,
+		...Tf,
+		...bo,
+		...Bf,
+		...sf,
+		...Vf,
+		...bp,
+		...an,
+		...Rd,
+		...ja,
+		...io
+	}, {
+		...ya,
+		...Aa,
+		...ao,
+		...tf
 	});
 }
-function Rf() {
-	i.handle("app:get-version", () => n.getVersion()), Lf();
+function wp() {
+	i.handle("app:get-version", () => n.getVersion()), Cp();
 	try {
-		Wn();
+		Jn();
 	} catch (e) {
-		lr("No se pudo abrir la base local:", e);
+		mr("No se pudo abrir la base local:", e);
 	}
-	qi();
+	Oa();
 }
-async function zf() {
-	_i();
+async function Tp() {
+	Si();
 	try {
-		await Oi(xe);
+		await Ni(xe);
 	} catch (e) {
-		lr("No se pudo sincronizar al cerrar:", e);
+		mr("No se pudo sincronizar al cerrar:", e);
 	}
 }
-function Bf() {
-	Jn();
+function Ep() {
+	Qn();
 }
 //#endregion
 //#region electron/main/index.ts
-var Vf = s.dirname(c(import.meta.url)), Hf = process.env.VITE_DEV_SERVER_URL, Uf = null, Wf = !1;
-function Gf() {
-	if (Uf = new t({
+var Dp = s.dirname(c(import.meta.url)), Op = process.env.VITE_DEV_SERVER_URL, kp = null, Ap = !1;
+function jp() {
+	if (kp = new t({
 		width: 1200,
 		height: 800,
 		webPreferences: {
-			preload: s.join(Vf, "index.mjs"),
+			preload: s.join(Dp, "index.mjs"),
 			contextIsolation: !0,
 			nodeIntegration: !1
 		}
 	}), process.env.PRELATURA_SECOND_SCREEN === "1") {
 		let e = o.getAllDisplays().find((e) => e.id !== o.getPrimaryDisplay().id);
-		e && Uf.setBounds(e.workArea);
+		e && kp.setBounds(e.workArea);
 	}
-	Uf.maximize(), Hf ? (Uf.loadURL(Hf), Uf.webContents.openDevTools()) : Uf.loadFile(s.join(Vf, "../dist/index.html")), Uf.on("closed", () => {
-		Uf = null;
+	kp.maximize(), Op ? (kp.loadURL(Op), kp.webContents.openDevTools()) : kp.loadFile(s.join(Dp, "../dist/index.html")), kp.on("closed", () => {
+		kp = null;
 	});
 }
 n.whenReady().then(() => {
-	Rf(), Gf();
+	wp(), jp();
 }), n.on("before-quit", (e) => {
-	Wf || (e.preventDefault(), Wf = !0, zf().finally(() => n.quit()));
-}), n.on("will-quit", Bf), n.on("window-all-closed", () => {
+	Ap || (e.preventDefault(), Ap = !0, Tp().finally(() => n.quit()));
+}), n.on("will-quit", Ep), n.on("window-all-closed", () => {
 	process.platform !== "darwin" && n.quit();
 }), n.on("activate", () => {
-	t.getAllWindows().length === 0 && Gf();
+	t.getAllWindows().length === 0 && jp();
 });
 //#endregion
 export {};
