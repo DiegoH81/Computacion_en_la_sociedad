@@ -1,7 +1,8 @@
 import { useId, useState, type FormEvent } from 'react';
 import type { RangeFilter, SearchFilters } from '../../../shared/models';
 
-// La búsqueda de partidas: los tres campos de nombre, y una búsqueda avanzada que se despliega con:
+// La búsqueda de partidas: los tres campos de nombre, y una búsqueda avanzada que se abre en una
+// ventana aparte (para no empujar la tabla hacia abajo) con:
 //   - Dónde buscar: la parroquia que se está viendo, o también otras (se marcan en una lista).
 //   - Libro, folio, registro y fechas en dos columnas, "de" y "a": si se llena solo "de", se busca
 //     ese valor exacto; si se llenan los dos, el rango; si se llena solo "a", hasta ese valor.
@@ -110,7 +111,7 @@ function toSearchFilters(values: FormValues, currentParishId: number | null): Sa
   return filters;
 }
 
-/** Cuántos filtros avanzados hay llenos: se muestra en el botón cuando la sección está cerrada. */
+/** Cuántos filtros avanzados hay llenos: se muestra en el botón que abre la ventana. */
 function countAdvanced(values: FormValues, currentParishId: number | null): number {
   const texts = ADVANCED_TEXT_KEYS.filter((key) => values.texts[key].trim() !== '').length;
   const ranges = RANGE_KEYS.filter((key) => toRangeFilter(values.ranges[key]) !== null).length;
@@ -209,12 +210,19 @@ export function SacramentSearchForm({ isLoading, godparentLabel, parishes, curre
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    setIsAdvancedOpen(false);
     onSearch(toSearchFilters(values, currentParishId));
   }
 
   function handleClear() {
     setValues(emptyValues());
     onClear();
+  }
+
+  /** En la ventana avanzada, "Limpiar" borra solo sus filtros: los nombres de arriba quedan. */
+  function clearAdvanced() {
+    const empty = emptyValues();
+    setValues((previous) => ({ ...empty, texts: { ...empty.texts, nombres: previous.texts.nombres, apellido_paterno: previous.texts.apellido_paterno, apellido_materno: previous.texts.apellido_materno } }));
   }
 
   function textField(key: TextKey, label: string) {
@@ -281,116 +289,147 @@ export function SacramentSearchForm({ isLoading, godparentLabel, parishes, curre
       </div>
 
       {isAdvancedOpen && (
-        <fieldset className="mt-4 flex flex-col gap-5 border-t border-black/20 pt-4">
-          <legend className="sr-only">Búsqueda avanzada</legend>
-
-          <div>
-            <p className={SECTION_TITLE}>¿Dónde buscar?</p>
-            <label className="flex cursor-pointer items-center gap-2 font-bold text-black">
-              <input
-                type="checkbox"
-                checked={values.otherParishes}
-                onChange={(e) => toggleOtherParishes(e.target.checked)}
-                className="h-5 w-5 accent-darker-app"
-              />
-              Buscar también en otras parroquias
-            </label>
-
-            {values.otherParishes ? (
-              <div className="mt-2 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={toggleAllParishes}
-                  className="self-start rounded-full border border-darker-app bg-white px-3 py-1 text-sm font-bold text-dark-app hover:bg-lighter-green"
-                >
-                  {allChosen ? 'Desmarcar todas' : 'Marcar todas'}
-                </button>
-                <div className="grid max-h-44 grid-cols-2 gap-x-4 gap-y-1 overflow-auto rounded-lg bg-white p-3">
-                  {parishes.map((parish) => (
-                    <label key={parish.id} className="flex cursor-pointer items-center gap-2 text-sm text-black">
-                      <input
-                        type="checkbox"
-                        checked={values.chosenParishes.includes(parish.id)}
-                        onChange={() => toggleParish(parish.id)}
-                        className="h-4 w-4 accent-darker-app"
-                      />
-                      {parish.nombre}
-                      {parish.id === currentParishId && <span className="text-xs font-bold text-darker-app">actual</span>}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className={HINT}>Ahora se busca solo en {currentParishName}.</p>
-            )}
-          </div>
-
-          <div>
-            <p className={SECTION_TITLE}>Ubicación en el libro</p>
-            <div className={RANGE_GRID}>
-              {rangeHeader()}
-              {NUMBER_ROWS.map((row) => rangeRow(row.key, row.label, false, row.example))}
-            </div>
-            <p className={HINT}>Para buscar uno solo, llene solo “de”. Para un rango, llene los dos.</p>
-          </div>
-
-          <div>
-            <p className={SECTION_TITLE}>Fechas</p>
-            <div className={RANGE_GRID}>
-              {rangeHeader()}
-              {DATE_ROWS.map((row) => rangeRow(row.key, row.label, true))}
-            </div>
-            <p className={HINT}>Solo “de”: ese día. Solo “a”: hasta ese día. Los dos: entre esas fechas.</p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            {textField('celebrante', 'Celebrante')}
-            {textField('padre', 'Padre')}
-            {textField('madre', 'Madre')}
-            {textField('dni', 'DNI')}
-            {textField('padrino', godparentLabel)}
-            <div>
-              <label htmlFor={`${fieldId}-estado`} className={LABEL}>
-                Estado
-              </label>
-              <select id={`${fieldId}-estado`} value={values.estado} onChange={(e) => setValues((previous) => ({ ...previous, estado: e.target.value }))} className={INPUT}>
-                <option value="">Todas</option>
-                <option value="vigente">Vigentes</option>
-                <option value="anulado">Anuladas</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor={`${fieldId}-anotaciones`} className={LABEL}>
-                Anotación marginal
-              </label>
-              <select
-                id={`${fieldId}-anotaciones`}
-                value={values.anotaciones}
-                onChange={(e) => setValues((previous) => ({ ...previous, anotaciones: e.target.value }))}
-                className={INPUT}
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
+          onKeyDown={(e) => e.key === 'Escape' && setIsAdvancedOpen(false)}
+        >
+          <div role="dialog" aria-modal="true" aria-label="Búsqueda avanzada" className="flex max-h-[92vh] w-full max-w-4xl flex-col gap-3 rounded-2xl bg-lighter-green p-5 shadow-2xl">
+            <header className="flex items-center justify-between gap-3 rounded-xl bg-black px-5 py-2">
+              <h2 className="font-bold text-white uppercase">Búsqueda avanzada</h2>
+              <button
+                type="button"
+                onClick={() => setIsAdvancedOpen(false)}
+                aria-label="Cerrar la búsqueda avanzada"
+                className="rounded-md px-2 text-lg font-bold text-white hover:bg-white/20"
               >
-                <option value="">Todas</option>
-                <option value="con">Con anotación</option>
-                <option value="sin">Sin anotación</option>
-              </select>
+                ✕
+              </button>
+            </header>
+
+            {/* El contenido se desplaza dentro de la ventana; los botones quedan siempre a la vista. */}
+            <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+              <fieldset className="flex flex-col gap-5">
+                <legend className="sr-only">Búsqueda avanzada</legend>
+
+                <div>
+                  <p className={SECTION_TITLE}>¿Dónde buscar?</p>
+                  <label className="flex cursor-pointer items-center gap-2 font-bold text-black">
+                    <input
+                      type="checkbox"
+                      checked={values.otherParishes}
+                      onChange={(e) => toggleOtherParishes(e.target.checked)}
+                      className="h-5 w-5 accent-darker-app"
+                    />
+                    Buscar también en otras parroquias
+                  </label>
+
+                  {values.otherParishes ? (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleAllParishes}
+                        className="self-start rounded-full border border-darker-app bg-white px-3 py-1 text-sm font-bold text-dark-app hover:bg-lighter-green"
+                      >
+                        {allChosen ? 'Desmarcar todas' : 'Marcar todas'}
+                      </button>
+                      <div className="grid max-h-44 grid-cols-2 gap-x-4 gap-y-1 overflow-auto rounded-lg bg-white p-3">
+                        {parishes.map((parish) => (
+                          <label key={parish.id} className="flex cursor-pointer items-center gap-2 text-sm text-black">
+                            <input
+                              type="checkbox"
+                              checked={values.chosenParishes.includes(parish.id)}
+                              onChange={() => toggleParish(parish.id)}
+                              className="h-4 w-4 accent-darker-app"
+                            />
+                            {parish.nombre}
+                            {parish.id === currentParishId && <span className="text-xs font-bold text-darker-app">actual</span>}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={HINT}>Ahora se busca solo en {currentParishName}.</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className={SECTION_TITLE}>Ubicación en el libro</p>
+                  <div className={RANGE_GRID}>
+                    {rangeHeader()}
+                    {NUMBER_ROWS.map((row) => rangeRow(row.key, row.label, false, row.example))}
+                  </div>
+                  <p className={HINT}>Para buscar uno solo, llene solo “de”. Para un rango, llene los dos.</p>
+                </div>
+
+                <div>
+                  <p className={SECTION_TITLE}>Fechas</p>
+                  <div className={RANGE_GRID}>
+                    {rangeHeader()}
+                    {DATE_ROWS.map((row) => rangeRow(row.key, row.label, true))}
+                  </div>
+                  <p className={HINT}>Solo “de”: ese día. Solo “a”: hasta ese día. Los dos: entre esas fechas.</p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  {textField('celebrante', 'Celebrante')}
+                  {textField('padre', 'Padre')}
+                  {textField('madre', 'Madre')}
+                  {textField('dni', 'DNI')}
+                  {textField('padrino', godparentLabel)}
+                  <div>
+                    <label htmlFor={`${fieldId}-estado`} className={LABEL}>
+                      Estado
+                    </label>
+                    <select id={`${fieldId}-estado`} value={values.estado} onChange={(e) => setValues((previous) => ({ ...previous, estado: e.target.value }))} className={INPUT}>
+                      <option value="">Todas</option>
+                      <option value="vigente">Vigentes</option>
+                      <option value="anulado">Anuladas</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor={`${fieldId}-anotaciones`} className={LABEL}>
+                      Anotación marginal
+                    </label>
+                    <select
+                      id={`${fieldId}-anotaciones`}
+                      value={values.anotaciones}
+                      onChange={(e) => setValues((previous) => ({ ...previous, anotaciones: e.target.value }))}
+                      className={INPUT}
+                    >
+                      <option value="">Todas</option>
+                      <option value="con">Con anotación</option>
+                      <option value="sin">Sin anotación</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" aria-live="polite">
+                  {describeSearch()}
+                </p>
+              </fieldset>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={clearAdvanced} className="rounded-lg bg-white px-4 py-2 text-sm font-bold text-black uppercase hover:opacity-90">
+                Limpiar filtros
+              </button>
+              <button type="submit" disabled={isLoading} className={`${SEARCH_BUTTON} bg-solid-blue`}>
+                Buscar
+              </button>
             </div>
           </div>
-
-          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900" aria-live="polite">
-            {describeSearch()}
-          </p>
-        </fieldset>
+        </div>
       )}
 
       <div className="mt-3 flex items-end justify-end gap-2">
         <button
           type="button"
-          onClick={() => setIsAdvancedOpen((open) => !open)}
-          aria-expanded={isAdvancedOpen}
+          onClick={() => setIsAdvancedOpen(true)}
+          aria-haspopup="dialog"
           className="mr-auto rounded-lg bg-white px-4 py-2 text-sm font-bold text-black uppercase hover:opacity-90"
         >
-          {isAdvancedOpen ? '▴ Ocultar búsqueda avanzada' : '▾ Búsqueda avanzada'}
-          {!isAdvancedOpen && advancedCount > 0 && ` (${advancedCount})`}
+          Búsqueda avanzada
+          {advancedCount > 0 && ` (${advancedCount})`}
         </button>
         <button type="submit" disabled={isLoading} className={`${SEARCH_BUTTON} bg-solid-blue`}>
           Buscar

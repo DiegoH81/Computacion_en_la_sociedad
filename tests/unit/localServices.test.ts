@@ -121,36 +121,44 @@ describe('crear partidas', () => {
     expect(count('sacramentos')).toBe(1);
   });
 
-  it('valida los datos requeridos; la fecha aproximada es texto libre', () => {
-    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { nombres: '  ' } }))).toThrow(/Faltan datos: nombres/);
+  it('solo exige libro, folio y número; la fecha aproximada es texto libre', () => {
     expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { libro: '' } }))).toThrow(/libro/);
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { folio: ' ' } }))).toThrow(/folio/);
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { numero: '' } }))).toThrow(/número/);
     const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { fecha_aproximada: '  22 AG 1978  ' } }));
     expect(read(id).persona.fecha_aproximada).toBe('22 AG 1978');
   });
 
-  it('al registrar exige todos los datos de la persona menos el DNI, y el celebrante', () => {
-    const empty = { lugar_nacimiento: null, padre: '  ', madre: null, fecha_nacimiento: null, fecha_aproximada: null };
-    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: empty }))).toThrow(
-      'Faltan datos: fecha de nacimiento (o fecha aproximada), lugar de nacimiento, padre, madre.',
-    );
-    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { ministro_id: null } }))).toThrow(/celebrante/);
-    expect(() => create_marriage(db, parish1, marriageInput({ conyuge_1: { madre: null } }))).toThrow('Faltan datos del esposo: madre.');
+  it('una partida vieja se registra solo con el libro, el folio y el número (pedido del padre)', () => {
+    const empty = { dni: null, nombres: '', apellido_paterno: '', apellido_materno: '', lugar_nacimiento: null, padre: null, madre: null, fecha_nacimiento: null, fecha_aproximada: null };
+    const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { ministro_id: null }, persona: empty }));
+    expect(read(id).persona).toMatchObject({ nombres: '', padre: null });
+    expect(read(id).sacramento.ministro_id).toBeNull();
 
-    // Sin DNI, y con solo la fecha aproximada, se puede registrar.
-    expect(create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { dni: null, fecha_aproximada: '(27 AÑOS)' } }))).toBeGreaterThan(0);
-    expect(count('sacramentos')).toBe(1);
+    const marriage = create_marriage(db, parish1, marriageInput({ conyuge_1: { nombres: '', madre: null }, conyuge_2: { nombres: '' } }));
+    expect(marriage).toBeGreaterThan(0);
   });
 
-  it('una partida vieja sin algunos datos se puede editar, pero no se borra lo que tenía', () => {
+  it('no guarda una fecha a medias: sin año, o con día y sin mes', () => {
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { fecha_evento: '?-03-05' } }))).toThrow(
+      'La fecha del sacramento está incompleta: falta el año.',
+    );
+    expect(() => create_person_sacrament(db, 'bautismo', parish1, baptismInput({ persona: { fecha_nacimiento: '2001-?-05' } }))).toThrow(
+      'La fecha de nacimiento está incompleta: falta el mes.',
+    );
+    expect(() => create_marriage(db, parish1, marriageInput({ conyuge_2_bautismo_fecha: '?-04' }))).toThrow(
+      'La fecha de bautismo de la esposa está incompleta: falta el año.',
+    );
+
+    const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { fecha_evento: '1990' }, persona: { fecha_nacimiento: '1989-11' } }));
+    expect(read(id)).toMatchObject({ sacramento: { fecha_evento: '1990' }, persona: { fecha_nacimiento: '1989-11' } });
+  });
+
+  it('al editar se pueden borrar datos que antes eran obligatorios', () => {
     const id = create_person_sacrament(db, 'bautismo', parish1, baptismInput());
-    // Como una importada del sistema anterior: sin padre ni celebrante.
-    db.prepare('UPDATE personas SET padre = NULL').run();
-    db.prepare('UPDATE sacramentos SET ministro_id = NULL').run();
 
-    update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id, ministro_id: null }, persona: { padre: null }, padrino_1: 'Pedro' }));
-    expect(read(id)).toMatchObject({ padrino_1: 'Pedro', persona: { padre: null } });
-
-    expect(() => update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id, ministro_id: null }, persona: { padre: null, madre: '' } }))).toThrow('Faltan datos: madre.');
+    update_person_sacrament(db, 'bautismo', parish1, baptismInput({ sacramento: { id, ministro_id: null }, persona: { padre: null, madre: '' }, padrino_1: 'Pedro' }));
+    expect(read(id)).toMatchObject({ padrino_1: 'Pedro', persona: { padre: null, madre: null }, sacramento: { ministro_id: null } });
   });
 
   it('si algo falla no deja la persona ni el sacramento a medias', () => {
@@ -376,9 +384,7 @@ describe('matrimonios', () => {
     }
   });
 
-  it('exige ambos nombres y respeta la parroquia', () => {
-    expect(() => create_marriage(db, parish1, marriageInput({ conyuge_2: { nombres: '' } }))).toThrow('Faltan datos de la esposa: nombres.');
-
+  it('respeta la parroquia', () => {
     const id = create_marriage(db, parish1, marriageInput());
     expect(() => annul_sacrament(db, parish2, id, 'motivo')).toThrow(/otra parroquia/);
   });
@@ -418,8 +424,8 @@ describe('datos de referencia', () => {
     });
 
     expect(list_parishes(db)).toEqual([
-      { id: 2, nombre: 'Alfa' },
-      { id: 1, nombre: 'Zeta' },
+      { id: 2, nombre: 'Alfa', ubicacion: null },
+      { id: 1, nombre: 'Zeta', ubicacion: null },
     ]);
   });
 

@@ -109,7 +109,7 @@ function record_row(values: Record<number, Cell>): Cell[] {
   return row;
 }
 
-/** Dos bautismos, un matrimonio (en el libro "M61") y una fila sin nombre, que se salta. */
+/** Dos bautismos, un matrimonio (en el libro "M61") y una fila sin número de registro, que se salta. */
 export function legacy_rows(code = 32): { feligres: Cell[][]; libros: Cell[][] } {
   const baptism = (numero: number, nombres: string) =>
     record_row({ 0: code, 1: 'B', 2: 21, 3: 5, 4: numero, 6: nombres, 7: 'MAMANI', 8: 'IMPORTADA', 9: '15/01/1959', 11: 'CRUCERO', 12: '11/10/1959', 16: 'JOSE MAMANI', 17: 'ROSA QUISPE', 23: 'Pbro. PEDRO RAMOS DIAZ', 24: 'NINGUNA', 25: 'DIONISIO QUISPE' });
@@ -120,7 +120,7 @@ export function legacy_rows(code = 32): { feligres: Cell[][]; libros: Cell[][] }
       baptism(9001, 'JUANA'),
       baptism(9002, 'PEDRO'),
       record_row({ 0: code, 1: 'M', 2: 5, 3: 12, 4: 9003, 6: 'TOMAS', 7: 'CONDORI', 8: 'IMPORTADO', 10: '(27 AÑOS AL DIA DE BODA)', 12: '02/10/1980', 23: 'Pbro. PEDRO RAMOS DIAZ', 27: 'CARMEN', 28: 'HUAMAN', 29: 'IMPORTADA' }),
-      record_row({ 0: code, 1: 'B', 2: 21, 3: 5, 4: 9004, 7: 'SIN', 8: 'NOMBRE' }),
+      record_row({ 0: code, 1: 'B', 2: 21, 3: 5, 6: 'SIN', 7: 'NUMERO' }),
     ],
     libros: [BOOKS_HEADER_ROW, [code, 'B', 21, '21', null], [code, 'M', 5, 'M61', '1961-2017']],
   };

@@ -250,7 +250,7 @@ describe('canal IPC de la base local', () => {
   });
 
   it('parroquias, logo, índice, estadísticas y duplicados', async () => {
-    expect(await data('parishes.list')).toEqual({ parroquias: [{ id: 1, nombre: 'Parroquia 1' }, { id: 2, nombre: 'Parroquia 2' }] });
+    expect(await data('parishes.list')).toEqual({ parroquias: [{ id: 1, nombre: 'Parroquia 1', ubicacion: null }, { id: 2, nombre: 'Parroquia 2', ubicacion: null }] });
 
     const logo = 'data:image/png;base64,iVBORw0KGgo=';
     expect(await data('parishes.saveLogo', { parroquia_id: 1, logo })).toEqual({ success: true });

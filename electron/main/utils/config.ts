@@ -30,6 +30,7 @@ export const FILE_NAMES =
 	temp_key: 'prelatura-reconstruccion.key',
 	set_aside_folder: 'bases-apartadas',
 	logos_folder: 'logos',
+	backup_log: 'registro-respaldos.json',
 } as const;
 
 export const SET_ASIDE_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 1 month

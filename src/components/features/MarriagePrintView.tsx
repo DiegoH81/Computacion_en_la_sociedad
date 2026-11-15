@@ -50,7 +50,7 @@ export function MarriagePrintView({ record, logo }: { record: Marriage; logo: st
               label="Parroquia:"
               value={printText(partida.parroquia?.nombre)}
               labelClassName="text-[13pt] font-bold"
-              valueClassName="text-[10pt] font-bold uppercase"
+              valueClassName="text-center text-[10pt] font-bold uppercase"
             />
             <div className="grid grid-cols-3 gap-[3mm]">
               <DottedField label="Libro:" value={partida.libro} valueClassName="text-center font-bold" />
@@ -77,11 +77,11 @@ export function MarriagePrintView({ record, logo }: { record: Marriage; logo: st
         <tbody>
           {ROWS.map(({ label, value }) => (
             <tr key={label}>
-              <td className={`${CELL} font-semibold uppercase`}>
+              <td className={`${CELL} text-center font-semibold uppercase`}>
                 <ValueOrMark value={value(record, 'conyuge_1')} />
               </td>
               <td className={`${CELL} text-center`}>{label}</td>
-              <td className={`${CELL} font-semibold uppercase`}>
+              <td className={`${CELL} text-center font-semibold uppercase`}>
                 <ValueOrMark value={value(record, 'conyuge_2')} />
               </td>
             </tr>

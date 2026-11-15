@@ -37,8 +37,9 @@ async function completePerson(dialog: Locator, suffix: string): Promise<void> {
 }
 
 /**
- * Completa los datos obligatorios que la prueba no llenó (todos los de la persona menos el DNI, y el
- * celebrante): así cada prueba escribe solo lo que le importa. El celebrante es Braulio Guido, de Parroquia 1.
+ * Completa los datos de la persona (menos el DNI) y el celebrante que la prueba no llenó. Ya no son
+ * obligatorios, pero así las partidas de prueba quedan completas y cada prueba escribe solo lo que le
+ * importa. El celebrante es Braulio Guido, de Parroquia 1.
  */
 export async function completeRequired(window: Page): Promise<void> {
   const dialog = window.getByRole('dialog', { name: /partida/i }).last();

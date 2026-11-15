@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { BackupLogEntry } from '../../../shared/models';
 import { ApiError } from '../../lib/apiClient';
 import { BackupService } from '../../services/BackupService';
 import { PasswordInput } from '../ui/PasswordInput';
@@ -7,6 +8,60 @@ const PASSWORD_MIN_LENGTH = 8;
 
 function count(total: number, singular: string, plural: string): string {
   return `${total} ${total === 1 ? singular : plural}`;
+}
+
+const ACTIONS: Record<BackupLogEntry['accion'], string> = { exporto: 'Exportó', restauro: 'Restauró' };
+const LOG_ROWS = 5;
+
+const formatDate = (iso: string) => new Date(iso).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
+
+/** Los últimos respaldos hechos o restaurados en esta PC, y por quién. */
+function BackupLog() {
+  const [entries, setEntries] = useState<BackupLogEntry[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    BackupService.getLog()
+      .then((result) => !cancelled && setEntries(result.registros))
+      .catch(() => !cancelled && setEntries([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (entries === null) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <h3 className="text-sm font-semibold text-slate-700">Últimos respaldos en esta PC</h3>
+      {entries.length === 0 ? (
+        <p className="text-sm text-slate-500">Todavía no se exportó ni restauró ningún respaldo.</p>
+      ) : (
+        <div className="max-h-40 overflow-auto rounded-md border border-slate-200">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="sticky top-0 bg-slate-100">
+              <tr>
+                <th className="px-2 py-1">Fecha</th>
+                <th className="px-2 py-1">Usuario</th>
+                <th className="px-2 py-1">Acción</th>
+                <th className="px-2 py-1">Archivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.slice(0, LOG_ROWS).map((entry) => (
+                <tr key={`${entry.fecha}-${entry.accion}`} className="border-t border-slate-100">
+                  <td className="px-2 py-1 whitespace-nowrap">{formatDate(entry.fecha)}</td>
+                  <td className="px-2 py-1">{entry.usuario}</td>
+                  <td className="px-2 py-1">{ACTIONS[entry.accion]}</td>
+                  <td className="px-2 py-1 break-all">{entry.archivo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 const BUTTON = 'rounded-md px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50';
@@ -27,7 +82,9 @@ const TEXTS: Record<BackupMode, { title: string; intro: string; action: string }
     title: 'Exportar respaldo',
     intro:
       'Se guarda en un archivo todo lo que tiene esta PC, también lo que todavía no se subió al servidor. ' +
-      'Elija una contraseña: sin ella el archivo no se puede abrir. Anótela en un lugar seguro, porque no se puede recuperar.',
+      'Elija una contraseña: sin ella el archivo no se puede abrir. Anótela en un lugar seguro, porque no se puede recuperar. ' +
+      'Al lado se guarda un Excel con las partidas y el historial de esta parroquia, para consultar. El Excel no lleva ' +
+      'contraseña y no sirve para restaurar.',
     action: 'Elegir dónde guardar',
   },
   restore: {
@@ -81,7 +138,8 @@ export function BackupDialog({ mode, onClose, onRestored }: BackupDialogProps) {
       const records = count(result.partidas, 'partida', 'partidas');
       const pending = result.pendientes > 0 ? ` Incluye ${count(result.pendientes, 'cambio pendiente', 'cambios pendientes')} de subir al servidor.` : '';
       if (isExport) {
-        setDoneMessage(`Respaldo guardado: ${records}.${pending}`);
+        const files = result.archivo && result.excel ? ` Archivos: ${result.archivo} y ${result.excel}.` : '';
+        setDoneMessage(`Respaldo guardado: ${records}.${pending}${files}`);
       } else {
         setIsRestored(true);
         setDoneMessage(`Respaldo restaurado: ${records}.${pending} Ya puede iniciar sesión.`);
@@ -127,6 +185,9 @@ export function BackupDialog({ mode, onClose, onRestored }: BackupDialogProps) {
             {doneMessage}
           </p>
         )}
+
+        {/* En una PC nueva (desde el login) no hay sesión: el registro se ve después, en Configuración. */}
+        {mode !== 'restoreOnEmptyPc' && !isRestored && <BackupLog key={doneMessage ?? ''} />}
 
         <div className="flex justify-end gap-2">
           {isRestored ? (

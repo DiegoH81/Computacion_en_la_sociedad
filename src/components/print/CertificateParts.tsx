@@ -20,9 +20,9 @@ export function SerialNumber() {
   );
 }
 
-/** Raya corta que tacha un dato vacío, para que se vea que no se dejó en blanco por olvido. */
+/** Raya que tacha un dato vacío, para que se vea que no se dejó en blanco por olvido. */
 export function EmptyMark() {
-  return <span aria-label="vacío" className="inline-block w-[8mm] border-t-[0.3mm] border-black align-middle" />;
+  return <span aria-label="vacío" className="inline-block w-[25mm] max-w-full border-t-[0.3mm] border-black align-middle" />;
 }
 
 /** El dato, o la raya si está vacío. */

@@ -15,7 +15,7 @@ import { MarginalNotesButton } from './MarginalNotesButton';
 import { MarginalNotesSection } from './MarginalNotesSection';
 import { MarriageFamilyFields, MarriagePersonFields } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
-import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { SacramentRegisterPanel, type RecordParish } from './SacramentRegisterPanel';
 import { useDuplicateCheck } from './useDuplicateCheck';
 import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
@@ -30,7 +30,7 @@ const TESTIGOS = [
 interface MarriageFormProps {
   /** La partida que se edita, tal como llegó de Electron. Sin ella, se crea una nueva. */
   initialRecord?: Marriage;
-  parroquiaNombre: string;
+  parroquia: RecordParish;
   errorMessage?: string | null;
   /** thenPrint: el usuario eligió "Guardar e imprimir". */
   onSave: (record: Marriage, thenPrint: boolean) => void;
@@ -58,7 +58,7 @@ function duplicateQuery(para: string, person: Person) {
 
 export function MarriageForm({
   initialRecord,
-  parroquiaNombre,
+  parroquia,
   errorMessage,
   onSave,
   onCancel,
@@ -69,7 +69,7 @@ export function MarriageForm({
   onlyCorrections = false,
 }: MarriageFormProps) {
   // Una partida nueva trae como lugar del matrimonio la parroquia actual (se puede cambiar).
-  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parroquiaNombre || null });
+  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parroquia.nombre || null });
   const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
   const recorded = [...recordedChanges(record.conyuge_1, 'conyuge_1'), ...recordedChanges(record.conyuge_2, 'conyuge_2')];
   const isEditing = initialRecord !== undefined;
@@ -133,7 +133,7 @@ export function MarriageForm({
       {!lockFields && <RequiredNote />}
       <fieldset disabled={lockFields} className="contents">
       <FormSectionTitle>Datos de registro en el libro</FormSectionTitle>
-      <SacramentRegisterPanel sacramento={sacramento} onChange={updateSacrament} parroquiaNombre={parroquiaNombre} />
+      <SacramentRegisterPanel sacramento={sacramento} onChange={updateSacrament} parroquia={parroquia} />
 
       <FormSectionTitle>Datos personales de los cónyuges</FormSectionTitle>
       <MarriagePersonFields marriage={record} onChange={setRecord} />
@@ -153,7 +153,7 @@ export function MarriageForm({
           <FormInput value={record.lugar ?? ''} onChange={(e) => setRecord((prev) => ({ ...prev, lugar: e.target.value }))} />
         </InlineFormField>
         <div className="sm:col-span-2">
-          <InlineFormField label="Celebrante:" required>
+          <InlineFormField label="Celebrante:">
             <PriestSelector
               value={sacramento.ministro_id}
               onSelect={(id) => updateSacrament({ ministro_id: id })}

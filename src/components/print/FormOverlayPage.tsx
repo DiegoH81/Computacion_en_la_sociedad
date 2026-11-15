@@ -40,7 +40,8 @@ function slotStyle(slot: PrintSlot, fontSize: number): CSSProperties {
   }
 
   const lines = slot.lines ?? 1;
-  const textAlign = slot.align ?? 'left';
+  // Los datos van centrados en su línea (pedido del padre), salvo el lugar que diga otra cosa.
+  const textAlign = slot.align ?? 'center';
 
   if (slot.kind === 'line') {
     const lineHeight = slot.gap ?? DEFAULT_LINE_MM;
@@ -85,10 +86,10 @@ function slotStyle(slot: PrintSlot, fontSize: number): CSSProperties {
   };
 }
 
-// Ancho de la raya que tacha un dato vacío: corta, para que no parezca una línea más del formato.
-const EMPTY_MARK_MM = 8;
+// Ancho de la raya que tacha un dato vacío (25 mm, pedido del padre). En un lugar más corto, ocupa todo el lugar.
+const EMPTY_MARK_MM = 25;
 
-/** Un dato vacío se tacha con una raya corta: así se ve que no se dejó en blanco por olvido. */
+/** Un dato vacío se tacha con una raya: así se ve que no se dejó en blanco por olvido. */
 function EmptyMark({ slotKey, slot, fontSize }: { slotKey: string; slot: PrintSlot; fontSize: number }) {
   // Las anotaciones vacías se tachan en su primer renglón.
   const place: PrintSlot = slot.kind === 'area' ? { kind: 'line', x: slot.x, y: slot.top + DEFAULT_LINE_MM, width: slot.width } : slot;
@@ -96,7 +97,7 @@ function EmptyMark({ slotKey, slot, fontSize }: { slotKey: string; slot: PrintSl
 
   return (
     <div data-slot={slotKey} data-empty="true" style={style}>
-      <span style={{ display: 'inline-block', width: `${EMPTY_MARK_MM}mm`, borderTop: '0.3mm solid black', verticalAlign: 'middle' }} />
+      <span style={{ display: 'inline-block', width: `${EMPTY_MARK_MM}mm`, maxWidth: '100%', borderTop: '0.3mm solid black', verticalAlign: 'middle' }} />
     </div>
   );
 }

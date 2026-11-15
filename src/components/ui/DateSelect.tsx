@@ -1,90 +1,74 @@
 import { useState } from 'react';
-import { PARTIAL_DATE_PATTERN } from '../../lib/dates';
+import { date_problem, days_in_month, join_date, split_date, type DateParts } from '../../../shared/partial_date';
 import { FORM_CONTROL_CLASS } from './FormInput';
 
 const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
 const FIRST_YEAR = 1800;
 
 interface DateSelectProps {
-  /** "AAAA", "AAAA-MM" o "AAAA-MM-DD"; vacío si no hay fecha. */
+  /** "AAAA", "AAAA-MM" o "AAAA-MM-DD"; vacío si no hay fecha. Con "?" si está a medias (ej. "?-03-05"). */
   value: string;
   onChange: (value: string) => void;
   ariaLabel: string;
 }
 
-function daysInMonth(month: string, year: string): number {
-  return new Date(Number(year), Number(month), 0).getDate();
-}
-
 /**
- * Fecha en tres listas. El libro no siempre trae el día, o ni el mes: se puede guardar solo el
- * año, o el año y el mes. Por eso el mes se habilita después del año y el día después del mes:
- * así no se arma una fecha sin sentido, como un día sin mes.
+ * Fecha en tres listas: día, mes y año. Las tres se pueden elegir en cualquier orden, así el Tab
+ * pasa de izquierda a derecha. El libro no siempre trae el día, o ni el mes: se puede guardar solo
+ * el año, o el año y el mes. Una fecha sin año, o con día y sin mes, muestra qué le falta y la
+ * partida no se guarda hasta completarla.
  */
 export function DateSelect({ value, onChange, ariaLabel }: DateSelectProps) {
-  const [, initialYear = '', initialMonth = '', initialDay = ''] = PARTIAL_DATE_PATTERN.exec(value) ?? [];
-  const [day, setDay] = useState(initialDay);
-  const [month, setMonth] = useState(initialMonth);
-  const [year, setYear] = useState(initialYear);
+  const [parts, setParts] = useState<DateParts>(() => split_date(value));
 
-  function change(next: { day?: string; month?: string; year?: string }) {
-    const newYear = next.year ?? year;
-    // Sin año no hay mes, y sin mes no hay día.
-    const newMonth = newYear ? (next.month ?? month) : '';
-    let newDay = newMonth ? (next.day ?? day) : '';
-    if (newDay && Number(newDay) > daysInMonth(newMonth, newYear)) newDay = '';
+  function change(next: Partial<DateParts>) {
+    const newParts = { ...parts, ...next };
+    // Al cambiar el mes o el año, un día que ya no existe (ej. 31 de abril) se borra.
+    if (newParts.day && newParts.month && Number(newParts.day) > days_in_month(newParts.month, newParts.year)) newParts.day = '';
 
-    setDay(newDay);
-    setMonth(newMonth);
-    setYear(newYear);
-    onChange([newYear, newMonth, newDay].filter(Boolean).join('-'));
+    setParts(newParts);
+    onChange(join_date(newParts));
   }
 
-  const select = `min-w-0 flex-1 px-1 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${FORM_CONTROL_CLASS}`;
+  const problem = date_problem(join_date(parts));
+  const select = `min-w-0 flex-1 px-1 py-1.5 ${FORM_CONTROL_CLASS}`;
   const pad = (number: number) => String(number).padStart(2, '0');
   const currentYear = new Date().getFullYear();
+  const dayCount = parts.month ? days_in_month(parts.month, parts.year) : 31;
 
   return (
-    <div className="flex w-full gap-1">
-      <select
-        aria-label={`${ariaLabel}: día`}
-        value={day}
-        onChange={(e) => change({ day: e.target.value })}
-        disabled={!month}
-        title={month ? undefined : 'Elija primero el mes'}
-        className={select}
-      >
-        <option value="">Día</option>
-        {month &&
-          Array.from({ length: daysInMonth(month, year) }, (_, index) => (
+    <div className="flex w-full flex-col gap-0.5">
+      <div className="flex w-full gap-1">
+        <select aria-label={`${ariaLabel}: día`} value={parts.day} onChange={(e) => change({ day: e.target.value })} className={select}>
+          <option value="">Día</option>
+          {Array.from({ length: dayCount }, (_, index) => (
             <option key={index} value={pad(index + 1)}>
               {index + 1}
             </option>
           ))}
-      </select>
-      <select
-        aria-label={`${ariaLabel}: mes`}
-        value={month}
-        onChange={(e) => change({ month: e.target.value })}
-        disabled={!year}
-        title={year ? undefined : 'Elija primero el año'}
-        className={select}
-      >
-        <option value="">Mes</option>
-        {MONTHS.map((name, index) => (
-          <option key={name} value={pad(index + 1)}>
-            {name}
-          </option>
-        ))}
-      </select>
-      <select aria-label={`${ariaLabel}: año`} value={year} onChange={(e) => change({ year: e.target.value })} className={select}>
-        <option value="">Año</option>
-        {Array.from({ length: currentYear - FIRST_YEAR + 1 }, (_, index) => String(currentYear - index)).map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
+        </select>
+        <select aria-label={`${ariaLabel}: mes`} value={parts.month} onChange={(e) => change({ month: e.target.value })} className={select}>
+          <option value="">Mes</option>
+          {MONTHS.map((name, index) => (
+            <option key={name} value={pad(index + 1)}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select aria-label={`${ariaLabel}: año`} value={parts.year} onChange={(e) => change({ year: e.target.value })} className={select}>
+          <option value="">Año</option>
+          {Array.from({ length: currentYear - FIRST_YEAR + 1 }, (_, index) => String(currentYear - index)).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
+      {problem && (
+        <p role="alert" className="text-xs font-semibold text-solid-red">
+          Fecha incompleta: {problem}.
+        </p>
+      )}
     </div>
   );
 }

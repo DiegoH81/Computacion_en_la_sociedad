@@ -97,7 +97,6 @@ async function goToBaptisms(window: Page): Promise<void> {
 
 async function createBaptism(window: Page, registro: string, nombre: string): Promise<void> {
   await window.getByRole('button', { name: '+ Agregar' }).click();
-  await field(window, 'Fecha del sacramento').fill('2020-05-10');
   await field(window, 'N° de libro').fill('7');
   await field(window, 'N° de folio').fill('3');
   await field(window, 'N° de registro').fill(registro);
