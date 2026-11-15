@@ -4,7 +4,7 @@ import { localRequest } from '../lib/localClient';
 
 
 /** Lo que llega de cada parroquia en las listas para elegir. */
-export type Parish = Pick<ParishRow, 'id' | 'nombre'>;
+export type Parish = Pick<ParishRow, 'id' | 'nombre' | 'ubicacion'>;
 
 export const AuthService = {
   login(username: string, password: string): Promise<LoginResponse> {

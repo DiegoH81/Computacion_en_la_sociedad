@@ -10,7 +10,7 @@ import { DuplicateWarning } from './DuplicateWarning';
 import { MarginalNotesSection } from './MarginalNotesSection';
 import { SacramentCelebrationFields } from './SacramentCelebrationFields';
 import { SacramentPersonPanel } from './SacramentPersonPanel';
-import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { SacramentRegisterPanel, type RecordParish } from './SacramentRegisterPanel';
 import { useDuplicateCheck } from './useDuplicateCheck';
 import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
@@ -26,7 +26,7 @@ interface PersonSacramentFormProps {
   tipo: PersonSacramentType;
   /** La partida que se edita, tal como llegó de Electron. Sin ella, se crea una nueva. */
   initialRecord?: Baptism;
-  parroquiaNombre: string;
+  parroquia: RecordParish;
   errorMessage?: string | null;
   /** thenPrint: el usuario eligió "Guardar e imprimir". */
   onSave: (record: Baptism, thenPrint: boolean) => void;
@@ -43,7 +43,7 @@ interface PersonSacramentFormProps {
 export function PersonSacramentForm({
   tipo,
   initialRecord,
-  parroquiaNombre,
+  parroquia,
   errorMessage,
   onSave,
   onCancel,
@@ -119,10 +119,15 @@ export function PersonSacramentForm({
       <SacramentRegisterPanel
         sacramento={record.sacramento}
         onChange={(changes) => setRecord((prev) => ({ ...prev, sacramento: { ...prev.sacramento, ...changes } }))}
-        parroquiaNombre={parroquiaNombre}
+        parroquia={parroquia}
       />
 
+      {/* Primero los datos personales y después los del sacramento (pedido del padre). */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SacramentPersonPanel
+          persona={persona}
+          onChange={(changes) => setRecord((prev) => ({ ...prev, persona: { ...prev.persona, ...changes } }))}
+        />
         <SacramentCelebrationFields
           title={labels.celebracion}
           fechaLabel={labels.fecha}
@@ -133,10 +138,6 @@ export function PersonSacramentForm({
           isSearchingPriests={isSearchingPriests}
           notesOpen={notes.isOpen}
           onToggleNotes={notes.toggle}
-        />
-        <SacramentPersonPanel
-          persona={persona}
-          onChange={(changes) => setRecord((prev) => ({ ...prev, persona: { ...prev.persona, ...changes } }))}
         />
       </div>
       </fieldset>

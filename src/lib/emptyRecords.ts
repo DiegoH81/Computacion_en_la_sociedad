@@ -1,6 +1,5 @@
 import type { Baptism, Marriage, Minister, Person, Sacrament } from '../../shared/models';
 import type { SacramentType } from '../../shared/sync';
-import { todayIsoDate } from './dates';
 
 
 export function emptyPerson(): Person {
@@ -25,7 +24,8 @@ export function emptySacrament(tipo: SacramentType): Sacrament {
     libro: '',
     folio: '',
     numero: '',
-    fecha_emision: todayIsoDate(),
+    // Ya no se pide en el formulario: la fecha que cuenta es la del sacramento (fecha_evento).
+    fecha_emision: null,
     fecha_evento: null,
     anotaciones: null,
   };

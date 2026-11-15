@@ -53,7 +53,7 @@ export function SinglePersonPrintView({ record, logo }: SinglePersonPrintViewPro
               label="Parroquia:"
               value={printText(partida.parroquia?.nombre)}
               labelClassName="text-[13pt] font-bold"
-              valueClassName="text-[10pt] font-bold uppercase"
+              valueClassName="text-center text-[10pt] font-bold uppercase"
             />
           </div>
         </div>
@@ -77,7 +77,7 @@ export function SinglePersonPrintView({ record, logo }: SinglePersonPrintViewPro
             de {sacramentoMinuscula} cuyos datos son:
           </p>
           {fields.map((field) => (
-            <DottedField key={field.label} label={`${field.label}:`} value={field.value} valueClassName="font-bold uppercase" />
+            <DottedField key={field.label} label={`${field.label}:`} value={field.value} valueClassName="text-center font-bold uppercase" />
           ))}
         </section>
       </div>

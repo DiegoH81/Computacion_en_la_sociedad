@@ -41,7 +41,7 @@ export function SacramentCelebrationFields({
           onChange={(v) => onChange({ ...record, sacramento: { ...sacramento, fecha_evento: v } })}
         />
       </StackedFormField>
-      <StackedFormField label="Celebrante" required>
+      <StackedFormField label="Celebrante">
         <PriestSelector
           value={sacramento.ministro_id}
           onSelect={(id) => onChange({ ...record, sacramento: { ...sacramento, ministro_id: id } })}
