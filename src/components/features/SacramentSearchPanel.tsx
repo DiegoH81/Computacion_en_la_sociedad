@@ -4,6 +4,7 @@ import { MarginalNoteBadge } from './MarginalNoteBadge';
 import { SacramentSearchForm, type SacramentSearchValues, type SearchParish } from './SacramentSearchForm';
 import { loadParishes } from '../../controllers/UserController';
 import { useSessionStore } from '../../store/sessionStore';
+import { parish_label } from '../../../shared/parish_label';
 import { StatusBadge } from './ManagementPanel';
 import { PageNav, PanelError, PanelTitle, SortPanel, type SortDirection } from '../ui/SearchPanelParts';
 import {
@@ -24,12 +25,31 @@ export interface SacramentColumn<T> {
   render: (row: T) => ReactNode;
 }
 
+/**
+ * Un dato largo (por ejemplo, una anotación marginal) se corta en dos líneas con "…", para que la fila
+ * no crezca; al pasar el mouse se ve entero. El texto completo sigue en el formulario y en la impresión.
+ */
+function ClampedCell({ content }: { content: ReactNode }) {
+  return (
+    <div className="line-clamp-2 break-words" title={typeof content === 'string' && content ? content : undefined}>
+      {content}
+    </div>
+  );
+}
+
+// Las columnas de siempre ocupan todo el ancho de la tabla; las demás quedan a la derecha y se ven
+// con la barra de desplazamiento horizontal (pedido del padre). Cada columna extra mide lo mismo.
+const EXTRA_COLUMN_REM = 11;
+const NUMBER_COLUMN_REM = 5;
+
 /** Las filas son partidas completas (Baptism o Marriage): se lee su sacramento. */
 interface SacramentSearchPanelProps<T extends SacramentRecord> {
   title: string;
   errorMessage: string | null;
   rows: T[];
   columns: SacramentColumn<T>[];
+  /** El resto de los datos de la partida: a la derecha de "Estado", fuera de la vista inicial. */
+  extraColumns: SacramentColumn<T>[];
   isLoading: boolean;
   currentPage: number;
   totalPages: number;
@@ -64,6 +84,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
   errorMessage,
   rows,
   columns,
+  extraColumns,
   isLoading,
   currentPage,
   totalPages,
@@ -105,10 +126,19 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
   const showParish = rows.some((row) => row.sacramento.parroquia_id !== parroquiaActivaId);
 
   function parishName(parishId: number | undefined): string {
-    return parishes.find((parish) => parish.id === parishId)?.nombre ?? '';
+    const parish = parishes.find((item) => item.id === parishId);
+    return parish ? parish_label(parish) : '';
   }
 
   const selectedRow = rows.find((row) => row.sacramento.id === selectedId)?.sacramento ?? null;
+  // Una partida anulada solo se ve y no se imprime, hasta que se rehabilite.
+  const selectedAnnulled = selectedRow?.estado === 'anulado';
+
+  // Doble clic: otra forma de abrir la partida para editarla (o para pedir un cambio).
+  function handleDoubleClick(id: number) {
+    setSelectedId(id);
+    onEdit(id);
+  }
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_14rem] gap-4">
@@ -128,13 +158,32 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
       <SortPanel sortBy={sortBy} sortDirection={sortDirection} onSortChange={onSortChange} />
 
       <div className="col-start-1 flex flex-col gap-3 rounded-2xl bg-table-panel p-4">
-        <div className={PANEL_TABLE_BOX}>
+        {/* containerType: así la tabla puede medir "todo el ancho visible" (100cqw). */}
+        <div className={PANEL_TABLE_BOX} style={{ containerType: 'inline-size' }}>
           {isLoading || rows.length === 0 ? (
             <p className="p-4 text-slate-700">
               {isLoading ? 'Cargando...' : 'No se encontraron partidas.'}
             </p>
           ) : (
-            <table className="w-full border-separate border-spacing-0 text-left">
+            <table
+              className="table-fixed border-separate border-spacing-0 text-left"
+              style={{ width: `calc(100cqw + ${extraColumns.length * EXTRA_COLUMN_REM}rem)` }}
+            >
+              <colgroup>
+                {canWrite && <col className="w-11" />}
+                {showParish && <col />}
+                <col style={{ width: `${NUMBER_COLUMN_REM}rem` }} />
+                <col style={{ width: `${NUMBER_COLUMN_REM}rem` }} />
+                <col style={{ width: `${NUMBER_COLUMN_REM}rem` }} />
+                {columns.map((column) => (
+                  <col key={column.header} />
+                ))}
+                <col className="w-32" />
+                <col className="w-28" />
+                {extraColumns.map((column) => (
+                  <col key={column.header} style={{ width: `${EXTRA_COLUMN_REM}rem` }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
                   {canWrite && <th aria-label="Seleccionar" className={`${PANEL_HEADER_CELL} w-11`} />}
@@ -149,6 +198,11 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                   ))}
                   <th className={PANEL_HEADER_CELL}>Notas</th>
                   <th className={PANEL_HEADER_CELL}>Estado</th>
+                  {extraColumns.map((column) => (
+                    <th key={column.header} className={PANEL_HEADER_CELL}>
+                      {column.header}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -165,6 +219,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                       onClick={
                         selectable ? () => setSelectedId(isSelected ? null : id) : undefined
                       }
+                      onDoubleClick={selectable ? () => handleDoubleClick(id) : undefined}
                       className={panelRowClass(selectable, isSelected, isAnnulled)}
                     >
                       {canWrite && (
@@ -186,7 +241,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                       <td className={`${PANEL_CELL} ${PANEL_NUMBER}`}>{sacramento.numero}</td>
                       {columns.map((column, index) => (
                         <td key={column.header} className={`${PANEL_CELL} ${index === 0 ? PANEL_MAIN : ''}`}>
-                          {column.render(row)}
+                          <ClampedCell content={column.render(row)} />
                         </td>
                       ))}
                       <td className={PANEL_CELL}>
@@ -195,6 +250,11 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                       <td className={PANEL_CELL}>
                         <StatusBadge label={isAnnulled ? 'Anulada' : 'Vigente'} tone={isAnnulled ? 'alert' : 'on'} />
                       </td>
+                      {extraColumns.map((column) => (
+                        <td key={column.header} className={PANEL_CELL}>
+                          <ClampedCell content={column.render(row)} />
+                        </td>
+                      ))}
                     </tr>
                   );
                 })}
@@ -219,13 +279,13 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
               title={selectedRow ? undefined : 'Seleccione una partida'}
               className={`${PANEL_ACTION_BUTTON} bg-darker-app`}
             >
-              {editLabel}
+              {selectedAnnulled ? 'Ver' : editLabel}
             </button>
             <button
               type="button"
-              disabled={!selectedRow}
+              disabled={!selectedRow || selectedAnnulled}
               onClick={() => selectedRow && onPrint(selectedRow.id as number)}
-              title={selectedRow ? undefined : 'Seleccione una partida'}
+              title={!selectedRow ? 'Seleccione una partida' : selectedAnnulled ? 'Una partida anulada no se imprime' : undefined}
               className={`${PANEL_ACTION_BUTTON} bg-solid-purple`}
             >
               Imprimir

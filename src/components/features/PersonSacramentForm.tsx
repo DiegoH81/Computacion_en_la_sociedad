@@ -10,7 +10,7 @@ import { DuplicateWarning } from './DuplicateWarning';
 import { MarginalNotesSection } from './MarginalNotesSection';
 import { SacramentCelebrationFields } from './SacramentCelebrationFields';
 import { SacramentPersonPanel } from './SacramentPersonPanel';
-import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { SacramentRegisterPanel, type RecordParish } from './SacramentRegisterPanel';
 import { useDuplicateCheck } from './useDuplicateCheck';
 import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
@@ -26,9 +26,10 @@ interface PersonSacramentFormProps {
   tipo: PersonSacramentType;
   /** La partida que se edita, tal como llegó de Electron. Sin ella, se crea una nueva. */
   initialRecord?: Baptism;
-  parroquiaNombre: string;
+  parroquia: RecordParish;
   errorMessage?: string | null;
-  onSave: (record: Baptism) => void;
+  /** thenPrint: el usuario eligió "Guardar e imprimir". */
+  onSave: (record: Baptism, thenPrint: boolean) => void;
   onCancel: () => void;
   isLoading: boolean;
   priestOptions: Minister[];
@@ -42,7 +43,7 @@ interface PersonSacramentFormProps {
 export function PersonSacramentForm({
   tipo,
   initialRecord,
-  parroquiaNombre,
+  parroquia,
   errorMessage,
   onSave,
   onCancel,
@@ -58,9 +59,14 @@ export function PersonSacramentForm({
   const recorded = recordedChanges(record.persona);
   const isEditing = initialRecord !== undefined;
   const pending = isEditing ? pendingRequests(record) : [];
+  // Una partida anulada solo se ve: no admite cambios.
+  const viewOnly = initialRecord?.sacramento.estado === 'anulado';
   // Un usuario con un pedido esperando no puede pedir otro: el formulario queda solo para ver.
-  const lockFields = onlyCorrections && pending.length > 0;
-  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
+  const lockFields = viewOnly || (onlyCorrections && pending.length > 0);
+  // Un usuario no cambia una anotación que ya está escrita (solo llena la que está en blanco).
+  const notesLocked = onlyCorrections && Boolean(initialRecord?.sacramento.anotaciones?.trim());
+  // Abierto cuando hay que confirmar que se descarta un pedido; recuerda si después se imprime.
+  const [confirmingDiscard, setConfirmingDiscard] = useState<{ thenPrint: boolean } | null>(null);
   const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
 
   const { persona } = record;
@@ -78,13 +84,13 @@ export function PersonSacramentForm({
   // Las correcciones nuevas se agregan a las ya registradas (que Electron no vuelve a guardar).
   const toSave = (): Baptism => ({ ...record, persona: { ...persona, cambios: [...persona.cambios, ...newChanges(drafts)] } });
 
-  function handleSave() {
+  function handleSave(thenPrint: boolean) {
     // El administrador que guarda sin usar lo que pidió un usuario lo descarta: se le pregunta antes.
     if (!onlyCorrections && pending.length > 0 && !usesRequestedValues(toSave(), drafts, pending)) {
-      setIsConfirmingDiscard(true);
+      setConfirmingDiscard({ thenPrint });
       return;
     }
-    onSave(toSave());
+    onSave(toSave(), thenPrint);
   }
 
   function applyRequestedValues() {
@@ -96,18 +102,23 @@ export function PersonSacramentForm({
 
   return (
     <FormDialog
-      title={!isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
-      onSave={handleSave}
+      title={viewOnly ? 'Ver partida anulada' : !isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
+      viewOnly={viewOnly}
+      onSave={() => handleSave(false)}
+      // Un pedido de cambio no modifica la partida: imprimirla ahora sacaría los datos de antes.
+      onSaveAndPrint={isEditing && onlyCorrections ? undefined : () => handleSave(true)}
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
       saveLabel={isEditing && onlyCorrections ? 'Pedir cambio' : undefined}
       canSave={!lockFields}
       notice={
-        <>
-          {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
-          <DuplicateWarning sacramento={labels.sacramento} matches={duplicates.matches} total={duplicates.total} />
-        </>
+        !viewOnly && (
+          <>
+            {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
+            <DuplicateWarning sacramento={labels.sacramento} matches={duplicates.matches} total={duplicates.total} />
+          </>
+        )
       }
     >
       {!lockFields && <RequiredNote />}
@@ -115,10 +126,15 @@ export function PersonSacramentForm({
       <SacramentRegisterPanel
         sacramento={record.sacramento}
         onChange={(changes) => setRecord((prev) => ({ ...prev, sacramento: { ...prev.sacramento, ...changes } }))}
-        parroquiaNombre={parroquiaNombre}
+        parroquia={parroquia}
       />
 
+      {/* Primero los datos personales y después los del sacramento (pedido del padre). */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SacramentPersonPanel
+          persona={persona}
+          onChange={(changes) => setRecord((prev) => ({ ...prev, persona: { ...prev.persona, ...changes } }))}
+        />
         <SacramentCelebrationFields
           title={labels.celebracion}
           fechaLabel={labels.fecha}
@@ -129,10 +145,6 @@ export function PersonSacramentForm({
           isSearchingPriests={isSearchingPriests}
           notesOpen={notes.isOpen}
           onToggleNotes={notes.toggle}
-        />
-        <SacramentPersonPanel
-          persona={persona}
-          onChange={(changes) => setRecord((prev) => ({ ...prev, persona: { ...prev.persona, ...changes } }))}
         />
       </div>
       </fieldset>
@@ -147,19 +159,20 @@ export function PersonSacramentForm({
           onCorrectionsChange={setDrafts}
           recorded={recorded}
           correctionsLocked={lockFields}
+          notesLocked={notesLocked}
         />
       )}
 
-      {isConfirmingDiscard && (
+      {confirmingDiscard && (
         <ConfirmActionDialog
           title="Descartar el cambio pedido"
           description={`Hay un cambio pendiente de ${requestedBy(pending)}. Si guarda sin usar esos valores, el pedido se descarta.`}
           confirmLabel="Guardar y descartar"
           onConfirm={() => {
-            setIsConfirmingDiscard(false);
-            onSave(toSave());
+            setConfirmingDiscard(null);
+            onSave(toSave(), confirmingDiscard.thenPrint);
           }}
-          onDismiss={() => setIsConfirmingDiscard(false)}
+          onDismiss={() => setConfirmingDiscard(null)}
         />
       )}
     </FormDialog>

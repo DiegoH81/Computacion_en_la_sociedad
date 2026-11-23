@@ -1,7 +1,7 @@
 // POST /api/sync/push: guarda en la base online los cambios que hizo una PC.
 
 
-import type { ChangeResult, PersonCorrection, PersonData, RecordData, SacramentType, SyncChange, UserData } from '../../../shared/sync';
+import type { ChangeResult, MinisterData, PersonCorrection, PersonData, RecordData, SacramentType, SyncChange, UserData } from '../../../shared/sync';
 import { PERSON_COLUMNS } from '../../../shared/record_fields';
 import { is_sacrament_type } from '../models/sacrament';
 import { actor_in_parish, cannot_create, cannot_disable, cannot_modify, NEW_PRINCIPAL_SQL, role_parish_error, user_in_parish } from '../models/user';
@@ -9,7 +9,8 @@ import { pair_in_parish } from '../controllers/users';
 import type { TokenUser } from '../utils/crypto';
 import { read_record } from './pull';
 import { check_helper_edit, check_helper_new, save_new_history, save_requests, users_named } from './requests';
-import { check_minister, check_record, check_user, RejectedChange } from './validation';
+import { check_minister, check_record, check_staff_history, check_user, RejectedChange } from './validation';
+import { insert_staff_history } from '../models/staff_history';
 
 const CONFLICT_REASON = 'Otra PC modificó este registro antes de que se subiera este cambio.';
 
@@ -147,6 +148,10 @@ async function apply_minister(db: D1Database, token_user: TokenUser, change: Syn
 		);
 	}
 
+	// El historial del ministro que tiene la PC; las filas que el servidor ya tenía se ignoran.
+	for (const entry of check_staff_history((change.datos as MinisterData).historial, 'ministro', minister.client_id, minister.parroquia_id))
+		writes.push(insert_staff_history(db, entry));
+
 	writes.push(db.prepare('SELECT version FROM ministros WHERE client_id = ?').bind(minister.client_id));
 
 	const results = await db.batch<{ version: number }>(writes);
@@ -249,6 +254,10 @@ async function apply_user(db: D1Database, user: TokenUser, change: SyncChange): 
 				),
 		);
 	}
+
+	// El historial de la cuenta que tiene la PC; las filas que el servidor ya tenía se ignoran.
+	for (const entry of check_staff_history((change.datos as UserData).historial, 'usuario', account.client_id, account.parroquia_id))
+		writes.push(insert_staff_history(db, entry));
 
 	writes.push(db.prepare('SELECT id, version FROM usuarios WHERE client_id = ?').bind(account.client_id));
 

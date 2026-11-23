@@ -1,22 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { HistoryEntry } from '../../../shared/models';
 import { field_label } from '../../../shared/record_fields';
-import type { HistoryEvent } from '../../../shared/sync';
+import { HISTORY_EVENT_LABELS } from '../../../shared/sync';
 import { ApiError } from '../../lib/apiClient';
 import { RequestService } from '../../services/RequestService';
-
-const EVENT_LABELS: Record<HistoryEvent, string> = {
-  registrada: 'Registró la partida',
-  importada: 'Importó la partida',
-  editada: 'Editó la partida',
-  correccion: 'Corrigió por nota marginal',
-  cambio_pedido: 'Pidió un cambio',
-  cambio_aprobado: 'Aprobó el cambio',
-  cambio_rechazado: 'Rechazó el cambio',
-  cambio_descartado: 'Descartó el cambio',
-  anulada: 'Anuló la partida',
-  rehabilitada: 'Rehabilitó la partida',
-};
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
 
@@ -86,7 +73,7 @@ export function HistoryDialog({ sacramentoId, onClose }: HistoryDialogProps) {
                       <td className="px-3 py-1.5 text-slate-900">
                         {index === 0 && (
                           <>
-                            {EVENT_LABELS[entry.evento]}
+                            {HISTORY_EVENT_LABELS[entry.evento]}
                             {entry.motivo && <span className="block text-xs text-slate-600">{entry.motivo}</span>}
                           </>
                         )}

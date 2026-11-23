@@ -566,4 +566,22 @@ export const LOCAL_MIGRATIONS: readonly string[] = [
   WHERE fecha_evento IS NULL AND fecha_emision IS NOT NULL
     AND EXISTS (SELECT 1 FROM historial_partidas h WHERE h.sacramento_id = sacramentos.id AND h.evento = 'importada');
   `,
+  `
+  -- Historial de ministros y cuentas: igual que en el servidor (worker/src/db/migrations/0024).
+  CREATE TABLE historial_ministros_cuentas (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id          TEXT    NOT NULL UNIQUE,
+    parroquia_id       INTEGER REFERENCES parroquias(id),
+    entidad            TEXT    NOT NULL CHECK (entidad IN ('ministro', 'usuario')),
+    entidad_client_id  TEXT    NOT NULL,
+    usuario_client_id  TEXT,
+    evento             TEXT    NOT NULL CHECK (evento IN ('creado', 'editado', 'contrasena', 'deshabilitado', 'habilitado',
+                                                           'principal', 'parroquia_agregada', 'parroquia_quitada')),
+    detalle            TEXT,
+    fecha              TEXT    NOT NULL
+  );
+
+  CREATE INDEX idx_historial_ministros_cuentas_parroquia ON historial_ministros_cuentas (parroquia_id, fecha);
+  CREATE INDEX idx_historial_ministros_cuentas_entidad ON historial_ministros_cuentas (entidad, entidad_client_id);
+  `,
 ];

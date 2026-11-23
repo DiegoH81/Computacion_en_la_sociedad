@@ -216,6 +216,20 @@ CREATE VIEW membresias AS
   SELECT usuario_id, parroquia_id, rol, principal, 0 AS origen
   FROM usuario_parroquias;
 
+-- Historial de ministros y cuentas (migración 0024).
+CREATE TABLE historial_ministros_cuentas (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id          TEXT    NOT NULL UNIQUE,
+  parroquia_id       INTEGER REFERENCES parroquias(id),
+  entidad            TEXT    NOT NULL CHECK (entidad IN ('ministro', 'usuario')),
+  entidad_client_id  TEXT    NOT NULL,
+  usuario_client_id  TEXT,
+  evento             TEXT    NOT NULL CHECK (evento IN ('creado', 'editado', 'contrasena', 'deshabilitado', 'habilitado',
+                                                         'principal', 'parroquia_agregada', 'parroquia_quitada')),
+  detalle            TEXT,
+  fecha              TEXT    NOT NULL
+);
+
 
 -- ============ DATOS INICIALES ============
 
@@ -245,7 +259,8 @@ CREATE UNIQUE INDEX idx_usuarios_un_principal ON usuarios (IFNULL(parroquia_id, 
 
 CREATE UNIQUE INDEX idx_usuario_parroquias_un_principal ON usuario_parroquias (parroquia_id) WHERE principal = 1;
 
-CREATE UNIQUE INDEX idx_parroquias_nombre_unico ON parroquias (nombre COLLATE NOCASE);
+-- Se repite el nombre (tres "San Francisco de Asís"), no el nombre con la ubicación.
+CREATE UNIQUE INDEX idx_parroquias_nombre_ubicacion ON parroquias (nombre COLLATE NOCASE, IFNULL(ubicacion, '') COLLATE NOCASE);
 
 CREATE INDEX idx_personas_dni ON personas (dni) WHERE dni IS NOT NULL;
 
@@ -269,6 +284,8 @@ CREATE INDEX idx_cambios_persona ON cambios_persona (persona_id, fecha_cambio);
 
 CREATE INDEX idx_cambios_sacramento ON cambios_persona (sacramento_id);
 
+
+CREATE INDEX idx_historial_ministros_cuentas_parroquia ON historial_ministros_cuentas (parroquia_id, fecha);
 
 -- ============ TRIGGERS ============
 

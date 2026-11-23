@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { ConflictCard } from '../components/features/ConflictCard';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { formatLastSync, useSyncActions } from '../controllers/SyncController';
 import type { ConnectionMode } from '../services/SyncService';
@@ -18,6 +19,9 @@ export function SyncPage() {
   const navigate = useNavigate();
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
+  const rol = useSessionStore((state) => state.rol);
+  // Resolver un conflicto decide qué datos quedan: solo un administrador.
+  const canResolve = rol === 'admin_parroquia' || rol === 'admin_general';
   const status = useSyncStore((state) => state.status);
   const { errorMessage, syncNow, resolve, dismissNotice } = useSyncActions();
 
@@ -59,24 +63,17 @@ export function SyncPage() {
           {status.items.length > 0 && (
             <section className="flex flex-col gap-3">
               <h2 className="font-semibold">Registros por revisar</h2>
-              {status.items.map((item) => (
-                <article key={`${item.entidad}-${item.client_id}`} className="flex flex-col gap-2 rounded-xl bg-white p-4 text-sm">
-                  <p className="font-semibold">{item.descripcion}</p>
-                  <p>{item.motivo}</p>
-                  {item.estado === 'conflicto' ? (
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" className={BUTTON} onClick={() => resolve(item.entidad, item.client_id, 'servidor')}>
-                        Usar la versión del servidor
-                      </button>
-                      <button type="button" className={BUTTON} onClick={() => resolve(item.entidad, item.client_id, 'local')}>
-                        Conservar la de esta PC
-                      </button>
-                    </div>
-                  ) : (
+              {status.items.map((item) =>
+                item.estado === 'conflicto' ? (
+                  <ConflictCard key={`${item.entidad}-${item.client_id}`} item={item} canResolve={canResolve} onResolve={resolve} />
+                ) : (
+                  <article key={`${item.entidad}-${item.client_id}`} className="flex flex-col gap-2 rounded-xl bg-white p-4 text-sm">
+                    <p className="font-semibold">{item.descripcion}</p>
+                    <p>{item.motivo}</p>
                     <p className="text-xs text-slate-500">Se volverá a intentar en la próxima sincronización.</p>
-                  )}
-                </article>
-              ))}
+                  </article>
+                ),
+              )}
             </section>
           )}
         </div>

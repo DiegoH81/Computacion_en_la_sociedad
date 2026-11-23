@@ -32,15 +32,16 @@ export async function searchSacraments<T extends SacramentRecord>(tipo: Sacramen
  * Crea la partida si todavía no tiene id (siempre en la parroquia del usuario); si no, la edita.
  * Un usuario (ayudante) no edita: Electron guarda solo la corrección que pide, que queda pendiente.
  */
-export async function saveSacrament(record: SacramentRecord): Promise<MutationResult> {
+/** Guarda la partida. Devuelve su id, para poder imprimirla justo después. */
+export async function saveSacrament(record: SacramentRecord): Promise<MutationResult & { id?: number }> {
   const isNew = record.sacramento.id === undefined;
   try {
     if (isNew) {
-      await SacramentService.create(record);
-    } else {
-      await SacramentService.update(record);
+      const { id } = await SacramentService.create(record);
+      return { success: true, id };
     }
-    return { success: true };
+    await SacramentService.update(record);
+    return { success: true, id: record.sacramento.id };
   } catch (error) {
     return { success: false, errorMessage: messageOf(error, isNew ? 'Error al crear la partida.' : 'Error al editar la partida.') };
   }

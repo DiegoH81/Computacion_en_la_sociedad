@@ -3,6 +3,7 @@ import type { LocalDatabase } from '../db/database';
 import { read_minister } from '../models/minister';
 import { check_parish_admin, parish_for_new } from '../models/parish';
 import type { Session } from '../models/session';
+import { add_staff_history, changes_text } from '../models/staff_history';
 import { add_to_queue } from '../sync/queue';
 import { PAGE_SIZE } from '../utils/config';
 import { ServiceError } from '../utils/errors';
@@ -117,6 +118,7 @@ export function create_minister(db: LocalDatabase, session: Session, minister: M
 			.prepare('INSERT INTO ministros (client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno) VALUES (?, ?, ?, ?, ?, ?)')
 			.run(client_id, parish_id, values.titulo, values.nombre, values.apellido_paterno, values.apellido_materno);
 
+		add_staff_history(db, session, 'ministro', client_id, parish_id, 'creado');
 		return Number(result.lastInsertRowid);
 	});
 
@@ -128,12 +130,22 @@ export function update_minister(db: LocalDatabase, session: Session, minister: M
 	const id = positive_id(minister?.id, NOT_FOUND);
 	check_can_manage_minister(db, session, id);
 	const values = clean_minister(minister);
+	const before = db.prepare('SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno FROM ministros WHERE id = ?').get(id) as MinisterColumns & { client_id: string; parroquia_id: number };
+	const detail = changes_text([
+		{ label: 'Título', before: before.titulo, after: values.titulo },
+		{ label: 'Nombre', before: before.nombre, after: values.nombre },
+		{ label: 'Apellido paterno', before: before.apellido_paterno, after: values.apellido_paterno },
+		{ label: 'Apellido materno', before: before.apellido_materno, after: values.apellido_materno },
+	]);
 
 	const update = db.transaction(() =>
 	{
 		queue_minister(db, id);
 		db.prepare('UPDATE ministros SET titulo = ?, nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?')
 			.run(values.titulo, values.nombre, values.apellido_paterno, values.apellido_materno, id);
+
+		if (detail)
+			add_staff_history(db, session, 'ministro', before.client_id, before.parroquia_id, 'editado', detail);
 	});
 
 	update();
@@ -143,10 +155,13 @@ export function toggle_minister_active(db: LocalDatabase, session: Session, id: 
 {
 	check_can_manage_minister(db, session, id);
 
+	const before = db.prepare('SELECT client_id, parroquia_id, activo FROM ministros WHERE id = ?').get(id) as { client_id: string; parroquia_id: number; activo: number };
+
 	const toggle = db.transaction(() =>
 	{
 		queue_minister(db, id);
 		db.prepare('UPDATE ministros SET activo = NOT activo WHERE id = ?').run(id);
+		add_staff_history(db, session, 'ministro', before.client_id, before.parroquia_id, before.activo === 1 ? 'deshabilitado' : 'habilitado');
 	});
 
 	toggle();

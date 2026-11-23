@@ -363,9 +363,8 @@ export function read_row(row: unknown[], file_row: number, books: BookNames): Im
 	if (!book_name)
 		return { fila: file_row, motivo: `El libro ${type_letter} ${book} no está en la hoja "${BOOKS_SHEET}".` };
 
+	// Solo el libro, el folio y el número son obligatorios: hay partidas viejas que casi no traen datos.
 	const groom = read_person(row, GROOM);
-	if (!groom.nombres)
-		return { fila: file_row, motivo: 'Falta el nombre.' };
 
 	const extra: string[] = [];
 	const event = date_or_text(row[COLUMNS.fecha_sacramento]);
@@ -382,9 +381,6 @@ export function read_row(row: unknown[], file_row: number, books: BookNames): Im
 	if (type === 'matrimonio')
 	{
 		const bride = read_person(row, BRIDE);
-		if (!bride.nombres)
-			return { fila: file_row, motivo: 'Falta el nombre de la novia.' };
-
 		people.push(bride);
 
 		const groom_baptism = date_or_text(row[COLUMNS.fecha_bautizo_novio]);

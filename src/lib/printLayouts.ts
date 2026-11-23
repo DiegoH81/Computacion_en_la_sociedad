@@ -112,9 +112,7 @@ export const FORM_LAYOUTS: Record<FormKind, FormLayout> = {
       fecha_matrimonio: box(47.5, 174.3, 183.5, 54.5),
       celebrante: box(44.5, 183.5, 192.6, 57.5),
       lugar: line(47.5, 198.5, 54.5, { lines: 2, gap: 5 }),
-      // Padrinos queda vacío: los cuatro testigos van en "Testigos".
       testigos: line(27, 225.6, 75, { lines: 2, gap: 5.2 }),
-      // Toda la casilla de las anotaciones, debajo de su rótulo.
       anotaciones: area(105.5, 182, 232, 89),
 
       dia: line(128, MARRIAGE_DATE_Y, 15.5, { align: 'center' }),

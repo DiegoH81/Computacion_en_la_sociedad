@@ -21,6 +21,7 @@ import {
 } from '../controllers/UserController';
 import type { Parish } from '../services/AuthService';
 import { ROLE_LABELS } from '../lib/permissions';
+import { parish_label } from '../../shared/parish_label';
 
 type Filters = Pick<SearchFilters, NameColumn>;
 
@@ -354,7 +355,7 @@ export function UsersPage() {
           parishes={parishes}
           initialValues={modalState.mode === 'edit' ? modalState.user : undefined}
           actorRole={rol ?? 'usuario'}
-          actorParishName={parishes.find((parish) => parish.id === parroquiaId)?.nombre ?? ''}
+          actorParishName={parishes.filter((parish) => parish.id === parroquiaId).map(parish_label)[0] ?? ''}
           canCreateGeneralAdmin={isGeneralAdmin && isPrincipal}
           canCreateParishAdmin={!isGeneralAdmin && isPrincipal}
           onSave={handleSave}
@@ -375,7 +376,7 @@ function parishText(user: User, parishes: Parish[]): string {
   const names = (user.parroquias_adicionales ?? []).map((row) => ({ id: row.parroquia_id, nombre: row.parroquia_nombre }));
   const originId = user.parroquia_origen_id ?? user.parroquia_id;
   const origin = parishes.find((parish) => parish.id === originId);
-  if (origin) names.unshift({ id: origin.id, nombre: origin.nombre });
+  if (origin) names.unshift({ id: origin.id, nombre: parish_label(origin) });
 
   const others = names.filter((parish) => parish.id !== user.parroquia_id);
   const name = user.parroquia_nombre ?? '—';

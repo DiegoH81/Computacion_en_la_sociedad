@@ -5,9 +5,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { build_backup, decode_backup, encode_backup, prepare_restore } from '../../electron/main/controllers/backup';
+import readXlsxFile from 'read-excel-file/node';
+import { add_backup_log, build_backup, decode_backup, encode_backup, prepare_restore, read_backup_log } from '../../electron/main/controllers/backup';
+import { parish_workbook } from '../../electron/main/controllers/excel_export';
+import { create_marriage, create_person_sacrament, read_person_sacrament, update_person_sacrament } from '../../electron/main/controllers/sacraments';
+import { build_xlsx } from '../../electron/main/utils/xlsx';
 import { verify_offline } from '../../electron/main/controllers/login';
-import { create_person_sacrament } from '../../electron/main/controllers/sacraments';
 import { create_user } from '../../electron/main/controllers/users';
 import { install_temp_database, local_paths, open_local_database, type KeyStore, type LocalDatabase, type LocalPaths } from '../../electron/main/db/database';
 import { LOCAL_MIGRATIONS } from '../../electron/main/db/migrations';
@@ -16,7 +19,7 @@ import { set_sync_value } from '../../electron/main/sync/queue';
 import { save_reference_data } from '../../electron/main/sync/sync';
 import { new_key } from '../../electron/main/utils/crypto';
 import { SYNC_KEYS } from '../../electron/main/utils/config';
-import { baptism, TEST_MINISTER } from './helpers/records';
+import { baptism, marriage, TEST_MINISTER } from './helpers/records';
 
 const parroco: Session = { user_id: 1, role: 'admin_parroquia', parish_id: 1, token: 't' };
 const PASSWORD = 'clave-del-respaldo';
@@ -132,5 +135,55 @@ describe('respaldo', () => {
     const other = build_backup(source, source_dir);
     other.tablas['parroquias'].columnas[0] = 'columna_inventada';
     expect(() => prepare_restore(local_paths(new_dir()), memory_keys(), other)).toThrow('no es un respaldo');
+  });
+});
+
+describe('Excel para consultar', () => {
+  it('lleva las partidas de la parroquia activa, una hoja por sacramento, y el historial', async () => {
+    const id = create_person_sacrament(source, 'bautismo', parroco, baptism('bautismo', {
+      sacramento: { libro: '2', folio: '7', numero: '15', fecha_evento: '1990-05-20', anotaciones: 'Se casó en 2015 & "otro" <dato>' },
+      persona: { nombres: 'Ñusta', apellido_paterno: 'Quispe', apellido_materno: 'Mamani', fecha_nacimiento: '1990-01' },
+    }));
+    create_person_sacrament(source, 'bautismo', parroco, baptism('bautismo', { sacramento: { libro: '10', folio: '1', numero: '1' }, persona: { nombres: 'Vieja', apellido_paterno: '', apellido_materno: '' } }));
+    create_marriage(source, parroco, marriage({ sacramento: { libro: '1', folio: '1', numero: '1' } }));
+    update_person_sacrament(source, 'bautismo', parroco, { ...read_person_sacrament(source, 'bautismo', id), padrino_1: 'Mario' });
+
+    const file = path.join(new_dir(), 'respaldo.xlsx');
+    writeFileSync(file, build_xlsx(parish_workbook(source, 1)));
+    const sheets = await readXlsxFile(file);
+
+    expect(sheets.map((sheet) => sheet.sheet)).toEqual(['Bautismos', 'Confirmaciones', 'Matrimonios', 'Historial']);
+
+    const [titles, first, second] = sheets[0].data;
+    const cell = (row: unknown[], title: string) => row[titles.indexOf(title)];
+    // En el orden del libro: el libro 2 antes que el 10.
+    expect(cell(first, 'Libro')).toBe('2');
+    expect(cell(second, 'Libro')).toBe('10');
+    expect(cell(first, 'Nombres')).toBe('Ñusta');
+    expect(cell(first, 'Fecha de nacimiento')).toBe('01/1990');
+    expect(cell(first, 'Fecha de bautismo')).toBe('20/05/1990');
+    expect(cell(first, 'Padrino')).toBe('Mario');
+    expect(cell(first, 'Anotación marginal')).toBe('Se casó en 2015 & "otro" <dato>');
+    expect(cell(first, 'Estado')).toBe('Vigente');
+
+    expect(sheets[1].data).toHaveLength(1); // solo los títulos
+    expect(sheets[2].data).toHaveLength(2);
+
+    const history = sheets[3].data;
+    expect(history[0]).toContain('Qué se hizo');
+    // Lo último primero: la edición del padrino.
+    expect(history[1]).toEqual(expect.arrayContaining(['Bautismo', 'Ñusta Quispe Mamani', 'Editó la partida', 'Padrino: (vacío) → Mario']));
+  });
+});
+
+describe('registro de respaldos', () => {
+  it('guarda quién exportó o restauró, lo último primero, aparte de la base', () => {
+    const dir = new_dir();
+    expect(read_backup_log(dir)).toEqual([]);
+
+    add_backup_log(dir, { fecha: '2026-11-10T10:00:00.000Z', usuario: 'Juan Pérez (parroco1)', accion: 'exporto', archivo: 'respaldo-2026-11-10.respaldo' });
+    add_backup_log(dir, { fecha: '2026-11-12T09:00:00.000Z', usuario: 'Ana Paz (ana)', accion: 'restauro', archivo: 'respaldo-2026-11-10.respaldo' });
+
+    expect(read_backup_log(dir).map((entry) => entry.accion)).toEqual(['restauro', 'exporto']);
   });
 });

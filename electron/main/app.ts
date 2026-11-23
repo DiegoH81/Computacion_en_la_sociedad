@@ -1,6 +1,7 @@
 import { app, ipcMain } from 'electron';
 import { request_routes } from './controllers/requests';
 import { backup_public_routes, backup_routes } from './controllers/backup';
+import { modification_routes } from './controllers/modifications';
 import { duplicate_routes } from './controllers/duplicates';
 import { legacy_import_routes } from './controllers/legacy_import';
 import { login_routes, session_routes } from './controllers/login';
@@ -36,6 +37,7 @@ export function register_routes(): void
 		...legacy_import_routes,
 		...package_routes,
 		...backup_routes,
+		...modification_routes,
 	};
 
 	listen(routes, { ...login_routes, ...package_public_routes, ...backup_public_routes, ...server_routes });

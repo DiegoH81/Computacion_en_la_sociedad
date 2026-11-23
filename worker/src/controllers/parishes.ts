@@ -16,9 +16,11 @@ function check_admin(user: TokenUser): void
 		throw new ServiceError('Solo el administrador general puede gestionar parroquias.', 403);
 }
 
+const DUPLICATE_MESSAGE = 'Ya existe una parroquia con ese nombre en esa ubicación.';
+
 function is_duplicate_error(error: unknown): boolean
 {
-	return error instanceof Error && error.message.includes('UNIQUE constraint failed') && error.message.includes('parroquias.nombre');
+	return error instanceof Error && error.message.includes('UNIQUE constraint failed') && error.message.includes('idx_parroquias_nombre_ubicacion');
 }
 
 
@@ -28,11 +30,16 @@ async function clean_parish(db: D1Database, body: Parish, parish_id: number | nu
 	if (!name)
 		throw new ServiceError('El nombre de la parroquia es requerido.', 400);
 
-	const taken = await db.prepare('SELECT 1 FROM parroquias WHERE nombre = ? COLLATE NOCASE AND id <> ?').bind(name, parish_id ?? 0).first();
+	// Varias parroquias se llaman igual ("San Francisco de Asís"): lo que no se repite es nombre y ubicación juntos.
+	const place = clean_text(body.ubicacion) || null;
+	const taken = await db
+		.prepare("SELECT 1 FROM parroquias WHERE nombre = ? COLLATE NOCASE AND IFNULL(ubicacion, '') = ? COLLATE NOCASE AND id <> ?")
+		.bind(name, place ?? '', parish_id ?? 0)
+		.first();
 	if (taken)
-		throw new ServiceError('Ya existe una parroquia con ese nombre.', 409);
+		throw new ServiceError(DUPLICATE_MESSAGE, 409);
 
-	return { nombre: name, ubicacion: clean_text(body.ubicacion) || null };
+	return { nombre: name, ubicacion: place };
 }
 
 async function check_parish_exists(db: D1Database, parish_id: number): Promise<void>
@@ -55,7 +62,7 @@ export async function create_parish(db: D1Database, user: TokenUser, body: Paris
 	catch (error)
 	{
 		if (is_duplicate_error(error))
-			throw new ServiceError('Ya existe una parroquia con ese nombre.', 409);
+			throw new ServiceError(DUPLICATE_MESSAGE, 409);
 
 		throw error;
 	}
@@ -74,7 +81,7 @@ export async function update_parish(db: D1Database, user: TokenUser, parish_id: 
 	catch (error)
 	{
 		if (is_duplicate_error(error))
-			throw new ServiceError('Ya existe una parroquia con ese nombre.', 409);
+			throw new ServiceError(DUPLICATE_MESSAGE, 409);
 
 		throw error;
 	}

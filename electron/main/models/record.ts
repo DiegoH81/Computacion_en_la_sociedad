@@ -1,5 +1,6 @@
-import type { Baptism, Marriage, Person, Sacrament, SacramentRecord } from '../../../shared/models';
+import type { Baptism, Marriage, Sacrament, SacramentRecord } from '../../../shared/models';
 import { changed_fields, person_at, person_parts, type FieldChange, type RecordPart } from '../../../shared/record_fields';
+import { date_problem } from '../../../shared/partial_date';
 import type { SacramentType } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
 import { add_to_queue } from '../sync/queue';
@@ -68,61 +69,28 @@ export function read_record(db: LocalDatabase, sacrament_id: number): SacramentR
 	return read_person_sacrament(db, row.tipo, sacrament_id);
 }
 
-const REQUIRED_NAMES: { field: 'nombres' | 'apellido_paterno' | 'apellido_materno'; label: string }[] =
-[
-	{ field: 'nombres', label: 'nombres' },
-	{ field: 'apellido_paterno', label: 'apellido paterno' },
-	{ field: 'apellido_materno', label: 'apellido materno' },
-];
-
-const REQUIRED_DETAILS: { field: 'lugar_nacimiento' | 'padre' | 'madre'; label: string }[] =
-[
-	{ field: 'lugar_nacimiento', label: 'lugar de nacimiento' },
-	{ field: 'padre', label: 'padre' },
-	{ field: 'madre', label: 'madre' },
-];
-
 const WHO: Record<RecordPart, string> = { persona: '', conyuge_1: ' del esposo', conyuge_2: ' de la esposa', sacramento: '', detalle: '' };
 
-function has_birth(person: Person | undefined | null): boolean
+function check_date(value: string | null | undefined, label: string): void
 {
-	return Boolean(clean_text(person?.fecha_nacimiento) || clean_text(person?.fecha_aproximada));
+	const problem = date_problem(value);
+	if (problem)
+		throw new ServiceError(`La ${label} está incompleta: ${problem}.`, 400);
 }
 
-function check_person(person: Person | undefined, previous: Person | null, who: string): void
+export function check_dates(record: SacramentRecord): void
 {
-	const missing: string[] = [];
+	check_date(record.sacramento?.fecha_evento, 'fecha del sacramento');
 
-	for (const { field, label } of REQUIRED_NAMES)
-	{
-		if (!clean_text(person?.[field]))
-			missing.push(label);
-
-	}
-
-	if ((previous === null || has_birth(previous)) && !has_birth(person))
-		missing.push('fecha de nacimiento (o fecha aproximada)');
-
-	for (const { field, label } of REQUIRED_DETAILS)
-	{
-		const was_filled = previous === null || clean_text(previous[field]) !== null;
-		if (was_filled && !clean_text(person?.[field]))
-			missing.push(label);
-
-	}
-
-	if (missing.length > 0)
-		throw new ServiceError(`Faltan datos${who}: ${missing.join(', ')}.`, 400);
-}
-
-export function check_required(record: SacramentRecord, saved: SacramentRecord | null): void
-{
 	for (const part of person_parts(record.sacramento.tipo))
-		check_person(person_at(record, part), saved ? person_at(saved, part) : null, WHO[part]);
+		check_date(person_at(record, part)?.fecha_nacimiento, `fecha de nacimiento${WHO[part]}`);
 
-	const minister_was_filled = saved === null || saved.sacramento.ministro_id !== null;
-	if (minister_was_filled && !record.sacramento?.ministro_id)
-		throw new ServiceError('Seleccione el celebrante.', 400);
+	if (record.sacramento.tipo === 'matrimonio')
+	{
+		const marriage = record as Marriage;
+		check_date(marriage.conyuge_1_bautismo_fecha, 'fecha de bautismo del esposo');
+		check_date(marriage.conyuge_2_bautismo_fecha, 'fecha de bautismo de la esposa');
+	}
 }
 
 
@@ -229,7 +197,7 @@ export interface EditResult
 
 export function save_edit(db: LocalDatabase, session: Session, saved: SacramentRecord, record: SacramentRecord): EditResult
 {
-	check_required(record, saved);
+	check_dates(record);
 
 	const sacrament_id = saved.sacramento.id as number;
 	const corrections: FieldChange[] = [];

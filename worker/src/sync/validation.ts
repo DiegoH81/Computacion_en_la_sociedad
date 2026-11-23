@@ -1,8 +1,8 @@
 // Check everything before sending online
 
 import { detail_columns, is_known_field } from '../../../shared/record_fields';
-import { HISTORY_EVENTS } from '../../../shared/sync';
-import type { ChangeRequestData, HistoryData, HistoryFieldData, MinisterData, PersonCorrection, PersonData, RecordData, RequestState, RequestType, SacramentType, UserData } from '../../../shared/sync';
+import { HISTORY_EVENTS, STAFF_EVENTS } from '../../../shared/sync';
+import type { ChangeRequestData, HistoryData, HistoryFieldData, MinisterData, PersonCorrection, PersonData, RecordData, RequestState, RequestType, SacramentType, StaffEntity, StaffEvent, StaffHistoryData, UserData } from '../../../shared/sync';
 import { people_count } from '../models/sacrament';
 import { is_role, PASSWORD_HASH_PATTERN, USERNAME_PATTERN } from '../models/user';
 import type { JsonObject } from '../utils/helpers';
@@ -270,6 +270,37 @@ export function check_user(value: unknown): UserData
 		activo: user.activo === 0 ? 0 : 1,
 		password_hash: password_hash,
 	};
+}
+
+/**
+ * El historial que manda la PC con un ministro o una cuenta. La entidad y la parroquia salen del cambio,
+ * no de cada fila: así una PC no puede anotar cosas a nombre de otro registro.
+ */
+export function check_staff_history(value: unknown, entity: StaffEntity, entity_client_id: string, parish_id: number | null): StaffHistoryData[]
+{
+	if (is_missing(value))
+		return [];
+
+	if (!Array.isArray(value))
+		throw new RejectedChange('El historial no es válido.');
+
+	return value.map((item) =>
+	{
+		const entry = (item ?? {}) as JsonObject;
+		if (!STAFF_EVENTS.includes(entry.evento as StaffEvent))
+			throw new RejectedChange('Un evento del historial no es válido.');
+
+		return {
+			client_id: required_text(entry.client_id, 'client_id'),
+			parroquia_id: parish_id,
+			entidad: entity,
+			entidad_client_id: entity_client_id,
+			usuario_client_id: optional_text(entry.usuario_client_id, 'usuario_client_id'),
+			evento: entry.evento as StaffEvent,
+			detalle: optional_text(entry.detalle, 'detalle'),
+			fecha: required_text(entry.fecha, 'fecha'),
+		};
+	});
 }
 
 export function check_minister(value: unknown): MinisterData

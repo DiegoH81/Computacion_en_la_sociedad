@@ -10,7 +10,11 @@ import { wait_for_sync } from '../sync/auto_sync';
 import { FILE_NAMES, SYNC_KEYS } from '../utils/config';
 import { decrypt_with_password, encrypt_with_password, type PasswordEncrypted } from '../utils/crypto';
 import { ServiceError } from '../utils/errors';
+import { full_name } from '../utils/helpers';
+import { build_xlsx } from '../utils/xlsx';
+import { parish_workbook } from './excel_export';
 import type { PublicRoutes, Routes } from '../utils/middleware';
+import type { BackupLogEntry } from '../../../shared/models';
 import { logout } from './login';
 import { needs_package, parent_window } from './package';
 
@@ -29,6 +33,8 @@ export interface BackupContent
 	tablas: Record<string, { columnas: string[]; filas: unknown[][] }>;
 	logos: Record<string, string>; // los logos de las parroquias: nombre del archivo y contenido
 }
+
+const LOG_MAX_ENTRIES = 200;
 
 function table_names(db: LocalDatabase): string[]
 {
@@ -187,12 +193,70 @@ async function replace_database(content: BackupContent): Promise<void>
 	write_logos(paths.directory, content.logos);
 }
 
-// Exportar o importar datos es cosa del administrador de una parroquia (pedido del padre, 2026-11-08):
-// el administrador general solo consulta. La pantalla además lo ofrece solo en la parroquia propia.
+function log_path(directory: string): string
+{
+	return path.join(directory, FILE_NAMES.backup_log);
+}
+
+export function read_backup_log(directory: string): BackupLogEntry[]
+{
+	try
+	{
+		const log = JSON.parse(readFileSync(log_path(directory), 'utf8'));
+		return Array.isArray(log) ? log : [];
+	}
+	catch
+	{
+		return [];
+	}
+}
+
+export function add_backup_log(directory: string, entry: BackupLogEntry): void
+{
+	const log = [entry, ...read_backup_log(directory)].slice(0, LOG_MAX_ENTRIES);
+	writeFileSync(log_path(directory), JSON.stringify(log, null, 2), 'utf8');
+}
+
+function user_name(db: LocalDatabase, session: Session): string
+{
+	const user = db.prepare('SELECT username, nombre, apellido_paterno, apellido_materno FROM usuarios WHERE id = ?').get(session.user_id) as
+		{ username: string; nombre: string | null; apellido_paterno: string | null; apellido_materno: string | null } | undefined;
+
+	if (!user)
+		return 'Usuario desconocido';
+
+	const name = full_name(user.nombre, user.apellido_paterno, user.apellido_materno);
+	return name ? `${name} (${user.username})` : user.username;
+}
+
 function check_admin(session: Session): void
 {
 	if (session.role !== 'admin_parroquia')
 		throw new ServiceError('Solo el administrador de una parroquia puede hacer o restaurar respaldos.', 403);
+}
+
+async function export_excel(db: LocalDatabase, session: Session)
+{
+	const parish_id = session.parish_id as number;
+	const day = new Date().toISOString().slice(0, 10);
+	const options = { title: 'Guardar el Excel', defaultPath: `partidas-${day}.xlsx`, filters: [{ name: 'Excel', extensions: ['xlsx'] }] };
+	const window = parent_window();
+	const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+	if (choice.canceled || !choice.filePath)
+		return { cancelado: true as const };
+
+	try
+	{
+		writeFileSync(choice.filePath, build_xlsx(parish_workbook(db, parish_id)));
+	}
+	catch
+	{
+		throw new ServiceError(`No se pudo guardar el Excel: puede que "${path.basename(choice.filePath)}" esté abierto. Ciérrelo y vuelva a exportar.`, 409);
+	}
+
+	add_backup_log(database_paths().directory, { fecha: new Date().toISOString(), usuario: user_name(db, session), accion: 'exporto_excel', archivo: path.basename(choice.filePath) });
+	const records = db.prepare('SELECT COUNT(*) FROM sacramentos WHERE parroquia_id = ?').pluck().get(parish_id) as number;
+	return { cancelado: false as const, partidas: records, archivo: path.basename(choice.filePath) };
 }
 
 function read_password(value: unknown, is_new: boolean): string
@@ -218,7 +282,7 @@ function summary_of(content: BackupContent)
 	return { cancelado: false as const, partidas: count_rows(content, 'sacramentos'), pendientes: count_rows(content, 'sync_cola') };
 }
 
-async function restore_from_file(password_value: unknown)
+async function restore_from_file(password_value: unknown, user: string)
 {
 	const password = read_password(password_value, false);
 
@@ -240,6 +304,7 @@ async function restore_from_file(password_value: unknown)
 
 	const content = await decode_backup(text, password);
 	await replace_database(content);
+	add_backup_log(database_paths().directory, { fecha: new Date().toISOString(), usuario: user, accion: 'restauro', archivo: path.basename(choice.filePaths[0]) });
 	return summary_of(content);
 }
 
@@ -269,15 +334,30 @@ export const backup_routes: Routes =
 		if (choice.canceled || !choice.filePath)
 			return { cancelado: true };
 
-		const content = build_backup(db, database_paths().directory);
+		const directory = database_paths().directory;
+		const content = build_backup(db, directory);
 		writeFileSync(choice.filePath, await encode_backup(content, password), 'utf8');
-		return summary_of(content);
+		add_backup_log(directory, { fecha: new Date().toISOString(), usuario: user_name(db, session), accion: 'exporto', archivo: path.basename(choice.filePath) });
+
+		return { ...summary_of(content), archivo: path.basename(choice.filePath) };
 	},
 
-	'backup.restore': (payload: { password: unknown }, { session }) =>
+	'backup.exportExcel': (_payload, { db, session }) =>
 	{
 		check_admin(session);
-		return restore_from_file(payload?.password);
+		return export_excel(db, session);
+	},
+
+	'backup.restore': (payload: { password: unknown }, { db, session }) =>
+	{
+		check_admin(session);
+		return restore_from_file(payload?.password, user_name(db, session));
+	},
+
+	'backup.log': (_payload, { session }) =>
+	{
+		check_admin(session);
+		return { registros: read_backup_log(database_paths().directory) };
 	},
 };
 
@@ -288,6 +368,6 @@ export const backup_public_routes: PublicRoutes =
 		if (!is_empty_pc())
 			throw new ServiceError('Esta PC ya tiene usuarios: entre como administrador y restaure el respaldo desde Configuración.', 409);
 
-		return restore_from_file(payload?.password);
+		return restore_from_file(payload?.password, 'Sin sesión (PC nueva)');
 	},
 };

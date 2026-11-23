@@ -30,6 +30,67 @@ export const HISTORY_EVENTS = [
 
 export type HistoryEvent = (typeof HISTORY_EVENTS)[number];
 
+export type StaffEntity = 'ministro' | 'usuario';
+
+export const STAFF_EVENTS = [
+	'creado',
+	'editado',
+	'contrasena',
+	'deshabilitado',
+	'habilitado',
+	'principal',
+	'parroquia_agregada',
+	'parroquia_quitada',
+] as const;
+
+export type StaffEvent = (typeof STAFF_EVENTS)[number];
+
+export const STAFF_EVENT_LABELS: Record<StaffEntity, Partial<Record<StaffEvent, string>>> =
+{
+	ministro: {
+		creado: 'Registró al ministro',
+		editado: 'Editó al ministro',
+		deshabilitado: 'Deshabilitó al ministro',
+		habilitado: 'Habilitó al ministro',
+	},
+	usuario: {
+		creado: 'Creó la cuenta',
+		editado: 'Editó la cuenta',
+		contrasena: 'Cambió la contraseña',
+		deshabilitado: 'Deshabilitó la cuenta',
+		habilitado: 'Habilitó la cuenta',
+		principal: 'Pasó la marca de principal',
+		parroquia_agregada: 'Agregó la cuenta a la parroquia',
+		parroquia_quitada: 'Quitó la cuenta de la parroquia',
+	},
+};
+
+export interface StaffHistoryData
+{
+	client_id: string;
+	parroquia_id: number | null;
+	entidad: StaffEntity;
+	entidad_client_id: string;
+	usuario_client_id: string | null;
+	evento: StaffEvent;
+	detalle: string | null;
+	fecha: string;
+}
+
+export const HISTORY_EVENT_LABELS: Record<HistoryEvent, string> =
+{
+	registrada: 'Registró la partida',
+	importada: 'Importó la partida',
+	editada: 'Editó la partida',
+	correccion: 'Corrigió por nota marginal',
+	cambio_pedido: 'Pidió un cambio',
+	cambio_aprobado: 'Aprobó el cambio',
+	cambio_rechazado: 'Rechazó el cambio',
+	cambio_descartado: 'Descartó el cambio',
+	anulada: 'Anuló la partida',
+	rehabilitada: 'Rehabilitó la partida',
+};
+
 export interface PersonData
 {
 	client_id: string;
@@ -130,9 +191,9 @@ export interface MinisterData
 	activo: number;
 	version?: number;
 	updated_at?: string;
+	historial?: StaffHistoryData[];
 }
 
-// Changes using POST
 export interface SyncChange
 {
 	entidad: SyncEntity;
@@ -157,6 +218,7 @@ export interface UserData
 	password_hash?: string | null;
 	version?: number;
 	updated_at?: string;
+	historial?: StaffHistoryData[];
 }
 
 export type ChangeResult =

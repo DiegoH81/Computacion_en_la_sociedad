@@ -17,7 +17,7 @@ import { insert_requests } from '../models/change_request';
 import { add_history, read_history } from '../models/history';
 import { check_parish_read, parish_for_new } from '../models/parish';
 import { name_condition, save_corrections } from '../models/person';
-import { check_required, corrections_of, insert_detail, insert_people, NOT_FOUND, queue_sacrament, read_record, save_edit } from '../models/record';
+import { check_dates, corrections_of, insert_detail, insert_people, NOT_FOUND, queue_sacrament, read_record, save_edit } from '../models/record';
 import { check_can_manage, detail_table, insert_sacrament, is_sacrament_type } from '../models/sacrament';
 import type { Session } from '../models/session';
 import { add_to_queue } from '../sync/queue';
@@ -265,7 +265,7 @@ export function create_record(db: LocalDatabase, session: Session, record: Sacra
 {
 	const type = check_type(record?.sacramento?.tipo);
 	const parish_id = parish_for_new(session);
-	check_required(record, null);
+	check_dates(record);
 	check_notes(record, null);
 
 	const is_helper = session.role === 'usuario';

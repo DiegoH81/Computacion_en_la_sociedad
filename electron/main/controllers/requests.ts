@@ -5,7 +5,7 @@ import { close_requests, has_pending_request, insert_requests, pending_requests,
 import { add_history } from '../models/history';
 import { check_parish_access, check_parish_admin } from '../models/parish';
 import { apply_corrections } from '../models/person';
-import { check_required, queue_sacrament, read_record, save_edit, with_correction } from '../models/record';
+import { check_dates, queue_sacrament, read_record, save_edit, with_correction } from '../models/record';
 import { OTHER_PARISH_RECORD } from '../models/sacrament';
 import type { Session } from '../models/session';
 import { ServiceError } from '../utils/errors';
@@ -76,7 +76,7 @@ export function request_changes(db: LocalDatabase, session: Session, record: Sac
 	if (typed.length === 0 && corrections.length === 0 && !writes_blank_note)
 		throw new ServiceError('No hay cambios para pedir.', 400);
 
-	check_required(record, saved);
+	check_dates(record);
 
 	const requests = [...as_requests(typed, 'digitacion'), ...as_requests(corrections, 'nota_marginal')];
 

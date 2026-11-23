@@ -31,7 +31,6 @@ export function DashboardPage() {
   const { canAdminister } = usePermissions();
   const [pendingChanges, setPendingChanges] = useState(0);
 
-  // Un administrador de la parroquia ve al entrar si hay cambios pedidos esperando su aprobación.
   useEffect(() => {
     if (!canAdminister) return;
     let cancelled = false;

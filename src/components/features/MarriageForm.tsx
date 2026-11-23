@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Marriage, Minister, Person } from '../../../shared/models';
+import { parish_label } from '../../../shared/parish_label';
 import { emptyMarriage } from '../../lib/emptyRecords';
 import { newChanges, personOptions, recordedChanges, type CorrectionDraft } from '../../lib/personCorrections';
 import { pendingRequests, requestedBy, usesRequestedValues, withRequestedValues } from '../../lib/changeRequests';
@@ -15,7 +16,7 @@ import { MarginalNotesButton } from './MarginalNotesButton';
 import { MarginalNotesSection } from './MarginalNotesSection';
 import { MarriageFamilyFields, MarriagePersonFields } from './MarriagePersonFields';
 import { PriestSelector } from './PriestSelector';
-import { SacramentRegisterPanel } from './SacramentRegisterPanel';
+import { SacramentRegisterPanel, type RecordParish } from './SacramentRegisterPanel';
 import { useDuplicateCheck } from './useDuplicateCheck';
 import { RequiredNote } from '../ui/RequiredMark';
 import { useMarginalNotes } from './useMarginalNotes';
@@ -30,9 +31,10 @@ const TESTIGOS = [
 interface MarriageFormProps {
   /** La partida que se edita, tal como llegó de Electron. Sin ella, se crea una nueva. */
   initialRecord?: Marriage;
-  parroquiaNombre: string;
+  parroquia: RecordParish;
   errorMessage?: string | null;
-  onSave: (record: Marriage) => void;
+  /** thenPrint: el usuario eligió "Guardar e imprimir". */
+  onSave: (record: Marriage, thenPrint: boolean) => void;
   onCancel: () => void;
   isLoading: boolean;
   priestOptions: Minister[];
@@ -57,7 +59,7 @@ function duplicateQuery(para: string, person: Person) {
 
 export function MarriageForm({
   initialRecord,
-  parroquiaNombre,
+  parroquia,
   errorMessage,
   onSave,
   onCancel,
@@ -68,14 +70,19 @@ export function MarriageForm({
   onlyCorrections = false,
 }: MarriageFormProps) {
   // Una partida nueva trae como lugar del matrimonio la parroquia actual (se puede cambiar).
-  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parroquiaNombre || null });
+  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parish_label(parroquia) || null });
   const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
   const recorded = [...recordedChanges(record.conyuge_1, 'conyuge_1'), ...recordedChanges(record.conyuge_2, 'conyuge_2')];
   const isEditing = initialRecord !== undefined;
   const pending = isEditing ? pendingRequests(record) : [];
+  // Una partida anulada solo se ve: no admite cambios.
+  const viewOnly = initialRecord?.sacramento.estado === 'anulado';
   // Un usuario con un pedido esperando no puede pedir otro: el formulario queda solo para ver.
-  const lockFields = onlyCorrections && pending.length > 0;
-  const [isConfirmingDiscard, setIsConfirmingDiscard] = useState(false);
+  const lockFields = viewOnly || (onlyCorrections && pending.length > 0);
+  // Un usuario no cambia una anotación que ya está escrita (solo llena la que está en blanco).
+  const notesLocked = onlyCorrections && Boolean(initialRecord?.sacramento.anotaciones?.trim());
+  // Abierto cuando hay que confirmar que se descarta un pedido; recuerda si después se imprime.
+  const [confirmingDiscard, setConfirmingDiscard] = useState<{ thenPrint: boolean } | null>(null);
   const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
 
   const duplicates = useDuplicateCheck('matrimonio', record.sacramento.id, [
@@ -94,13 +101,13 @@ export function MarriageForm({
     conyuge_2: { ...record.conyuge_2, cambios: [...record.conyuge_2.cambios, ...newChanges(drafts, 'conyuge_2')] },
   });
 
-  function handleSave() {
+  function handleSave(thenPrint: boolean) {
     // El administrador que guarda sin usar lo que pidió un usuario lo descarta: se le pregunta antes.
     if (!onlyCorrections && pending.length > 0 && !usesRequestedValues(toSave(), drafts, pending)) {
-      setIsConfirmingDiscard(true);
+      setConfirmingDiscard({ thenPrint });
       return;
     }
-    onSave(toSave());
+    onSave(toSave(), thenPrint);
   }
 
   function applyRequestedValues() {
@@ -112,24 +119,29 @@ export function MarriageForm({
 
   return (
     <FormDialog
-      title={!isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
-      onSave={handleSave}
+      title={viewOnly ? 'Ver partida anulada' : !isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
+      viewOnly={viewOnly}
+      onSave={() => handleSave(false)}
+      // Un pedido de cambio no modifica la partida: imprimirla ahora sacaría los datos de antes.
+      onSaveAndPrint={isEditing && onlyCorrections ? undefined : () => handleSave(true)}
       onCancel={onCancel}
       isLoading={isLoading}
       errorMessage={errorMessage}
       saveLabel={isEditing && onlyCorrections ? 'Pedir cambio' : undefined}
       canSave={!lockFields}
       notice={
-        <>
-          {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
-          <DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />
-        </>
+        !viewOnly && (
+          <>
+            {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
+            <DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />
+          </>
+        )
       }
     >
       {!lockFields && <RequiredNote />}
       <fieldset disabled={lockFields} className="contents">
       <FormSectionTitle>Datos de registro en el libro</FormSectionTitle>
-      <SacramentRegisterPanel sacramento={sacramento} onChange={updateSacrament} parroquiaNombre={parroquiaNombre} />
+      <SacramentRegisterPanel sacramento={sacramento} onChange={updateSacrament} parroquia={parroquia} />
 
       <FormSectionTitle>Datos personales de los cónyuges</FormSectionTitle>
       <MarriagePersonFields marriage={record} onChange={setRecord} />
@@ -149,7 +161,7 @@ export function MarriageForm({
           <FormInput value={record.lugar ?? ''} onChange={(e) => setRecord((prev) => ({ ...prev, lugar: e.target.value }))} />
         </InlineFormField>
         <div className="sm:col-span-2">
-          <InlineFormField label="Celebrante:" required>
+          <InlineFormField label="Celebrante:">
             <PriestSelector
               value={sacramento.ministro_id}
               onSelect={(id) => updateSacrament({ ministro_id: id })}
@@ -181,19 +193,20 @@ export function MarriageForm({
           onCorrectionsChange={setDrafts}
           recorded={recorded}
           correctionsLocked={lockFields}
+          notesLocked={notesLocked}
         />
       )}
 
-      {isConfirmingDiscard && (
+      {confirmingDiscard && (
         <ConfirmActionDialog
           title="Descartar el cambio pedido"
           description={`Hay un cambio pendiente de ${requestedBy(pending)}. Si guarda sin usar esos valores, el pedido se descarta.`}
           confirmLabel="Guardar y descartar"
           onConfirm={() => {
-            setIsConfirmingDiscard(false);
-            onSave(toSave());
+            setConfirmingDiscard(null);
+            onSave(toSave(), confirmingDiscard.thenPrint);
           }}
-          onDismiss={() => setIsConfirmingDiscard(false)}
+          onDismiss={() => setConfirmingDiscard(null)}
         />
       )}
     </FormDialog>

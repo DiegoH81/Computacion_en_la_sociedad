@@ -11,12 +11,15 @@ import { MarriagePrintView } from '../components/features/MarriagePrintView';
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { CertificatePrintPreview } from '../components/print/CertificatePrintPreview';
 import { useSessionStore } from '../store/sessionStore';
+import { recordParish, useActiveParish } from '../components/features/useActiveParish';
 import { usePermissions } from '../lib/permissions';
 import { annulSacrament, restoreSacrament, saveSacrament, searchSacraments } from '../controllers/SacramentController';
 import { searchPriests } from '../controllers/PriestController';
 import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
 import { marriagePrintValues } from '../lib/printFields';
+import { marriageExtraColumns } from '../lib/recordColumns';
+import { useOpenedFromChanges } from '../lib/openFromChanges';
 
 const personName = (person: Person) => `${person.nombres} ${person.apellido_paterno} ${person.apellido_materno}`;
 
@@ -27,6 +30,7 @@ export function MarriagesPage() {
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
   const token = useSessionStore((state) => state.token);
+  const activeParish = useActiveParish();
 
   const [records, setRecords] = useState<Marriage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,12 +124,17 @@ export function MarriagesPage() {
     }
   }
 
+  // Desde "Cambios por aprobar" se llega con una partida para abrir; al cerrarla se vuelve allá.
+  const { backToChanges } = useOpenedFromChanges(handleOpenEdit);
+
   function closeForm() {
     setFormState({ mode: 'closed' });
     setFormError(null);
+    backToChanges();
   }
 
-  async function handleSaveForm(record: Marriage) {
+  // Con thenPrint, después de guardar se abre la impresión de la partida ya guardada (como el botón Imprimir).
+  async function handleSaveForm(record: Marriage, thenPrint: boolean) {
     setIsLoading(true);
     setFormError(null);
 
@@ -140,6 +149,8 @@ export function MarriagesPage() {
 
     closeForm();
     setReloadCounter((count) => count + 1);
+
+    if (thenPrint && result.id !== undefined) await handlePrint(result.id);
   }
 
   async function handleConfirmAnnulment(motivo: string) {
@@ -175,6 +186,7 @@ export function MarriagesPage() {
           { header: 'Esposo', render: (record) => personName(record.conyuge_1) },
           { header: 'Esposa', render: (record) => personName(record.conyuge_2) },
         ]}
+        extraColumns={marriageExtraColumns()}
         isLoading={isLoading}
         currentPage={currentPage}
         totalPages={totalPages}
@@ -204,7 +216,7 @@ export function MarriagesPage() {
       {formState.mode !== 'closed' && (
         <MarriageForm
           initialRecord={formState.mode === 'edit' ? formState.record : undefined}
-          parroquiaNombre={formState.mode === 'edit' ? (formState.record.sacramento.parroquia?.nombre ?? '') : (parroquiaActivaNombre ?? '')}
+          parroquia={formState.mode === 'edit' ? recordParish(formState.record.sacramento.parroquia) : activeParish}
           errorMessage={formError}
           onSave={handleSaveForm}
           onCancel={closeForm}

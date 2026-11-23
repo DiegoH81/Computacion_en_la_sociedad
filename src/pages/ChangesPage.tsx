@@ -6,6 +6,7 @@ import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { ConfirmActionDialog } from '../components/ui/ConfirmActionDialog';
 import { ApiError } from '../lib/apiClient';
 import { pendingRequests, requestedBy } from '../lib/changeRequests';
+import { useOpenRecordPage } from '../lib/openFromChanges';
 import { recordPeople } from '../lib/personCorrections';
 import { RequestService, type PendingChanges, type ReviewDecision } from '../services/RequestService';
 import { useSessionStore } from '../store/sessionStore';
@@ -17,6 +18,7 @@ const fullName = (person: Person) => [person.nombres, person.apellido_paterno, p
 /** Los cambios que pidieron los usuarios de la parroquia, para que un administrador los apruebe o rechace. */
 export function ChangesPage() {
   const navigate = useNavigate();
+  const openRecordPage = useOpenRecordPage();
   const usuarioNombre = useSessionStore((state) => state.usuarioNombre);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
 
@@ -98,6 +100,14 @@ export function ChangesPage() {
                   Pedido por {requestedBy(requests)}. <span className="font-semibold text-pending-ink">Espera su aprobación.</span>
                 </span>
                 <div className="flex gap-2">
+                  {/* El formulario de la partida muestra todos los datos y ofrece "Usar estos valores". */}
+                  <button
+                    type="button"
+                    onClick={() => openRecordPage(sacramento.tipo, id)}
+                    className="rounded-lg bg-solid-blue px-4 py-1.5 text-sm font-bold text-white uppercase hover:opacity-90"
+                  >
+                    Ver partida completa
+                  </button>
                   <button
                     type="button"
                     onClick={() => setConfirming({ id, decision: 'rechazado' })}

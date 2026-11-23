@@ -27,6 +27,14 @@ export interface AdditionalParish
 	principal: number;
 }
 
+export interface BackupLogEntry
+{
+	fecha: string;
+	usuario: string;
+	accion: 'exporto' | 'restauro' | 'exporto_excel';
+	archivo: string;
+}
+
 export interface Parish
 {
 	id: number;
@@ -215,6 +223,49 @@ export interface SearchPage<T>
 {
 	resultados: T[];
 	total_paginas: number;
+}
+
+export type ModificationKind = 'partidas' | 'ministros' | 'cuentas' | 'pc';
+
+export interface ModificationFilters
+{
+	desde?: string;
+	hasta?: string;
+	usuario?: string;
+	tipo?: ModificationKind;
+	pagina?: number;
+	parroquia_id?: number;
+}
+
+export interface Modification
+{
+	fecha: string;
+	usuario: string;
+	tipo: ModificationKind;
+	accion: string;
+	sobre: string;
+	detalle: string | null;
+	sacramento_id: number | null;
+}
+
+export interface ConflictDifference
+{
+	dato: string;
+	servidor: string;
+	local: string;
+}
+
+export interface ConflictDetail
+{
+	diferencias: ConflictDifference[];
+	cambiado_por: string | null;
+	cambiado_en: string | null;
+	sacramento_id: number | null;
+}
+
+export interface ModificationPage extends SearchPage<Modification>
+{
+	usuarios: string[];
 }
 
 export type DuplicateQuery = Pick<Person, 'dni' | 'nombres' | 'apellido_paterno' | 'apellido_materno' | 'fecha_nacimiento' | 'padre' | 'madre'> & { para: string };

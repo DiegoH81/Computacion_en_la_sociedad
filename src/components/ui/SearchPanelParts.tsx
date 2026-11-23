@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import type { NameColumn, SearchFilters } from '../../../shared/models';
+import { parish_label } from '../../../shared/parish_label';
 
 // Piezas de las pantallas de búsqueda (partidas, ministros, usuarios): todas se ven iguales.
 
@@ -54,7 +55,7 @@ export function ParishFilter({
   value,
   onChange,
 }: {
-  parishes: { id: number; nombre: string }[];
+  parishes: { id: number; nombre: string; ubicacion?: string | null }[];
   value: number | null;
   onChange: (parishId: number | null) => void;
 }) {
@@ -74,7 +75,7 @@ export function ParishFilter({
         <option value="">Todas las parroquias</option>
         {parishes.map((parish) => (
           <option key={parish.id} value={parish.id}>
-            {parish.nombre}
+            {parish_label(parish)}
           </option>
         ))}
       </select>

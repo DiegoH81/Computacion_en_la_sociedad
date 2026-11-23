@@ -111,10 +111,12 @@ describe('solicitudes de cambio', () => {
     expect(list_pending(db, parroco)).toEqual([]);
   });
 
-  it('sin cambios no hay nada que pedir, y no se puede pedir borrar un dato obligatorio', () => {
+  it('sin cambios no hay nada que pedir, y no se puede pedir una fecha a medias', () => {
     const id = create_person_sacrament(db, 'bautismo', parroco, input());
     expect(() => update_person_sacrament(db, 'bautismo', ayudante, read(id))).toThrow('No hay cambios para pedir.');
-    expect(() => update_person_sacrament(db, 'bautismo', ayudante, { ...read(id), persona: { ...read(id).persona, madre: '' } })).toThrow('Faltan datos: madre.');
+    expect(() => update_person_sacrament(db, 'bautismo', ayudante, { ...read(id), persona: { ...read(id).persona, fecha_nacimiento: '?-05' } })).toThrow(
+      'La fecha de nacimiento está incompleta: falta el año.',
+    );
   });
 
   it('la corrección por nota marginal, al aprobarse, queda en la nota sin cambiar la partida, y se busca por los dos nombres', () => {

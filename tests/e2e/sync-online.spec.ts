@@ -97,7 +97,6 @@ async function goToBaptisms(window: Page): Promise<void> {
 
 async function createBaptism(window: Page, registro: string, nombre: string): Promise<void> {
   await window.getByRole('button', { name: '+ Agregar' }).click();
-  await field(window, 'Fecha del sacramento').fill('2020-05-10');
   await field(window, 'N° de libro').fill('7');
   await field(window, 'N° de folio').fill('3');
   await field(window, 'N° de registro').fill(registro);
@@ -292,8 +291,14 @@ test('una edición simultánea en dos PCs queda como conflicto y se puede resolv
   await expect(pcB.window.getByText(/libro 7, folio 3, registro 9004/)).toBeVisible();
   await expect(badge(pcB.window)).toHaveText('Revisar sincronización');
 
+  // Antes de elegir se ven las dos versiones: solo el dato que difiere, y quién lo cambió en el servidor.
+  const conflict = pcB.window.getByRole('article', { name: /Conflicto: .*registro 9004/ });
+  await expect(conflict.getByRole('row', { name: /Nombres.*Delfina A.*Delfina B/ })).toBeVisible();
+  await expect(conflict.getByRole('row')).toHaveCount(2);
+  await expect(conflict).toContainText(/En el servidor lo cambió .*parroco1/);
+
   // El servidor no se pisó. Elegir su versión descarta la edición de esta PC.
-  await pcB.window.getByRole('button', { name: 'Usar la versión del servidor' }).click();
+  await conflict.getByRole('button', { name: 'Quedarme con la del servidor' }).click();
   await expect(pcB.window.getByText('Registros por revisar')).toBeHidden();
 
   await backToBaptisms(pcB.window);
@@ -309,7 +314,7 @@ test('una edición simultánea en dos PCs queda como conflicto y se puede resolv
   await syncNow(pcA.window);
   await openSyncPage(pcB.window);
   await syncNow(pcB.window);
-  await pcB.window.getByRole('button', { name: 'Conservar la de esta PC' }).click();
+  await pcB.window.getByRole('button', { name: /Usar la de esta PC/ }).click();
   await expect(pcB.window.getByText('Registros por revisar')).toBeHidden();
   await expect(pending(pcB.window)).toHaveText('0');
 
@@ -581,6 +586,15 @@ test('el ayudante escribe la nota en blanco y pide una corrección; el párroco 
   await expect(card).toContainText('Corregida');
   await expect(card.getByRole('region', { name: 'Nota marginal' })).toContainText('Corregida');
   await expect(card).toContainText('Espera su aprobación.');
+
+  // "Ver partida completa" abre el formulario de la partida con lo pedido; al cerrarlo vuelve a la lista.
+  await card.getByRole('button', { name: 'Ver partida completa' }).click();
+  const fullRecord = parish.window.getByRole('dialog', { name: 'Editar partida' });
+  await expect(fullRecord.getByRole('region', { name: 'Cambio pedido' })).toContainText('Corregida');
+  await fullRecord.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await parish.window.getByRole('button', { name: 'Sí, cancelar' }).click();
+  await expect(card).toBeVisible();
+
   await card.getByRole('button', { name: 'Aprobar' }).click();
   await parish.window.getByRole('alertdialog').getByRole('button', { name: 'Aprobar' }).click();
   await expect(card).toBeHidden();
@@ -590,6 +604,11 @@ test('el ayudante escribe la nota en blanco y pide una corrección; el párroco 
   await syncAndBack(helper.window);
   await searchBaptism(helper.window, 'Corregida');
   await expect(helper.window.getByRole('cell', { name: 'Corregina' })).toBeVisible();
+
+  // La anotación ya tiene texto: el ayudante ya no la puede cambiar.
+  request = await openForChange(helper.window, '9201', 'Corregida');
+  await expect(request.getByRole('textbox', { name: 'Anotaciones', exact: true })).toHaveAttribute('readonly', '');
+  await expect(request).toContainText('Esta partida ya tiene anotación: solo el párroco la puede cambiar.');
 });
 
 test('el párroco edita una partida con un cambio pendiente: usa los valores pedidos y queda en el historial', async () => {
@@ -771,7 +790,9 @@ test('el principal de la parroquia crea un administrador, que no puede tocarlo, 
   await submitLogin(delegate.window, username, password);
   await expect(delegate.window.getByText(DASHBOARD_TEXT)).toBeVisible({ timeout: 30_000 });
   await delegate.window.getByRole('button', { name: 'Configuración' }).click();
-  await expect(delegate.window.getByRole('button', { name: 'Importar Excel del sistema anterior' })).toBeVisible();
+  await expect(delegate.window.getByRole('button', { name: 'Exportar e importar' })).toBeVisible();
+  // "Modificaciones" es solo del principal.
+  await expect(delegate.window.getByRole('button', { name: 'Modificaciones' })).toHaveCount(0);
   await delegate.window.getByRole('button', { name: 'Agregar usuario' }).click();
   await expect(delegate.window.getByRole('cell', { name: 'parroco1' })).toBeVisible();
   await expect(delegate.window.getByRole('checkbox', { name: 'Seleccionar usuario parroco1' })).toHaveCount(0);
@@ -780,12 +801,29 @@ test('el principal de la parroquia crea un administrador, que no puede tocarlo, 
   await delegate.window.getByRole('button', { name: 'Cancelar', exact: true }).click();
   await delegate.window.getByRole('button', { name: 'Sí, cancelar' }).click();
 
+  // El principal ve en "Modificaciones" que creó la cuenta.
+  await backToDashboard(principal.window);
+  await principal.window.getByRole('button', { name: 'Configuración' }).click();
+  await principal.window.getByRole('button', { name: 'Modificaciones' }).click();
+  await expect(principal.window.getByRole('row', { name: new RegExp(`Creó la cuenta.*${username}`) })).toBeVisible();
+  await backToDashboard(principal.window);
+  await principal.window.getByRole('button', { name: 'Configuración' }).click();
+  await principal.window.getByRole('button', { name: 'Agregar usuario' }).click();
+
   // El principal le pasa la marca: ahora el principal es el nuevo.
   await principal.window.getByRole('checkbox', { name: `Seleccionar usuario ${username}` }).click();
   await principal.window.getByRole('button', { name: 'Hacer principal' }).click();
   await principal.window.getByRole('alertdialog').getByRole('button', { name: 'Sí, pasar la marca' }).click();
   await expect(principal.window.getByRole('row', { name: new RegExp(username) })).toContainText('Principal');
   await expect(principal.window.getByRole('checkbox', { name: `Seleccionar usuario ${username}` })).toHaveCount(0);
+
+  // La marca la anota el servidor: al sincronizar, el nuevo principal ve "Modificaciones" con todo.
+  await syncAndBack(delegate.window);
+  await backToDashboard(delegate.window);
+  await delegate.window.getByRole('button', { name: 'Configuración' }).click();
+  await delegate.window.getByRole('button', { name: 'Modificaciones' }).click();
+  await expect(delegate.window.getByRole('row', { name: new RegExp(`Pasó la marca de principal.*${username}`) })).toBeVisible();
+  await expect(delegate.window.getByRole('row', { name: new RegExp(`Creó la cuenta.*${username}`) })).toBeVisible();
 });
 
 test('una cuenta en dos parroquias: el general le agrega otra, y al entrar elige en cuál trabajar', async () => {
@@ -817,8 +855,7 @@ test('una cuenta en dos parroquias: el general le agrega otra, y al entrar elige
   await admin.window.getByRole('button', { name: 'Confirmar' }).click();
   await admin.window.getByRole('button', { name: 'Configuración' }).click();
   // El general no importa ni exporta datos: eso es del administrador de cada parroquia.
-  await expect(admin.window.getByRole('button', { name: 'Exportar respaldo' })).toHaveCount(0);
-  await expect(admin.window.getByRole('button', { name: 'Importar Excel del sistema anterior' })).toHaveCount(0);
+  await expect(admin.window.getByRole('button', { name: 'Exportar e importar' })).toHaveCount(0);
   await admin.window.getByRole('button', { name: 'Agregar usuario' }).click();
   await admin.window.getByLabel('Apellido paterno', { exact: true }).fill(username);
   await admin.window.getByRole('button', { name: 'Buscar', exact: true }).click();
@@ -849,7 +886,7 @@ test('una cuenta en dos parroquias: el general le agrega otra, y al entrar elige
   await multi.window.getByRole('button', { name: 'Cerrar menú lateral' }).click();
   await backToDashboard(multi.window);
   await multi.window.getByRole('button', { name: 'Configuración' }).click();
-  await expect(multi.window.getByRole('button', { name: 'Exportar respaldo' })).toBeVisible();
+  await expect(multi.window.getByRole('button', { name: 'Exportar e importar' })).toBeVisible();
 
   // Consultando una parroquia que no es suya, aunque sea administradora en la suya: no importa ni exporta.
   await multi.window.getByRole('button', { name: 'Volver' }).first().click();
@@ -857,19 +894,17 @@ test('una cuenta en dos parroquias: el general le agrega otra, y al entrar elige
   await multi.window.getByRole('combobox').selectOption({ label: 'Parroquia 1' });
   await multi.window.getByRole('button', { name: 'Confirmar' }).click();
   await multi.window.getByRole('button', { name: 'Configuración' }).click();
-  await expect(multi.window.getByRole('button', { name: 'Exportar respaldo' })).toHaveCount(0);
-  await expect(multi.window.getByRole('button', { name: 'Restaurar respaldo' })).toHaveCount(0);
-  await expect(multi.window.getByRole('button', { name: 'Importar Excel del sistema anterior' })).toHaveCount(0);
+  await expect(multi.window.getByRole('button', { name: 'Exportar e importar' })).toHaveCount(0);
   await multi.window.getByRole('button', { name: 'Volver' }).first().click();
   await multi.window.getByRole('button', { name: 'Cambiar parroquia' }).click();
-  await multi.window.getByRole('combobox').selectOption({ label: '★ Parroquia 3 (trabajo aquí)' });
+  await multi.window.getByRole('combobox').selectOption({ label: 'Parroquia 3' });
   await multi.window.getByRole('button', { name: 'Confirmar' }).click();
   await goToBaptisms(multi.window);
   await multi.window.getByRole('button', { name: 'Abrir menú lateral' }).click();
 
   // En Parroquia 2 es usuario: no aprueba cambios.
   await menu.getByRole('button', { name: 'Cambiar parroquia' }).click();
-  await multi.window.getByRole('combobox').selectOption({ label: '★ Parroquia 2 (trabajo aquí)' });
+  await multi.window.getByRole('combobox').selectOption({ label: 'Parroquia 2' });
   await multi.window.getByRole('button', { name: 'Confirmar' }).click();
   await expect(multi.window.getByText(DASHBOARD_TEXT)).toBeVisible();
   await goToBaptisms(multi.window);

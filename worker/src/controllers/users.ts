@@ -37,6 +37,8 @@ import { USERS_MAX_PAGE, USERS_MAX_PAGE_SIZE, USERS_PAGE_SIZE } from '../utils/c
 import { hash_password, type TokenUser } from '../utils/crypto';
 import { clean_text, read_int, read_json_body, require_json_body } from '../utils/helpers';
 import { ServiceError, type AppEnv } from '../utils/middleware';
+import { add_account_history } from '../models/staff_history';
+import { parish_label_sql } from '../../../shared/parish_label';
 
 const NOT_FOUND = 'Usuario no encontrado.';
 
@@ -159,7 +161,7 @@ export async function search_users(db: D1Database, user: TokenUser, filters: Sea
 	const rows = await db
 		.prepare(
 			`SELECT u.id, u.username, ${role_columns}, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,
-				p.nombre AS parroquia_nombre
+				${parish_label_sql('p')} AS parroquia_nombre
 			 ${from}
 			 ${where}
 			 ORDER BY u.${sort_column} ${sort_direction}
@@ -243,7 +245,7 @@ export async function create_user(db: D1Database, user: TokenUser, body: User): 
 	}
 	else if (new_parish_name)
 	{
-		const parish_taken = await db.prepare('SELECT 1 FROM parroquias WHERE nombre = ? COLLATE NOCASE').bind(new_parish_name).first();
+		const parish_taken = await db.prepare("SELECT 1 FROM parroquias WHERE nombre = ? COLLATE NOCASE AND IFNULL(ubicacion, '') = ''").bind(new_parish_name).first();
 		if (parish_taken)
 			throw new ServiceError('Ya existe una parroquia con ese nombre.', 409);
 	}
@@ -283,7 +285,7 @@ export async function create_user(db: D1Database, user: TokenUser, body: User): 
 		if (is_duplicate_error(error, 'usuarios.username'))
 			throw new ServiceError('Ese nombre de usuario ya existe.', 409);
 
-		if (is_duplicate_error(error, 'parroquias.nombre'))
+		if (is_duplicate_error(error, 'idx_parroquias_nombre_ubicacion'))
 			throw new ServiceError('Ya existe una parroquia con ese nombre.', 409);
 
 		throw error;
@@ -385,6 +387,7 @@ export async function make_principal(db: D1Database, user: TokenUser, user_id: n
 			db.prepare('UPDATE usuarios SET principal = 0 WHERE principal = 1 AND parroquia_id IS NULL'),
 			db.prepare('UPDATE usuarios SET principal = 1 WHERE id = ?').bind(user_id),
 		]);
+		await add_account_history(db, user, user_id, null, 'principal');
 		return;
 	}
 
@@ -399,6 +402,7 @@ export async function make_principal(db: D1Database, user: TokenUser, user_id: n
 		db.prepare('UPDATE usuario_parroquias SET principal = 0 WHERE principal = 1 AND parroquia_id = ?').bind(target.parroquia_id),
 		give_mark,
 	]);
+	await add_account_history(db, user, user_id, target.parroquia_id, 'principal');
 }
 
 // Agrega una parroquia adicional a la cuenta, o le cambia el rol en ella. Si entra como administrador
@@ -435,6 +439,9 @@ export async function set_parish(db: D1Database, user: TokenUser, user_id: numbe
 		)
 		.bind(user_id, parish_id, role, role, parish_id)
 		.run();
+
+	const role_label = role === 'admin_parroquia' ? 'administrador' : 'usuario';
+	await add_account_history(db, user, user_id, parish_id, 'parroquia_agregada', `Como ${role_label}`);
 }
 
 export async function remove_parish(db: D1Database, user: TokenUser, user_id: number, parish_id: number): Promise<void>
@@ -455,6 +462,7 @@ export async function remove_parish(db: D1Database, user: TokenUser, user_id: nu
 		throw new ServiceError('Es el administrador principal de esa parroquia: primero pase la marca a otro administrador.', 400);
 
 	await db.prepare('DELETE FROM usuario_parroquias WHERE usuario_id = ? AND parroquia_id = ?').bind(user_id, parish_id).run();
+	await add_account_history(db, user, user_id, parish_id, 'parroquia_quitada');
 }
 
 

@@ -7,6 +7,7 @@ import { FormPanel } from '../ui/FormPanel';
 import { FormInput, FORM_CONTROL_CLASS } from '../ui/FormInput';
 import { Field } from '../ui/Field';
 import { PasswordInput } from '../ui/PasswordInput';
+import { parish_label } from '../../../shared/parish_label';
 
 const EMPTY_USER: User = {
   username: '',
@@ -25,7 +26,7 @@ const ROLE_HELP: Record<Role, string> = {
 
 interface UserFormModalProps {
   mode: 'create' | 'edit';
-  parishes: Array<{ id: number; nombre: string }>;
+  parishes: Array<{ id: number; nombre: string; ubicacion?: string | null }>;
   /** La cuenta que se edita, tal como llegó de Electron. */
   initialValues?: User;
   /** Quién crea la cuenta: el admin general elige rol y parroquia; el de parroquia solo crea usuarios de la suya. */
@@ -169,7 +170,7 @@ export function UserFormModal({
                 </option>
                 {parishes.map((parish) => (
                   <option key={parish.id} value={parish.id}>
-                    {parish.nombre}
+                    {parish_label(parish)}
                   </option>
                 ))}
               </select>

@@ -18,7 +18,25 @@
 			"database_id": "c71c8898-568e-452e-82ac-da22e593c4bd",
 			"migrations_dir": "src/db/migrations"
 		}
-	]
+	],
+	/**
+	 * Entorno de pruebas: otro Worker y otra base, para no tocar los del padre.
+	 * Todos los comandos llevan --env pruebas, por ejemplo: npx wrangler deploy --env pruebas
+	 * Sus secretos (JWT_SECRET, DEVICE_KEY_SECRET) se ponen aparte, también con --env pruebas.
+	 */
+	"env": {
+		"pruebas": {
+			"name": "registro-sacramental-pruebas",
+			"d1_databases": [
+				{
+					"binding": "prelatura_db",
+					"database_name": "prelatura-db-pruebas",
+					"database_id": "041a7a9f-32d3-42b7-8f32-80c9b30448e7",
+					"migrations_dir": "src/db/migrations"
+				}
+			]
+		}
+	}
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

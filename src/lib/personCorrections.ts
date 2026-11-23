@@ -58,17 +58,14 @@ export function recordedChanges(person: Person, spouse?: SpouseKey): RecordedCha
     .map((change) => ({ label: labelOf(change.campo_cambio, spouse), change }));
 }
 
-/** Las personas de una partida: una en bautismo y confirmación, dos en matrimonio. */
 export function recordPeople(record: SacramentRecord): Person[] {
   if ('persona' in record) return [record.persona];
   return [record.conyuge_1, record.conyuge_2];
 }
 
-/** Lo que la tabla muestra de las anotaciones marginales de una partida. */
 export interface MarginalNoteSummary {
   hasText: boolean;
   corrections: number;
-  /** Datos que pidió cambiar un usuario y esperan al administrador. */
   pending: number;
 }
 

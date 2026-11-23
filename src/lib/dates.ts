@@ -1,3 +1,7 @@
+import { PARTIAL_DATE_PATTERN } from '../../shared/partial_date';
+
+export { PARTIAL_DATE_PATTERN };
+
 const MONTHS = [
   'enero',
   'febrero',
@@ -12,8 +16,6 @@ const MONTHS = [
   'noviembre',
   'diciembre',
 ];
-
-export const PARTIAL_DATE_PATTERN = /^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$/;
 
 /**
  * "1979-02-25" -> "25 de febrero de 1979", "1979-02" -> "febrero de 1979", "1979" -> "1979".
@@ -35,9 +37,7 @@ export function todayLongDate(): string {
   return `${today.getDate()} de ${MONTHS[today.getMonth()]} de ${today.getFullYear()}`;
 }
 
-/** Hoy como AAAA-MM-DD, en la hora de la PC (toISOString usaría la de Greenwich y de noche daría mañana). */
-export function todayIsoDate(): string {
-  const today = new Date();
-  const pad = (number: number) => String(number).padStart(2, '0');
-  return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+/** El día de un momento guardado ("2026-11-03T15:24:00Z"), en la hora de la PC: "03/11/2026". */
+export function formatTimestampDate(iso: string | null | undefined): string {
+  return iso ? new Date(iso).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 }

@@ -1,13 +1,3 @@
-// Importar las partidas del Excel del sistema anterior (ver import/legacy_excel.ts).
-//
-//   legacyImport.preview   abre el selector de archivos, lee el Excel y dice cuántas partidas son nuevas,
-//                          cuáles ya están en el sistema y qué filas no se pudieron leer. No guarda nada.
-//   legacyImport.confirm   guarda las nuevas. Las que ya están no se tocan.
-//
-// Solo lo hace el párroco (admin_parroquia), y siempre en su parroquia. Una partida "ya está" si en
-// la parroquia hay otra con el mismo tipo, libro, folio y número. Las importadas se anotan en la cola
-// y se suben al sincronizar, como si se hubieran digitado.
-
 import { BrowserWindow, dialog } from 'electron';
 import readXlsxFile from 'read-excel-file/node';
 import type { Person, Sacrament } from '../../../shared/models';
@@ -18,6 +8,7 @@ import { add_history } from '../models/history';
 import { insert_person } from '../models/person';
 import { detail_table, insert_sacrament } from '../models/sacrament';
 import type { Session } from '../models/session';
+import { add_staff_history } from '../models/staff_history';
 import { add_to_queue } from '../sync/queue';
 import { ServiceError } from '../utils/errors';
 import type { Routes } from '../utils/middleware';
@@ -109,7 +100,7 @@ function minister_key(minister: Pick<ImportedMinister, 'nombre' | 'apellido_pate
 }
 
 // El celebrante se busca por nombre entre los ministros de la parroquia; si no está, se crea.
-function minister_finder(db: LocalDatabase, parish_id: number): (minister: ImportedMinister | null) => number | null
+function minister_finder(db: LocalDatabase, session: Session, parish_id: number): (minister: ImportedMinister | null) => number | null
 {
 	const known = new Map<string, number>();
 	const rows = db.prepare('SELECT id, nombre, apellido_paterno, apellido_materno FROM ministros WHERE parroquia_id = ?').all(parish_id) as (ImportedMinister & { id: number })[];
@@ -133,6 +124,7 @@ function minister_finder(db: LocalDatabase, parish_id: number): (minister: Impor
 		const client_id = crypto.randomUUID();
 		add_to_queue(db, 'ministro', client_id, null);
 		const id = Number(insert.run(client_id, parish_id, minister.titulo, minister.nombre, minister.apellido_paterno, minister.apellido_materno).lastInsertRowid);
+		add_staff_history(db, session, 'ministro', client_id, parish_id, 'creado', 'Desde el Excel del sistema anterior');
 
 		known.set(key, id);
 		return id;
@@ -203,7 +195,7 @@ export function save_import(db: LocalDatabase, session: Session, records: Import
 	const save = db.transaction(() =>
 	{
 		const plan = plan_import(db, parish_id, { partidas: records, errores: [] });
-		const find_minister = minister_finder(db, parish_id);
+		const find_minister = minister_finder(db, session, parish_id);
 
 		for (const record of plan.nuevas)
 			save_record(db, session, parish_id, record, find_minister(record.celebrante));

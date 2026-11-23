@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { ModificationsPage } from '../pages/ModificationsPage';
 import { LoginPage } from '../pages/LoginPage';
 import { DashboardPage } from '../pages/DashboardPage';
 import { SelectParishPage } from '../pages/SelectParishPage';
@@ -132,6 +133,15 @@ export function AppRoutes() {
         element={
           <ProtectedRoute roles={['admin_parroquia']}>
             <ChangesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/modificaciones"
+        element={
+          <ProtectedRoute roles={['admin_general', 'admin_parroquia']}>
+            <ModificationsPage />
           </ProtectedRoute>
         }
       />

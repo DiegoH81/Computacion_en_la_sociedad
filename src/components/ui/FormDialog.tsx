@@ -15,6 +15,10 @@ interface FormDialogProps {
   saveLabel?: string;
   /** Falso cuando no hay nada que se pueda guardar (por ejemplo, una partida bloqueada). */
   canSave?: boolean;
+  /** Si está, aparece el botón "Guardar e imprimir": guarda igual que el otro y después abre la impresión. */
+  onSaveAndPrint?: () => void;
+  /** Solo para ver (por ejemplo, una partida anulada): sin botones de guardar, y "Cerrar" sale sin preguntar. */
+  viewOnly?: boolean;
   children: ReactNode;
 }
 
@@ -33,6 +37,8 @@ export function FormDialog({
   size = 'large',
   saveLabel = 'Guardar cambios',
   canSave = true,
+  onSaveAndPrint,
+  viewOnly = false,
   children,
 }: FormDialogProps) {
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
@@ -48,12 +54,25 @@ export function FormDialog({
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black px-5 py-2">
           <h2 className="font-bold uppercase text-white">{title}</h2>
           <div className="flex gap-2">
-            <button type="button" onClick={onSave} disabled={isLoading || !canSave} className={`${HEADER_BUTTON} bg-solid-green`}>
-              {isLoading ? 'Guardando...' : saveLabel}
-            </button>
-            <button type="button" onClick={() => setIsConfirmingCancel(true)} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-red`}>
-              Cancelar
-            </button>
+            {viewOnly ? (
+              <button type="button" onClick={onCancel} className={`${HEADER_BUTTON} bg-solid-red`}>
+                Cerrar
+              </button>
+            ) : (
+              <>
+                {onSaveAndPrint && (
+                  <button type="button" onClick={onSaveAndPrint} disabled={isLoading || !canSave} className={`${HEADER_BUTTON} bg-solid-blue`}>
+                    Guardar e imprimir
+                  </button>
+                )}
+                <button type="button" onClick={onSave} disabled={isLoading || !canSave} className={`${HEADER_BUTTON} bg-solid-green`}>
+                  {isLoading ? 'Guardando...' : saveLabel}
+                </button>
+                <button type="button" onClick={() => setIsConfirmingCancel(true)} disabled={isLoading} className={`${HEADER_BUTTON} bg-solid-red`}>
+                  Cancelar
+                </button>
+              </>
+            )}
           </div>
         </header>
 

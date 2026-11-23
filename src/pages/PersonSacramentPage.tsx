@@ -11,12 +11,15 @@ import { SinglePersonPrintView } from '../components/features/SinglePersonPrintV
 import { SacramentIndexPreview } from '../components/features/SacramentIndexPreview';
 import { CertificatePrintPreview } from '../components/print/CertificatePrintPreview';
 import { useSessionStore } from '../store/sessionStore';
+import { recordParish, useActiveParish } from '../components/features/useActiveParish';
 import { usePermissions } from '../lib/permissions';
 import { annulSacrament, restoreSacrament, saveSacrament, searchSacraments } from '../controllers/SacramentController';
 import { searchPriests } from '../controllers/PriestController';
 import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
 import { baptismPrintValues } from '../lib/printFields';
+import { baptismExtraColumns } from '../lib/recordColumns';
+import { useOpenedFromChanges } from '../lib/openFromChanges';
 
 const TITLES: Record<PersonSacramentType, { page: string; search: string; index: string }> = {
   bautismo: { page: 'Bautismo', search: 'Buscar partida de bautismo', index: 'bautismo' },
@@ -31,6 +34,7 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
   const token = useSessionStore((state) => state.token);
+  const activeParish = useActiveParish();
   const titles = TITLES[tipo];
 
   const [records, setRecords] = useState<Baptism[]>([]);
@@ -131,12 +135,17 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
     }
   }
 
+  // Desde "Cambios por aprobar" se llega con una partida para abrir; al cerrarla se vuelve allá.
+  const { backToChanges } = useOpenedFromChanges(handleOpenEdit);
+
   function closeForm() {
     setFormState({ mode: 'closed' });
     setFormError(null);
+    backToChanges();
   }
 
-  async function handleSaveForm(record: Baptism) {
+  // Con thenPrint, después de guardar se abre la impresión de la partida ya guardada (como el botón Imprimir).
+  async function handleSaveForm(record: Baptism, thenPrint: boolean) {
     setIsLoading(true);
     setFormError(null);
 
@@ -151,6 +160,8 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
 
     closeForm();
     setReloadCounter((count) => count + 1);
+
+    if (thenPrint && result.id !== undefined) await handlePrint(result.id);
   }
 
   async function handleConfirmAnnulment(motivo: string) {
@@ -187,6 +198,7 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
           { header: 'Apellido paterno', render: (record) => record.persona.apellido_paterno },
           { header: 'Apellido materno', render: (record) => record.persona.apellido_materno },
         ]}
+        extraColumns={baptismExtraColumns(titles.index)}
         isLoading={isLoading}
         currentPage={currentPage}
         totalPages={totalPages}
@@ -217,7 +229,7 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
         <PersonSacramentForm
           tipo={tipo}
           initialRecord={formState.mode === 'edit' ? formState.record : undefined}
-          parroquiaNombre={formState.mode === 'edit' ? (formState.record.sacramento.parroquia?.nombre ?? '') : (parroquiaActivaNombre ?? '')}
+          parroquia={formState.mode === 'edit' ? recordParish(formState.record.sacramento.parroquia) : activeParish}
           errorMessage={formError}
           onSave={handleSaveForm}
           onCancel={closeForm}
