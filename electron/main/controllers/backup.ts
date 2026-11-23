@@ -192,7 +192,7 @@ async function replace_database(content: BackupContent): Promise<void>
 	use_database(install_temp_database(paths, KEY_STORE, key), key);
 	write_logos(paths.directory, content.logos);
 }
-.
+
 function log_path(directory: string): string
 {
 	return path.join(directory, FILE_NAMES.backup_log);
@@ -229,16 +229,34 @@ function user_name(db: LocalDatabase, session: Session): string
 	return name ? `${name} (${user.username})` : user.username;
 }
 
-function excel_path(backup_path: string): string
-{
-	const { dir, name } = path.parse(backup_path);
-	return path.join(dir, `${name}.xlsx`);
-}
-
 function check_admin(session: Session): void
 {
 	if (session.role !== 'admin_parroquia')
 		throw new ServiceError('Solo el administrador de una parroquia puede hacer o restaurar respaldos.', 403);
+}
+
+async function export_excel(db: LocalDatabase, session: Session)
+{
+	const parish_id = session.parish_id as number;
+	const day = new Date().toISOString().slice(0, 10);
+	const options = { title: 'Guardar el Excel', defaultPath: `partidas-${day}.xlsx`, filters: [{ name: 'Excel', extensions: ['xlsx'] }] };
+	const window = parent_window();
+	const choice = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options);
+	if (choice.canceled || !choice.filePath)
+		return { cancelado: true as const };
+
+	try
+	{
+		writeFileSync(choice.filePath, build_xlsx(parish_workbook(db, parish_id)));
+	}
+	catch
+	{
+		throw new ServiceError(`No se pudo guardar el Excel: puede que "${path.basename(choice.filePath)}" esté abierto. Ciérrelo y vuelva a exportar.`, 409);
+	}
+
+	add_backup_log(database_paths().directory, { fecha: new Date().toISOString(), usuario: user_name(db, session), accion: 'exporto_excel', archivo: path.basename(choice.filePath) });
+	const records = db.prepare('SELECT COUNT(*) FROM sacramentos WHERE parroquia_id = ?').pluck().get(parish_id) as number;
+	return { cancelado: false as const, partidas: records, archivo: path.basename(choice.filePath) };
 }
 
 function read_password(value: unknown, is_new: boolean): string
@@ -319,20 +337,15 @@ export const backup_routes: Routes =
 		const directory = database_paths().directory;
 		const content = build_backup(db, directory);
 		writeFileSync(choice.filePath, await encode_backup(content, password), 'utf8');
-
-		// Junto al respaldo, el Excel de la parroquia activa para consultar (no sirve para restaurar).
-		const excel = excel_path(choice.filePath);
 		add_backup_log(directory, { fecha: new Date().toISOString(), usuario: user_name(db, session), accion: 'exporto', archivo: path.basename(choice.filePath) });
-		try
-		{
-			writeFileSync(excel, build_xlsx(parish_workbook(db, session.parish_id as number)));
-		}
-		catch
-		{
-			throw new ServiceError(`Se guardó el respaldo, pero no el Excel: puede que "${path.basename(excel)}" esté abierto. Ciérrelo y vuelva a exportar.`, 409);
-		}
 
-		return { ...summary_of(content), archivo: path.basename(choice.filePath), excel: path.basename(excel) };
+		return { ...summary_of(content), archivo: path.basename(choice.filePath) };
+	},
+
+	'backup.exportExcel': (_payload, { db, session }) =>
+	{
+		check_admin(session);
+		return export_excel(db, session);
 	},
 
 	'backup.restore': (payload: { password: unknown }, { db, session }) =>

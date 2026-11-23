@@ -15,6 +15,8 @@ interface MarginalNotesSectionProps {
   recorded?: RecordedChange[];
   /** No se pueden agregar correcciones (la partida tiene una pendiente de revisar). */
   correctionsLocked?: boolean;
+  /** El texto de las anotaciones no se puede cambiar (un usuario, cuando la partida ya tiene anotación). */
+  notesLocked?: boolean;
 }
 
 const STATE_LABELS = { pendiente: 'por aprobar', aprobado: '', rechazado: 'rechazada' } as const;
@@ -28,7 +30,9 @@ export function MarginalNotesSection({
   onCorrectionsChange,
   recorded = [],
   correctionsLocked = false,
+  notesLocked = false,
 }: MarginalNotesSectionProps) {
+  const notesReadOnly = correctionsLocked || notesLocked;
   const usedByOthers = (id: string) => corrections.filter((row) => row.id !== id).map((row) => row.field);
   const nextFree = options.find((option) => !corrections.some((row) => row.field === option.key));
 
@@ -51,12 +55,15 @@ export function MarginalNotesSection({
           <textarea
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
-            readOnly={correctionsLocked}
+            readOnly={notesReadOnly}
             maxLength={NOTES_MAX_LENGTH}
             rows={4}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-teal-600"
+            className={`w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600 ${notesReadOnly ? 'bg-slate-100 text-slate-600' : 'bg-white text-slate-800'}`}
           />
         </label>
+        {notesLocked && !correctionsLocked && (
+          <p className="mt-1 text-xs font-semibold text-pending-ink">Esta partida ya tiene anotación: solo el párroco la puede cambiar.</p>
+        )}
         {/* El límite es lo que entra en el espacio de las anotaciones del formato impreso. */}
         <p className={`mt-1 text-right text-xs ${notes.length > NOTES_MAX_LENGTH ? 'font-bold text-solid-red' : 'text-slate-600'}`}>
           {notes.length} / {NOTES_MAX_LENGTH} caracteres

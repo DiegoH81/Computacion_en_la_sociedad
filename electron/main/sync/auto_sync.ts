@@ -1,11 +1,13 @@
+import type { ConflictDetail } from '../../../shared/models';
 import type { SyncEntity } from '../../../shared/sync';
+import { compare_versions } from './conflicts';
 import { OFFLINE_TOKEN } from '../../shared';
 import { current_key, database_paths, get_database } from '../db/app_database';
 import { current_session, require_session, saved_credentials } from '../models/session';
 import { SYNC_INTERVAL_MS, SYNC_KEYS } from '../utils/config';
 import { ServiceError } from '../utils/errors';
 import * as logger from '../utils/logger';
-import { is_connection_error, remote_request, request_login } from './online';
+import { get_record, is_connection_error, remote_request, request_login } from './online';
 import { set_sync_value } from './queue';
 import { upload_key_copy } from './recovery';
 import { read_queue_summary, resolve_conflict, run_sync, type ConflictChoice } from './sync';
@@ -187,9 +189,37 @@ export function get_sync_status()
 	};
 }
 
+const ONLY_ADMINS = 'Solo un administrador de la parroquia resuelve los conflictos. Pídale que entre en esta PC.';
+
+/** Resolver un conflicto decide qué datos quedan: lo hace un administrador, no un usuario. */
+function require_admin(): void
+{
+	const session = require_session();
+	if (session.role !== 'admin_parroquia' && session.role !== 'admin_general')
+		throw new ServiceError(ONLY_ADMINS, 403);
+}
+
+/** Las dos versiones del registro en conflicto, para decidir viéndolas. Necesita internet. */
+export async function read_conflict_detail(entity: SyncEntity, client_id: string): Promise<ConflictDetail>
+{
+	require_admin();
+
+	let detail: ConflictDetail | null = null;
+	await with_token(async (token) =>
+	{
+		const response = await get_record(remote_request, token, entity, client_id);
+		detail = compare_versions(get_database(), entity, client_id, response.registro);
+	});
+
+	if (!detail)
+		throw new ServiceError('Se necesita conexión para ver las diferencias.', 0);
+
+	return detail;
+}
+
 export async function resolve_sync_conflict(entity: SyncEntity, client_id: string, choice: ConflictChoice): Promise<void>
 {
-	require_session();
+	require_admin();
 
 	let done = false;
 	await with_token(async (token) =>

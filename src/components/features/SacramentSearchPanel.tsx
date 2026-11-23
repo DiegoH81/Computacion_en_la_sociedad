@@ -4,6 +4,7 @@ import { MarginalNoteBadge } from './MarginalNoteBadge';
 import { SacramentSearchForm, type SacramentSearchValues, type SearchParish } from './SacramentSearchForm';
 import { loadParishes } from '../../controllers/UserController';
 import { useSessionStore } from '../../store/sessionStore';
+import { parish_label } from '../../../shared/parish_label';
 import { StatusBadge } from './ManagementPanel';
 import { PageNav, PanelError, PanelTitle, SortPanel, type SortDirection } from '../ui/SearchPanelParts';
 import {
@@ -22,6 +23,18 @@ export type { SortDirection } from '../ui/SearchPanelParts';
 export interface SacramentColumn<T> {
   header: string;
   render: (row: T) => ReactNode;
+}
+
+/**
+ * Un dato largo (por ejemplo, una anotación marginal) se corta en dos líneas con "…", para que la fila
+ * no crezca; al pasar el mouse se ve entero. El texto completo sigue en el formulario y en la impresión.
+ */
+function ClampedCell({ content }: { content: ReactNode }) {
+  return (
+    <div className="line-clamp-2 break-words" title={typeof content === 'string' && content ? content : undefined}>
+      {content}
+    </div>
+  );
 }
 
 // Las columnas de siempre ocupan todo el ancho de la tabla; las demás quedan a la derecha y se ven
@@ -113,10 +126,13 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
   const showParish = rows.some((row) => row.sacramento.parroquia_id !== parroquiaActivaId);
 
   function parishName(parishId: number | undefined): string {
-    return parishes.find((parish) => parish.id === parishId)?.nombre ?? '';
+    const parish = parishes.find((item) => item.id === parishId);
+    return parish ? parish_label(parish) : '';
   }
 
   const selectedRow = rows.find((row) => row.sacramento.id === selectedId)?.sacramento ?? null;
+  // Una partida anulada solo se ve y no se imprime, hasta que se rehabilite.
+  const selectedAnnulled = selectedRow?.estado === 'anulado';
 
   // Doble clic: otra forma de abrir la partida para editarla (o para pedir un cambio).
   function handleDoubleClick(id: number) {
@@ -225,7 +241,7 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                       <td className={`${PANEL_CELL} ${PANEL_NUMBER}`}>{sacramento.numero}</td>
                       {columns.map((column, index) => (
                         <td key={column.header} className={`${PANEL_CELL} ${index === 0 ? PANEL_MAIN : ''}`}>
-                          {column.render(row)}
+                          <ClampedCell content={column.render(row)} />
                         </td>
                       ))}
                       <td className={PANEL_CELL}>
@@ -235,8 +251,8 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
                         <StatusBadge label={isAnnulled ? 'Anulada' : 'Vigente'} tone={isAnnulled ? 'alert' : 'on'} />
                       </td>
                       {extraColumns.map((column) => (
-                        <td key={column.header} className={`${PANEL_CELL} break-words`}>
-                          {column.render(row)}
+                        <td key={column.header} className={PANEL_CELL}>
+                          <ClampedCell content={column.render(row)} />
                         </td>
                       ))}
                     </tr>
@@ -263,13 +279,13 @@ export function SacramentSearchPanel<T extends SacramentRecord>({
               title={selectedRow ? undefined : 'Seleccione una partida'}
               className={`${PANEL_ACTION_BUTTON} bg-darker-app`}
             >
-              {editLabel}
+              {selectedAnnulled ? 'Ver' : editLabel}
             </button>
             <button
               type="button"
-              disabled={!selectedRow}
+              disabled={!selectedRow || selectedAnnulled}
               onClick={() => selectedRow && onPrint(selectedRow.id as number)}
-              title={selectedRow ? undefined : 'Seleccione una partida'}
+              title={!selectedRow ? 'Seleccione una partida' : selectedAnnulled ? 'Una partida anulada no se imprime' : undefined}
               className={`${PANEL_ACTION_BUTTON} bg-solid-purple`}
             >
               Imprimir

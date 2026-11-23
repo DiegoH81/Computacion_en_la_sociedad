@@ -19,6 +19,7 @@ import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
 import { baptismPrintValues } from '../lib/printFields';
 import { baptismExtraColumns } from '../lib/recordColumns';
+import { useOpenedFromChanges } from '../lib/openFromChanges';
 
 const TITLES: Record<PersonSacramentType, { page: string; search: string; index: string }> = {
   bautismo: { page: 'Bautismo', search: 'Buscar partida de bautismo', index: 'bautismo' },
@@ -134,9 +135,13 @@ export function PersonSacramentPage({ tipo }: { tipo: PersonSacramentType }) {
     }
   }
 
+  // Desde "Cambios por aprobar" se llega con una partida para abrir; al cerrarla se vuelve allá.
+  const { backToChanges } = useOpenedFromChanges(handleOpenEdit);
+
   function closeForm() {
     setFormState({ mode: 'closed' });
     setFormError(null);
+    backToChanges();
   }
 
   // Con thenPrint, después de guardar se abre la impresión de la partida ya guardada (como el botón Imprimir).

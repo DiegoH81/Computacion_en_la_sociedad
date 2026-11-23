@@ -13,6 +13,7 @@ export const SYNC_KEYS =
 	last_sync: 'ultima_sync',
 	notice: 'aviso',
 	key_registered: 'clave_registrada',
+	staff_history_cursor: 'cursor_historial',
 } as const;
 
 

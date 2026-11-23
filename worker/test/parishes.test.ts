@@ -69,11 +69,15 @@ describe('rutas /api/parishes para administradores', () => {
 
     const repeated = await api('/api/parishes', { method: 'POST', token: adminToken, body: { nombre: 'SAN PEDRO' } });
     expect(repeated.status).toBe(409);
-    expect(await repeated.json()).toEqual({ message: 'Ya existe una parroquia con ese nombre.' });
+    expect(await repeated.json()).toEqual({ message: 'Ya existe una parroquia con ese nombre en esa ubicación.' });
 
     // Al editar, conservar su propio nombre no cuenta como repetido.
     expect((await api('/api/parishes/1', { method: 'PUT', token: adminToken, body: { nombre: 'San Pedro', ubicacion: 'Puno' } })).status).toBe(200);
     expect((await api('/api/parishes/999', { method: 'PUT', token: adminToken, body: { nombre: 'X' } })).status).toBe(404);
+
+    // El mismo nombre en otro lugar sí se puede (hay tres "San Francisco de Asís"); en el mismo lugar, no.
+    expect((await api('/api/parishes', { method: 'POST', token: adminToken, body: { nombre: 'San Pedro', ubicacion: 'Ayaviri' } })).status).toBe(201);
+    expect((await api('/api/parishes', { method: 'POST', token: adminToken, body: { nombre: 'san pedro', ubicacion: 'AYAVIRI' } })).status).toBe(409);
   });
 
   it('un usuario de parroquia no las gestiona, y sin token se pide sesión', async () => {

@@ -19,6 +19,7 @@ import { SacramentService } from '../services/SacramentService';
 import { ParishService } from '../services/ParishService';
 import { marriagePrintValues } from '../lib/printFields';
 import { marriageExtraColumns } from '../lib/recordColumns';
+import { useOpenedFromChanges } from '../lib/openFromChanges';
 
 const personName = (person: Person) => `${person.nombres} ${person.apellido_paterno} ${person.apellido_materno}`;
 
@@ -123,9 +124,13 @@ export function MarriagesPage() {
     }
   }
 
+  // Desde "Cambios por aprobar" se llega con una partida para abrir; al cerrarla se vuelve allá.
+  const { backToChanges } = useOpenedFromChanges(handleOpenEdit);
+
   function closeForm() {
     setFormState({ mode: 'closed' });
     setFormError(null);
+    backToChanges();
   }
 
   // Con thenPrint, después de guardar se abre la impresión de la partida ya guardada (como el botón Imprimir).

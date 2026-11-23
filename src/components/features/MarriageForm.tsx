@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Marriage, Minister, Person } from '../../../shared/models';
+import { parish_label } from '../../../shared/parish_label';
 import { emptyMarriage } from '../../lib/emptyRecords';
 import { newChanges, personOptions, recordedChanges, type CorrectionDraft } from '../../lib/personCorrections';
 import { pendingRequests, requestedBy, usesRequestedValues, withRequestedValues } from '../../lib/changeRequests';
@@ -69,13 +70,17 @@ export function MarriageForm({
   onlyCorrections = false,
 }: MarriageFormProps) {
   // Una partida nueva trae como lugar del matrimonio la parroquia actual (se puede cambiar).
-  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parroquia.nombre || null });
+  const [record, setRecord] = useState<Marriage>(initialRecord ?? { ...emptyMarriage(), lugar: parish_label(parroquia) || null });
   const [drafts, setDrafts] = useState<CorrectionDraft[]>([]);
   const recorded = [...recordedChanges(record.conyuge_1, 'conyuge_1'), ...recordedChanges(record.conyuge_2, 'conyuge_2')];
   const isEditing = initialRecord !== undefined;
   const pending = isEditing ? pendingRequests(record) : [];
+  // Una partida anulada solo se ve: no admite cambios.
+  const viewOnly = initialRecord?.sacramento.estado === 'anulado';
   // Un usuario con un pedido esperando no puede pedir otro: el formulario queda solo para ver.
-  const lockFields = onlyCorrections && pending.length > 0;
+  const lockFields = viewOnly || (onlyCorrections && pending.length > 0);
+  // Un usuario no cambia una anotación que ya está escrita (solo llena la que está en blanco).
+  const notesLocked = onlyCorrections && Boolean(initialRecord?.sacramento.anotaciones?.trim());
   // Abierto cuando hay que confirmar que se descarta un pedido; recuerda si después se imprime.
   const [confirmingDiscard, setConfirmingDiscard] = useState<{ thenPrint: boolean } | null>(null);
   const notes = useMarginalNotes(Boolean(record.sacramento.anotaciones || recorded.length || (isEditing && onlyCorrections)));
@@ -114,7 +119,8 @@ export function MarriageForm({
 
   return (
     <FormDialog
-      title={!isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
+      title={viewOnly ? 'Ver partida anulada' : !isEditing ? 'Agregar partida' : onlyCorrections ? 'Pedir cambio' : 'Editar partida'}
+      viewOnly={viewOnly}
       onSave={() => handleSave(false)}
       // Un pedido de cambio no modifica la partida: imprimirla ahora sacaría los datos de antes.
       onSaveAndPrint={isEditing && onlyCorrections ? undefined : () => handleSave(true)}
@@ -124,10 +130,12 @@ export function MarriageForm({
       saveLabel={isEditing && onlyCorrections ? 'Pedir cambio' : undefined}
       canSave={!lockFields}
       notice={
-        <>
-          {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
-          <DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />
-        </>
+        !viewOnly && (
+          <>
+            {isEditing && <ChangeRequestNotice record={record} onlyRequests={onlyCorrections} onUseValues={applyRequestedValues} />}
+            <DuplicateWarning sacramento="matrimonio" matches={duplicates.matches} total={duplicates.total} />
+          </>
+        )
       }
     >
       {!lockFields && <RequiredNote />}
@@ -185,6 +193,7 @@ export function MarriageForm({
           onCorrectionsChange={setDrafts}
           recorded={recorded}
           correctionsLocked={lockFields}
+          notesLocked={notesLocked}
         />
       )}
 

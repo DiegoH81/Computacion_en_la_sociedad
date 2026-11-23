@@ -4,25 +4,28 @@ import { useSessionStore } from '../../store/sessionStore';
 import type { Parish } from '../../../shared/models';
 import type { RecordParish } from './SacramentRegisterPanel';
 
-/** La parroquia que se está viendo, con su ubicación: para mostrarla en una partida nueva. */
+/**
+ * La parroquia que se está viendo, con su nombre y su ubicación por separado: para mostrarla en una
+ * partida nueva. (La sesión guarda "Nombre (Lugar)", que es lo que se ve en el menú.)
+ */
 export function useActiveParish(): RecordParish {
   const parroquiaActivaId = useSessionStore((state) => state.parroquiaActivaId);
   const parroquiaActivaNombre = useSessionStore((state) => state.parroquiaActivaNombre);
-  const [ubicacion, setUbicacion] = useState<string | null>(null);
+  const [parish, setParish] = useState<RecordParish | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     loadParishes().then((result) => {
       if (cancelled || !result.success) return;
-      const parish = result.parishes?.find((item) => item.id === parroquiaActivaId);
-      setUbicacion(parish?.ubicacion ?? null);
+      const found = result.parishes?.find((item) => item.id === parroquiaActivaId);
+      setParish(found ? { nombre: found.nombre, ubicacion: found.ubicacion ?? null } : null);
     });
     return () => {
       cancelled = true;
     };
   }, [parroquiaActivaId]);
 
-  return { nombre: parroquiaActivaNombre ?? '', ubicacion };
+  return parish ?? { nombre: parroquiaActivaNombre ?? '', ubicacion: null };
 }
 
 /** La parroquia de una partida guardada (puede no venir, en una partida a medio cargar). */

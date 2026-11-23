@@ -10,7 +10,7 @@ function count(total: number, singular: string, plural: string): string {
   return `${total} ${total === 1 ? singular : plural}`;
 }
 
-const ACTIONS: Record<BackupLogEntry['accion'], string> = { exporto: 'Exportó', restauro: 'Restauró' };
+const ACTIONS: Record<BackupLogEntry['accion'], string> = { exporto: 'Exportó respaldo', restauro: 'Restauró respaldo', exporto_excel: 'Exportó Excel' };
 const LOG_ROWS = 5;
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
@@ -33,9 +33,9 @@ function BackupLog() {
 
   return (
     <div className="flex flex-col gap-1">
-      <h3 className="text-sm font-semibold text-slate-700">Últimos respaldos en esta PC</h3>
+      <h3 className="text-sm font-semibold text-slate-700">Últimos respaldos y Excel en esta PC</h3>
       {entries.length === 0 ? (
-        <p className="text-sm text-slate-500">Todavía no se exportó ni restauró ningún respaldo.</p>
+        <p className="text-sm text-slate-500">Todavía no se exportó ni restauró nada.</p>
       ) : (
         <div className="max-h-40 overflow-auto rounded-md border border-slate-200">
           <table className="w-full text-left text-xs text-slate-700">
@@ -82,9 +82,7 @@ const TEXTS: Record<BackupMode, { title: string; intro: string; action: string }
     title: 'Exportar respaldo',
     intro:
       'Se guarda en un archivo todo lo que tiene esta PC, también lo que todavía no se subió al servidor. ' +
-      'Elija una contraseña: sin ella el archivo no se puede abrir. Anótela en un lugar seguro, porque no se puede recuperar. ' +
-      'Al lado se guarda un Excel con las partidas y el historial de esta parroquia, para consultar. El Excel no lleva ' +
-      'contraseña y no sirve para restaurar.',
+      'Elija una contraseña: sin ella el archivo no se puede abrir. Anótela en un lugar seguro, porque no se puede recuperar.',
     action: 'Elegir dónde guardar',
   },
   restore: {
@@ -138,8 +136,8 @@ export function BackupDialog({ mode, onClose, onRestored }: BackupDialogProps) {
       const records = count(result.partidas, 'partida', 'partidas');
       const pending = result.pendientes > 0 ? ` Incluye ${count(result.pendientes, 'cambio pendiente', 'cambios pendientes')} de subir al servidor.` : '';
       if (isExport) {
-        const files = result.archivo && result.excel ? ` Archivos: ${result.archivo} y ${result.excel}.` : '';
-        setDoneMessage(`Respaldo guardado: ${records}.${pending}${files}`);
+        const file = result.archivo ? ` Archivo: ${result.archivo}.` : '';
+        setDoneMessage(`Respaldo guardado: ${records}.${pending}${file}`);
       } else {
         setIsRestored(true);
         setDoneMessage(`Respaldo restaurado: ${records}.${pending} Ya puede iniciar sesión.`);

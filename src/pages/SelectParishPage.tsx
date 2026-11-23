@@ -4,6 +4,7 @@ import { ParishSelector } from '../components/features/ParishSelector';
 import { useSessionStore } from '../store/sessionStore';
 import { AuthService, type Parish } from '../services/AuthService';
 import { ApiError } from '../lib/apiClient';
+import { parish_label } from '../../shared/parish_label';
 
 // Elegir la parroquia que se ve. Si es una de las suyas, también pasa a ser la parroquia de trabajo
 // (donde registra y edita, con el rol que tiene en ella). Las demás solo se consultan.
@@ -47,7 +48,7 @@ export function SelectParishPage() {
       }
     }
 
-    setParroquiaActiva(parish.id, parish.nombre);
+    setParroquiaActiva(parish.id, parish_label(parish));
     navigate('/dashboard');
   }
 

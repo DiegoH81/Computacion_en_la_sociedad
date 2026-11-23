@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { parish_label } from '../../../shared/parish_label';
 
 interface Parish {
   id: number;
   nombre: string;
+  ubicacion?: string | null;
 }
 
 interface ParishSelectorProps {
@@ -27,7 +29,6 @@ export function ParishSelector({
     .map((id) => parishes.find((parish) => parish.id === id))
     .filter((parish): parish is Parish => parish !== undefined);
   const otherParishes = parishes.filter((parish) => !ownParishIds.includes(parish.id));
-  const ownLabel = ownParishes.length > 1 ? '(trabajo aquí)' : '(mi parroquia)';
 
   function handleConfirm() {
     if (selectedId !== null) {
@@ -52,12 +53,12 @@ export function ParishSelector({
         </option>
         {ownParishes.map((parish) => (
           <option key={parish.id} value={parish.id} className="bg-emerald-100 font-semibold text-emerald-900">
-            ★ {parish.nombre} {ownLabel}
+            {parish_label(parish)}
           </option>
         ))}
         {otherParishes.map((parish) => (
           <option key={parish.id} value={parish.id}>
-            {parish.nombre}
+            {parish_label(parish)}
           </option>
         ))}
       </select>
@@ -70,13 +71,9 @@ export function ParishSelector({
           disabled={isLoading || selectedId === parish.id}
           className="w-fit text-left text-xs font-medium text-emerald-800 hover:underline disabled:no-underline disabled:opacity-70"
         >
-          ★ {ownParishes.length > 1 ? 'Trabajar en' : 'Mi parroquia'}: {parish.nombre}
+          {ownParishes.length > 1 ? 'Trabajar en' : 'Mi parroquia'}: {parish_label(parish)}
         </button>
       ))}
-
-      {ownParishes.length > 0 && (
-        <p className="text-xs text-slate-600">En las parroquias sin ★ solo puede consultar.</p>
-      )}
 
       <button
         type="button"

@@ -50,7 +50,7 @@ export interface ManagementSearch {
   onPageChange: (page: number) => void;
   /** Filtro por parroquia. null es "todas". */
   parishFilter?: {
-    parishes: { id: number; nombre: string }[];
+    parishes: { id: number; nombre: string; ubicacion?: string | null }[];
     value: number | null;
     onChange: (parishId: number | null) => void;
   };

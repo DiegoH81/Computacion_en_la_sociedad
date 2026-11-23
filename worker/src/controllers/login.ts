@@ -6,13 +6,14 @@ import type { UserRecord } from '../models/user';
 import { sign_jwt, verify_password } from '../utils/crypto';
 import { require_json_body } from '../utils/helpers';
 import { ServiceError, type AppEnv } from '../utils/middleware';
+import { parish_label_sql } from '../../../shared/parish_label';
 
 export async function login(db: D1Database, jwt_secret: string, username: string, password: string): Promise<LoginResponse>
 {
 	const user = await db
 		.prepare(
 			`SELECT u.id, u.password_hash, u.nombre, u.apellido_paterno, u.apellido_materno, u.rol, u.parroquia_id, u.activo,
-				p.nombre AS parroquia_nombre
+				${parish_label_sql('p')} AS parroquia_nombre
 			 FROM usuarios u
 			 LEFT JOIN parroquias p ON p.id = u.parroquia_id
 			 WHERE u.username = ?`,
@@ -26,7 +27,7 @@ export async function login(db: D1Database, jwt_secret: string, username: string
 	const token = await sign_jwt({ usuarioId: user.id, rol: user.rol, parroquiaId: user.parroquia_id }, jwt_secret);
 	const parishes = await db
 		.prepare(
-			`SELECT m.parroquia_id AS id, p.nombre, m.rol
+			`SELECT m.parroquia_id AS id, ${parish_label_sql('p')} AS nombre, m.rol
 			 FROM membresias m
 			 JOIN parroquias p ON p.id = m.parroquia_id
 			 WHERE m.usuario_id = ?

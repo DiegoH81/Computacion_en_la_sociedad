@@ -1,23 +1,3 @@
-// Carga los datos reales de la prelatura, para hacer pruebas, en la base local del Worker o en la base
-// online de PRUEBAS (nunca en la del padre):
-//
-//   1. Borra todo menos el administrador general (la cuenta con id 1 se queda con su contraseña; con
-//      --admin-password se crea o se reemplaza como "admin_general" con esa contraseña).
-//   2. Crea las 21 parroquias de la lista "LISTA DE PARROQUIAS Y SACERDOTES", como "Nombre (Lugar)".
-//   3. Pone los 19 ministros activos en cada parroquia (Monseñor, Presbítero, Diácono).
-//   4. Crea las cuentas: Jhon_1 (contraseña "ayaviri") es el administrador principal de Crucero y de
-//      Usicayos; cada otra parroquia tiene admin_<lugar> con el lugar como contraseña ("ayaviri").
-//   5. Importa el Excel del sistema anterior en Nuestra Señora del Rosario (Crucero), con las mismas
-//      reglas que la app (electron/main/import/legacy_excel.ts).
-//
-// Uso, desde worker/:
-//   node src/scripts/seed-prelatura.mjs --excel="../EXPORTADO - NUESTRA SÑORA DEL ROSARIO (CRUCERO).xlsx"
-//
-// Por defecto trabaja en la base local (para otra carpeta de datos: --persist-to=carpeta).
-// En la base online de pruebas (recién migrada), con el administrador general nuevo:
-//   node src/scripts/seed-prelatura.mjs --remote --env=pruebas --admin-password=<clave> --excel="..."
-// --remote solo se acepta con --env=pruebas: así no se puede borrar la base del padre por error.
-
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -189,7 +169,7 @@ const excel = read_workbook(await readXlsxFile(path.resolve(options.excel)));
 const statements = [];
 
 // 1. Borrar todo, de las tablas hijas a las padres. El administrador general (id 1) se queda.
-const TABLES_TO_EMPTY = ['cambios_persona', 'historial_campos', 'historial_partidas', 'solicitudes_cambio', 'bautismos', 'confirmaciones', 'matrimonios', 'sync_feed', 'sacramentos', 'personas', 'ministros', 'dispositivos', 'usuario_parroquias'];
+const TABLES_TO_EMPTY = ['historial_ministros_cuentas', 'cambios_persona', 'historial_campos', 'historial_partidas', 'solicitudes_cambio', 'bautismos', 'confirmaciones', 'matrimonios', 'sync_feed', 'sacramentos', 'personas', 'ministros', 'dispositivos', 'usuario_parroquias'];
 for (const table of TABLES_TO_EMPTY)
 	statements.push(`DELETE FROM ${table};`);
 
@@ -215,7 +195,7 @@ for (const parish of PARISHES)
 {
 	statements.push(
 		`INSERT INTO parroquias (id, nombre, ubicacion, activa)
-		 VALUES (${parish.id}, ${sql_value(`${parish.nombre} (${parish.lugar})`)}, ${sql_value(`${parish.lugar}, ${parish.provincia}`)}, 1);`,
+		 VALUES (${parish.id}, ${sql_value(parish.nombre)}, ${sql_value(parish.lugar)}, 1);`,
 	);
 }
 
