@@ -8,20 +8,6 @@ sincroniza con un servidor en Cloudflare, y así todas las parroquias comparten 
 
 ---
 
-## Contenido
-
-1. [Cómo está armado](#cómo-está-armado)
-2. [Uso de la aplicación](#uso-de-la-aplicación)
-3. [Desarrollo](#desarrollo)
-4. [Pruebas automáticas](#pruebas-automáticas)
-5. [Servidores: local, pruebas y producción](#servidores-local-pruebas-y-producción)
-6. [Datos de prueba (capacitación)](#datos-de-prueba-capacitación)
-7. [El instalador](#el-instalador)
-8. [Mantenimiento y recuperación](#mantenimiento-y-recuperación)
-9. [Cuidados importantes](#cuidados-importantes)
-
----
-
 ## Estructura
 
 ```
