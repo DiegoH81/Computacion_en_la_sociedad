@@ -1,4 +1,5 @@
 import type { AdditionalParish, NameColumn, SearchFilters, SearchPage, User } from '../../../shared/models';
+import type { Role } from '../../../shared/sync';
 import {
 	can_manage_users,
 	cannot_change_parishes,
@@ -14,6 +15,7 @@ import {
 } from '../../../shared/users';
 import type { LocalDatabase } from '../db/database';
 import { current_session, type Session } from '../models/session';
+import { add_staff_history, changes_text } from '../models/staff_history';
 import { actor_in_parish, read_target_in_parish, type LocalTarget } from '../models/user';
 import { sync_now } from '../sync/auto_sync';
 import { remote_request } from '../sync/online';
@@ -23,6 +25,7 @@ import { create_server_hash } from '../utils/crypto';
 import { ServiceError } from '../utils/errors';
 import { clean_text, page_of, sort_direction } from '../utils/helpers';
 import type { Routes } from '../utils/middleware';
+import { parish_label_sql } from '../../../shared/parish_label';
 
 const NOT_FOUND = 'Usuario no encontrado.';
 
@@ -33,6 +36,13 @@ const SORT_COLUMNS: Record<NameColumn, string> =
 	nombres: 'nombre',
 	apellido_paterno: 'apellido_paterno',
 	apellido_materno: 'apellido_materno',
+};
+
+const ROLE_NAMES: Record<Role, string> =
+{
+	admin_general: 'Administrador general',
+	admin_parroquia: 'Administrador de parroquia',
+	usuario: 'Usuario',
 };
 
 function check_can_manage(session: Session): void
@@ -101,7 +111,7 @@ function read_additional_parishes(db: LocalDatabase, user_id: number): Additiona
 {
 	return db
 		.prepare(
-			`SELECT up.parroquia_id, p.nombre AS parroquia_nombre, up.rol, up.principal
+			`SELECT up.parroquia_id, ${parish_label_sql('p')} AS parroquia_nombre, up.rol, up.principal
 			 FROM usuario_parroquias up
 			 JOIN parroquias p ON p.id = up.parroquia_id
 			 WHERE up.usuario_id = ?
@@ -151,7 +161,7 @@ export function search_users(db: LocalDatabase, session: Session, filters: Searc
 	const rows = db
 		.prepare(
 			`SELECT u.id, u.username, ${role_columns}, u.parroquia_id AS parroquia_origen_id,
-				u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, p.nombre AS parroquia_nombre
+				u.nombre, u.apellido_paterno, u.apellido_materno, u.activo, ${parish_label_sql('p')} AS parroquia_nombre
 			 ${from}
 			 ${where}
 			 ORDER BY u.${sort_column} ${sort_direction(filters)}, u.id
@@ -217,6 +227,7 @@ export async function create_user(db: LocalDatabase, session: Session, user: Use
 		).run(provisional_id, client_id, parish_id, username, role, names.nombre, names.apellido_paterno, names.apellido_materno, becomes_principal(db, role, parish_id));
 
 		save_password(db, provisional_id, hash);
+		add_staff_history(db, session, 'usuario', client_id, parish_id, 'creado', `${ROLE_NAMES[role]}: ${username}`);
 		return provisional_id;
 	});
 
@@ -260,14 +271,29 @@ export async function update_user(db: LocalDatabase, session: Session, user: Use
 	const hash = password ? await create_server_hash(password) : null;
 	const new_username = username_change(db, id, user?.username);
 
+	const before = db.prepare('SELECT parroquia_id, username, nombre, apellido_paterno, apellido_materno FROM usuarios WHERE id = ?').get(id) as
+		{ parroquia_id: number | null; username: string; nombre: string; apellido_paterno: string; apellido_materno: string };
+	const detail = changes_text([
+		{ label: 'Nombre de usuario', before: before.username, after: new_username ?? before.username },
+		{ label: 'Nombre', before: before.nombre, after: names.nombre },
+		{ label: 'Apellido paterno', before: before.apellido_paterno, after: names.apellido_paterno },
+		{ label: 'Apellido materno', before: before.apellido_materno, after: names.apellido_materno },
+	]);
+
 	const update = db.transaction(() =>
 	{
 		add_to_queue(db, 'usuario', target.client_id, target.version);
 		db.prepare('UPDATE usuarios SET nombre = ?, apellido_paterno = ?, apellido_materno = ? WHERE id = ?')
 			.run(names.nombre, names.apellido_paterno, names.apellido_materno, id);
 
+		if (detail)
+			add_staff_history(db, session, 'usuario', target.client_id, before.parroquia_id, 'editado', detail);
+
 		if (hash)
+		{
 			save_password(db, id, hash);
+			add_staff_history(db, session, 'usuario', target.client_id, before.parroquia_id, 'contrasena');
+		}
 
 		if (new_username)
 		{
@@ -300,6 +326,8 @@ export function toggle_user_active(db: LocalDatabase, session: Session, user_id:
 	{
 		add_to_queue(db, 'usuario', target.client_id, target.version);
 		db.prepare('UPDATE usuarios SET activo = NOT activo WHERE id = ?').run(user_id);
+		const origin = db.prepare('SELECT parroquia_id FROM usuarios WHERE id = ?').pluck().get(user_id) as number | null;
+		add_staff_history(db, session, 'usuario', target.client_id, origin, target.activo === 1 ? 'deshabilitado' : 'habilitado');
 
 		if (target.activo === 1)
 			db.prepare('DELETE FROM credenciales_locales WHERE usuario_id = ?').run(user_id);

@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BackupDialog, type BackupMode } from '../components/features/BackupDialog';
+import { DataTransferDialog, type DataTransferChoice } from '../components/features/DataTransferDialog';
 import { LegacyImportDialog } from '../components/features/LegacyImportDialog';
 import { MainMenuLayout } from '../components/features/MainMenuLayout';
 import { ParishLogoSettings } from '../components/features/ParishLogoSettings';
 import { handleLogout } from '../controllers/AuthController';
+import { loadIsPrincipal } from '../controllers/UserController';
 import { ApiError } from '../lib/apiClient';
 import { ROLE_LABELS, usePermissions } from '../lib/permissions';
 import { ImportService } from '../services/ImportService';
@@ -42,9 +44,21 @@ export function SettingsPage() {
   // propia. El administrador general no tiene parroquia: sus opciones valen en cualquiera.
   const isOtherParish = rol !== 'admin_general' && parroquiaActivaId !== parroquiaId;
 
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [backupMode, setBackupMode] = useState<BackupMode | null>(null);
   const [packageMessage, setPackageMessage] = useState<{ text: string; isError: boolean } | null>(null);
+  const [isPrincipal, setIsPrincipal] = useState(false);
+
+  // "Modificaciones" lo ven el administrador principal de la parroquia y el administrador general.
+  useEffect(() => {
+    let cancelled = false;
+    if (permissions.canAdminister) loadIsPrincipal().then((principal) => !cancelled && setIsPrincipal(principal));
+    return () => {
+      cancelled = true;
+    };
+  }, [permissions.canAdminister]);
+  const canSeeModifications = rol === 'admin_general' || (permissions.canAdminister && isPrincipal);
 
   async function handleExportPackage() {
     setPackageMessage(null);
@@ -58,6 +72,14 @@ export function SettingsPage() {
     } catch (error) {
       setPackageMessage({ text: error instanceof ApiError ? error.message : 'No se pudo generar el paquete inicial.', isError: true });
     }
+  }
+
+  // Cada opción de "Exportar e importar" abre su propia ventana en lugar de esta.
+  function handleTransferChoice(choice: DataTransferChoice) {
+    setIsTransferOpen(false);
+    if (choice === 'exportBackup') setBackupMode('export');
+    if (choice === 'restoreBackup') setBackupMode('restore');
+    if (choice === 'importLegacy') setIsImporting(true);
   }
 
   // Restaurar cierra la sesión en Electron: las cuentas pueden ser otras, hay que volver a entrar.
@@ -100,11 +122,7 @@ export function SettingsPage() {
               {/* Importar y exportar datos: solo el administrador de la parroquia, en su propia parroquia
                   (no el administrador general). */}
               {permissions.canAdminister && (
-                <>
-                  <SettingsButton label="Importar Excel del sistema anterior" onClick={() => setIsImporting(true)} />
-                  <SettingsButton label="Exportar respaldo" onClick={() => setBackupMode('export')} />
-                  <SettingsButton label="Restaurar respaldo" onClick={() => setBackupMode('restore')} />
-                </>
+                <SettingsButton label="Exportar e importar" onClick={() => setIsTransferOpen(true)} />
               )}
               {rol === 'admin_general' && (
                 <SettingsButton label="Generar paquete inicial" onClick={handleExportPackage} />
@@ -124,11 +142,15 @@ export function SettingsPage() {
               {permissions.canAdminister && (
                 <SettingsButton label="Cambios por aprobar" onClick={() => navigate('/cambios')} />
               )}
+              {canSeeModifications && (
+                <SettingsButton label="Modificaciones" onClick={() => navigate('/modificaciones')} />
+              )}
             </div>
           </div>
         )}
       </div>
 
+      {isTransferOpen && <DataTransferDialog onChoose={handleTransferChoice} onClose={() => setIsTransferOpen(false)} />}
       {isImporting && <LegacyImportDialog parroquiaNombre={parroquiaActivaNombre ?? ''} onClose={() => setIsImporting(false)} />}
       {backupMode && <BackupDialog mode={backupMode} onClose={() => setBackupMode(null)} onRestored={handleRestored} />}
     </MainMenuLayout>

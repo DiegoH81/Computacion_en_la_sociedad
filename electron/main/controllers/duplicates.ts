@@ -5,6 +5,7 @@ import { is_sacrament_type, people_of } from '../models/sacrament';
 import { ServiceError } from '../utils/errors';
 import { full_name } from '../utils/helpers';
 import type { Routes } from '../utils/middleware';
+import { parish_label_sql } from '../../../shared/parish_label';
 
 interface Candidate
 {
@@ -236,7 +237,7 @@ export function find_duplicates(db: LocalDatabase, type: SacramentType, exclude_
 	const excluded_id = Number.isInteger(exclude_sacrament_id) ? exclude_sacrament_id : 0;
 	const candidates = db
 		.prepare(
-			`SELECT s.id, sub.persona_id, s.libro, s.folio, s.numero, par.nombre AS parroquia_nombre,
+			`SELECT s.id, sub.persona_id, s.libro, s.folio, s.numero, ${parish_label_sql('par')} AS parroquia_nombre,
 				pe.dni, pe.nombres, pe.apellido_paterno, pe.apellido_materno, pe.fecha_nacimiento, pe.padre, pe.madre
 			 FROM (${people_of(type)}) sub
 			 JOIN sacramentos s ON s.id = sub.sacramento_id

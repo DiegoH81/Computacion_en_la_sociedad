@@ -2,9 +2,10 @@
 //
 //   read_page        registers that changed after CURSOR
 //   read_record      one register to solve a conlict
-//   read_reference   parrishes, ministers and users
+//   read_reference   parrishes, ministers, users and the staff history (ministers and accounts)
 
 import type { ChangeRequestData, HistoryData, HistoryFieldData, PersonCorrection, PersonData, RecordData } from '../../../shared/sync';
+import { read_staff_history_since } from '../models/staff_history';
 import { detail_columns } from '../../../shared/record_fields';
 import type { JsonObject } from '../utils/helpers';
 
@@ -224,7 +225,7 @@ export async function read_record(db: D1Database, entity: string, client_id: str
 	return rows[0].record;
 }
 
-export async function read_reference(db: D1Database)
+export async function read_reference(db: D1Database, history_since: number = 0)
 {
 	const [parishes, ministers, users, memberships] = await db.batch([
 		db.prepare('SELECT id, nombre, ubicacion, activa FROM parroquias'),
@@ -233,10 +234,14 @@ export async function read_reference(db: D1Database)
 		db.prepare('SELECT usuario_id, parroquia_id, rol, principal FROM usuario_parroquias ORDER BY usuario_id, parroquia_id'),
 	]);
 
+	const history = await read_staff_history_since(db, history_since);
+
 	return {
 		parroquias: parishes.results,
 		ministros: ministers.results,
 		usuarios: users.results,
 		usuario_parroquias: memberships.results,
+		historial_ministros_cuentas: history.filas,
+		historial_cursor: history.cursor,
 	};
 }

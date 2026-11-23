@@ -1,4 +1,4 @@
-//   GET  /api/reference                                Parishes, ministers, users
+//   GET  /api/reference?historial_desde=N              Parishes, ministers, users, staff history after id N
 //   POST /api/sync/push         { cambios: [...] }  ->  { resultados: [...] }
 //   GET  /api/sync/pull?cursor=N                    ->  { partidas, cursor, hayMas }
 //   GET  /api/sync/record?entidad=...&client_id=... ->  { registro }
@@ -14,7 +14,8 @@ export const sync_router = new Hono<AppEnv>();
 
 sync_router.get('/reference', async (c) =>
 {
-	return c.json(await read_reference(c.env.prelatura_db));
+	const since = Number(c.req.query('historial_desde'));
+	return c.json(await read_reference(c.env.prelatura_db, Number.isInteger(since) && since > 0 ? since : 0));
 });
 
 sync_router.post('/sync/push', async (c) =>

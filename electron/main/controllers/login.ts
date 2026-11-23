@@ -12,6 +12,7 @@ import { create_verifier, matches_verifier } from '../utils/crypto';
 import { ServiceError } from '../utils/errors';
 import { full_name } from '../utils/helpers';
 import type { PublicRoutes, Routes } from '../utils/middleware';
+import { parish_label_sql } from '../../../shared/parish_label';
 
 
 // Without internet, verifier
@@ -37,7 +38,7 @@ export async function verify_offline(db: LocalDatabase, username: string, passwo
 	const row = db
 		.prepare(
 			`SELECT u.id, u.rol, u.parroquia_id, u.nombre, u.apellido_paterno, u.apellido_materno, u.activo,
-				c.verificador, p.nombre AS parroquia_nombre
+				c.verificador, ${parish_label_sql('p')} AS parroquia_nombre
 			 FROM usuarios u
 			 LEFT JOIN credenciales_locales c ON c.usuario_id = u.id
 			 LEFT JOIN parroquias p ON p.id = u.parroquia_id

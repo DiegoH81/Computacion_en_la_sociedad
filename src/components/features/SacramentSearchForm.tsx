@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from 'react';
 import type { RangeFilter, SearchFilters } from '../../../shared/models';
+import { parish_label } from '../../../shared/parish_label';
 
 // La búsqueda de partidas: los tres campos de nombre, y una búsqueda avanzada que se abre en una
 // ventana aparte (para no empujar la tabla hacia abajo) con:
@@ -156,7 +157,8 @@ export function SacramentSearchForm({ isLoading, godparentLabel, parishes, curre
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
 
   const advancedCount = countAdvanced(values, currentParishId);
-  const currentParishName = parishes.find((parish) => parish.id === currentParishId)?.nombre ?? 'la parroquia actual';
+  const currentParish = parishes.find((parish) => parish.id === currentParishId);
+  const currentParishName = currentParish ? parish_label(currentParish) : 'la parroquia actual';
   const allChosen = parishes.length > 0 && parishes.every((parish) => values.chosenParishes.includes(parish.id));
 
   function setText(key: TextKey, value: string) {
@@ -201,7 +203,7 @@ export function SacramentSearchForm({ isLoading, godparentLabel, parishes, curre
     const ids = chosenParishIds(values, currentParishId);
     // Sin ninguna marcada se busca en la actual, como si la casilla no estuviera marcada.
     if (allChosen && ids.length > 0) where = 'en todas las parroquias';
-    else if (ids.length > 0) where = 'en ' + parishes.filter((parish) => ids.includes(parish.id)).map((parish) => parish.nombre).join(', ');
+    else if (ids.length > 0) where = 'en ' + parishes.filter((parish) => ids.includes(parish.id)).map(parish_label).join(', ');
 
     const filled = parts.filter(Boolean);
     if (filled.length === 0) return `Se buscarán todas las partidas ${where}.`;
@@ -341,7 +343,7 @@ export function SacramentSearchForm({ isLoading, godparentLabel, parishes, curre
                               onChange={() => toggleParish(parish.id)}
                               className="h-4 w-4 accent-darker-app"
                             />
-                            {parish.nombre}
+                            {parish_label(parish)}
                             {parish.id === currentParishId && <span className="text-xs font-bold text-darker-app">actual</span>}
                           </label>
                         ))}

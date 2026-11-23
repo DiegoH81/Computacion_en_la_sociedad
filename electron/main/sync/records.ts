@@ -1,4 +1,5 @@
 import type { Minister, Sacrament } from '../../../shared/models';
+import { read_staff_history_data } from '../models/staff_history';
 import type { MinisterData, PersonCorrection, PersonData, RecordData, SyncEntity, UserData } from '../../../shared/sync';
 import type { LocalDatabase } from '../db/database';
 import { detail_columns, PERSON_COLUMNS } from '../../../shared/record_fields';
@@ -35,9 +36,11 @@ export function set_server_version(db: LocalDatabase, entity: SyncEntity, client
 // Local work
 export function read_local_minister(db: LocalDatabase, client_id: string): MinisterData
 {
-	return db
+	const minister = db
 		.prepare('SELECT client_id, parroquia_id, titulo, nombre, apellido_paterno, apellido_materno, activo FROM ministros WHERE client_id = ?')
 		.get(client_id) as MinisterData;
+
+	return { ...minister, historial: read_staff_history_data(db, 'ministro', client_id) };
 }
 
 export function read_local_user(db: LocalDatabase, client_id: string): UserData
@@ -50,7 +53,7 @@ export function read_local_user(db: LocalDatabase, client_id: string): UserData
 		)
 		.get(client_id) as UserData;
 
-	return row;
+	return { ...row, historial: read_staff_history_data(db, 'usuario', client_id) };
 }
 
 export function read_local_record(db: LocalDatabase, client_id: string): RecordData

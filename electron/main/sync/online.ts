@@ -1,5 +1,5 @@
 import type { Parish } from '../../../shared/models';
-import type { ChangeResult, LoginResponse, MembershipData, MinisterData, PullPage, RecordData, SyncChange, SyncEntity, UserData } from '../../../shared/sync';
+import type { ChangeResult, LoginResponse, MembershipData, MinisterData, PullPage, RecordData, StaffHistoryData, SyncChange, SyncEntity, UserData } from '../../../shared/sync';
 import { LOGIN_TIMEOUT_MS, REQUEST_TIMEOUT_MS } from '../utils/config';
 import { server_url } from '../utils/server_address';
 import { ServiceError } from '../utils/errors';
@@ -12,6 +12,9 @@ export interface ReferenceData
 	ministros: (MinisterData & { id: number })[];
 	usuarios: (UserData & { id: number })[];
 	usuario_parroquias?: MembershipData[];
+	/** Las filas nuevas del historial de ministros y cuentas, y hasta qué id llegan. */
+	historial_ministros_cuentas?: StaffHistoryData[];
+	historial_cursor?: number;
 }
 
 
@@ -78,9 +81,11 @@ export function request_login(request: RemoteRequest, username: string, password
 	return request<LoginResponse>('/api/auth/login', { method: 'POST', body: { username: username, password: password }, timeoutMs: LOGIN_TIMEOUT_MS });
 }
 
-export function get_reference(request: RemoteRequest, token: string): Promise<ReferenceData>
+export function get_reference(request: RemoteRequest, token: string, history_since: number = 0): Promise<ReferenceData>
 {
-	return request<ReferenceData>('/api/reference', { token: token });
+	// La primera vez (y con servidores sin este dato) la ruta va sin parámetro.
+	const path = history_since > 0 ? `/api/reference?historial_desde=${history_since}` : '/api/reference';
+	return request<ReferenceData>(path, { token: token });
 }
 
 export function push_changes(request: RemoteRequest, token: string, changes: SyncChange[]): Promise<{ resultados: ChangeResult[] }>

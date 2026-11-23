@@ -325,6 +325,47 @@ describe('ministros', () => {
 
     expect(r).toMatchObject({ estado: 'rechazado' });
   });
+
+  it('guarda su historial una sola vez, a nombre del ministro y de su parroquia, y lo entrega por cursor', async () => {
+    const token = await tokenParish1();
+    const fila = (client_id: string, evento: 'creado' | 'editado') => ({
+      client_id,
+      // La PC no decide de quién ni de qué parroquia es la fila: eso sale del cambio.
+      parroquia_id: 2,
+      entidad: 'usuario' as const,
+      entidad_client_id: 'otro',
+      usuario_client_id: 'cuenta-p1',
+      evento,
+      detalle: evento === 'editado' ? 'Nombre: Luis → Lucho' : null,
+      fecha: '2026-11-22T10:00:00.000Z',
+    });
+
+    await push(token, [cambio({ ...ministro(), historial: [fila('h-1', 'creado')] }, null, 'a')]);
+    // Al reenviar, la PC manda todo su historial: la fila que ya estaba no se repite.
+    await push(token, [cambio({ ...ministro({ nombre: 'Lucho' }), historial: [fila('h-1', 'creado'), fila('h-2', 'editado')] }, 1, 'b')]);
+
+    const filas = await db()
+      .prepare('SELECT client_id, parroquia_id, entidad, entidad_client_id, evento FROM historial_ministros_cuentas ORDER BY id')
+      .all();
+    expect(filas.results).toEqual([
+      { client_id: 'h-1', parroquia_id: 1, entidad: 'ministro', entidad_client_id: 'ministro-2', evento: 'creado' },
+      { client_id: 'h-2', parroquia_id: 1, entidad: 'ministro', entidad_client_id: 'ministro-2', evento: 'editado' },
+    ]);
+
+    const todo = (await (await api('/api/reference', token)).json()) as { historial_ministros_cuentas: unknown[]; historial_cursor: number };
+    expect(todo.historial_ministros_cuentas).toHaveLength(2);
+    const nuevo = (await (await api(`/api/reference?historial_desde=${todo.historial_cursor}`, token)).json()) as typeof todo;
+    expect(nuevo.historial_ministros_cuentas).toHaveLength(0);
+    expect(nuevo.historial_cursor).toBe(todo.historial_cursor);
+  });
+
+  it('un historial con un evento desconocido rechaza el cambio', async () => {
+    const malo = { ...ministro(), historial: [{ client_id: 'h-1', evento: 'borrado', fecha: '2026-11-22T10:00:00.000Z' }] } as unknown as MinisterData;
+    const [r] = await push(await tokenParish1(), [cambio(malo, null)]);
+
+    expect(r).toMatchObject({ estado: 'rechazado' });
+    expect(await count('historial_ministros_cuentas')).toBe(0);
+  });
 });
 
 describe('descargar', () => {

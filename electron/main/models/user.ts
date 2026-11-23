@@ -1,6 +1,7 @@
 import type { ParishRole, Role, UserParish } from '../../../shared/sync';
 import type { Actor, TargetUser } from '../../../shared/users';
 import type { LocalDatabase } from '../db/database';
+import { parish_label_sql } from '../../../shared/parish_label';
 
 export interface User
 {
@@ -33,7 +34,7 @@ export function read_user_parishes(db: LocalDatabase, user_id: number): UserPari
 {
 	return db
 		.prepare(
-			`SELECT m.parroquia_id AS id, p.nombre, m.rol
+			`SELECT m.parroquia_id AS id, ${parish_label_sql('p')} AS nombre, m.rol
 			 FROM membresias m
 			 JOIN parroquias p ON p.id = m.parroquia_id
 			 WHERE m.usuario_id = ?

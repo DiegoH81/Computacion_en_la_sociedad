@@ -1,4 +1,5 @@
 import type { ChangeResult, MinisterData, PullPage, RecordData, SyncChange, SyncEntity, UserData } from '../../../shared/sync';
+import { save_downloaded_staff_history } from '../models/staff_history';
 import type { LocalDatabase } from '../db/database';
 import { current_session, refresh_working_parish } from '../models/session';
 import { PUSH_BATCH_SIZE, SYNC_KEYS } from '../utils/config';
@@ -55,6 +56,10 @@ export function save_reference_data(db: LocalDatabase, data: ReferenceData): voi
 			save_membership.run(membership);
 
 		db.exec('DELETE FROM credenciales_locales WHERE usuario_id IN (SELECT id FROM usuarios WHERE activo <> 1)');
+
+		save_downloaded_staff_history(db, data.historial_ministros_cuentas ?? []);
+		if (data.historial_cursor !== undefined)
+			set_sync_value(db, SYNC_KEYS.staff_history_cursor, String(data.historial_cursor));
 	});
 
 	save_all();
@@ -62,7 +67,8 @@ export function save_reference_data(db: LocalDatabase, data: ReferenceData): voi
 
 export async function refresh_reference(db: LocalDatabase, request: RemoteRequest, token: string): Promise<void>
 {
-	const data = await get_reference(request, token);
+	const since = Number(get_sync_value(db, SYNC_KEYS.staff_history_cursor) ?? 0);
+	const data = await get_reference(request, token, since);
 	save_reference_data(db, data);
 	refresh_working_parish(db);
 }

@@ -3,13 +3,14 @@ import type { User } from '../../../shared/models';
 import type { ParishRole } from '../../../shared/sync';
 import { ROLE_LABELS } from '../../lib/permissions';
 import { FORM_CONTROL_CLASS } from '../ui/FormInput';
+import { parish_label } from '../../../shared/parish_label';
 
 // Las parroquias donde trabaja una cuenta. La de origen no cambia; las adicionales las agrega, cambia
 // y quita el administrador general. Cada acción se hace en el servidor al momento (necesita internet).
 
 interface UserParishesDialogProps {
   user: User;
-  parishes: Array<{ id: number; nombre: string }>;
+  parishes: Array<{ id: number; nombre: string; ubicacion?: string | null }>;
   onSetParish: (parishId: number, rol: ParishRole) => Promise<string | null>;
   onRemoveParish: (parishId: number) => Promise<string | null>;
   onMakePrincipal: (parishId: number) => Promise<string | null>;
@@ -133,7 +134,7 @@ export function UserParishesDialog({ user, parishes, onSetParish, onRemoveParish
                 <option value="">Seleccione una parroquia</option>
                 {available.map((parish) => (
                   <option key={parish.id} value={parish.id}>
-                    {parish.nombre}
+                    {parish_label(parish)}
                   </option>
                 ))}
               </select>

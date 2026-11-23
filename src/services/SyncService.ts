@@ -1,3 +1,4 @@
+import type { ConflictDetail } from '../../shared/models';
 import { localRequest } from '../lib/localClient';
 
 export type ConnectionMode = 'en-linea' | 'sin-conexion' | 'requiere-login' | 'error';
@@ -35,6 +36,11 @@ export const SyncService = {
 
   resolve(entidad: string, client_id: string, eleccion: ConflictChoice): Promise<SyncStatus> {
     return localRequest<SyncStatus>('sync.resolve', { entidad, client_id, eleccion });
+  },
+
+  /** Las dos versiones de un registro en conflicto (necesita internet; solo administradores). */
+  conflictDetail(entidad: string, client_id: string): Promise<ConflictDetail> {
+    return localRequest<ConflictDetail>('sync.conflictDetail', { entidad, client_id });
   },
 
   dismissNotice(): Promise<unknown> {

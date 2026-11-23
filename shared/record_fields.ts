@@ -17,7 +17,7 @@ export interface FieldChange
 	valor_nuevo: string | null;
 }
 
-export const NOTES_MAX_LENGTH = 350;
+export const NOTES_MAX_LENGTH = 875;
 
 export const SACRAMENT_FIELDS: readonly FieldInfo[] =
 [

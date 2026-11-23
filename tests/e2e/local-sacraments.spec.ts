@@ -161,6 +161,15 @@ test('confirmación: conserva fecha aproximada y DNI, y se puede anular con moti
   await window.getByRole('button', { name: 'Confirmar anulación' }).click();
   await expect(window.getByRole('cell', { name: 'Anulada', exact: true })).toBeVisible();
 
+  // Una partida anulada solo se ve: "Ver" en vez de "Editar", todo bloqueado, y no se imprime.
+  await expect(window.getByRole('button', { name: 'Imprimir', exact: true })).toBeDisabled();
+  await window.getByRole('button', { name: 'Ver', exact: true }).click();
+  const viewDialog = window.getByRole('dialog', { name: 'Ver partida anulada' });
+  await expect(field(window, 'Padrino')).toBeDisabled();
+  await expect(viewDialog.getByRole('button', { name: /Guardar/ })).toHaveCount(0);
+  await viewDialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await expect(viewDialog).toBeHidden();
+
   // Búsqueda avanzada, en su propia ventana: por número de registro y estado.
   await window.getByRole('button', { name: /Búsqueda avanzada/ }).click();
   const advanced = window.getByRole('dialog', { name: 'Búsqueda avanzada' });
@@ -669,6 +678,7 @@ test('importación: el Excel del sistema anterior se revisa, se importa una sola
     }, file);
 
   await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Exportar e importar' }).click();
   await window.getByRole('button', { name: 'Importar Excel del sistema anterior' }).click();
   const dialog = window.getByRole('dialog', { name: 'Importar Excel del sistema anterior' });
 
@@ -690,6 +700,15 @@ test('importación: el Excel del sistema anterior se revisa, se importa una sola
   await expect(dialog).toContainText('Ya están en el sistema, no se importan: 3');
   await expect(dialog.getByRole('button', { name: 'Importar 0 partidas' })).toBeDisabled();
   await dialog.getByRole('button', { name: 'Cerrar' }).click();
+
+  // En "Modificaciones" la importación es una sola línea, y los celebrantes nuevos del Excel también salen.
+  await window.getByRole('button', { name: 'Modificaciones' }).click();
+  await expect(window.getByRole('row', { name: /Importó del sistema anterior.*3 partidas/ })).toBeVisible();
+  await expect(window.getByRole('row', { name: /Registró al ministro.*Desde el Excel del sistema anterior/ }).first()).toBeVisible();
+  await window.getByLabel('Tipo').selectOption('ministros');
+  await window.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await expect(window.getByRole('row', { name: /Importó del sistema anterior/ })).toHaveCount(0);
+  await window.getByRole('button', { name: 'Volver' }).first().click();
 
   // El matrimonio queda en el libro con su nombre ("M61"), con el celebrante del Excel.
   await window.getByRole('button', { name: 'Volver' }).first().click();
@@ -742,11 +761,11 @@ test('imprimir sobre el formato: solo los datos, en su lugar, con el ajuste de e
   await field(window, 'Nombres').fill('Formatina');
   await field(window, 'Padrino').fill('Dionisio Quispe');
   await window.getByRole('button', { name: 'Añadir notas marginales' }).click();
-  // Una anotación casi del largo máximo (350 caracteres): el formulario no deja escribir más.
+  // Una anotación casi del largo máximo (875 caracteres): el formulario no deja escribir más.
   const notesBox = window.getByRole('textbox', { name: 'Anotaciones', exact: true });
-  await notesBox.fill('Nota marginal larga. '.repeat(16));
-  await expect(window.getByText('336 / 350 caracteres')).toBeVisible();
-  await expect(notesBox).toHaveAttribute('maxlength', '350');
+  await notesBox.fill('Nota marginal larga. '.repeat(41));
+  await expect(window.getByText('861 / 875 caracteres')).toBeVisible();
+  await expect(notesBox).toHaveAttribute('maxlength', '875');
   await save(window);
 
   const openPrint = async () => {
@@ -822,6 +841,7 @@ test('respaldo: se exporta con contraseña y, en una PC nueva, se restaura desde
   }, backupFile);
   await window.getByRole('button', { name: 'Volver' }).first().click();
   await window.getByRole('button', { name: 'Configuración' }).click();
+  await window.getByRole('button', { name: 'Exportar e importar' }).click();
   await window.getByRole('button', { name: 'Exportar respaldo' }).click();
   const exportDialog = window.getByRole('dialog', { name: 'Exportar respaldo' });
   await exportDialog.getByLabel('Contraseña del respaldo').fill('clave-respaldo');
@@ -829,10 +849,23 @@ test('respaldo: se exporta con contraseña y, en una PC nueva, se restaura desde
   await exportDialog.getByRole('button', { name: 'Elegir dónde guardar' }).click();
   await expect(exportDialog.getByText(/Respaldo guardado: \d+ partidas\. Incluye 1 cambio pendiente de subir/)).toBeVisible();
   expect(readFileSync(backupFile, 'utf8')).not.toContain('Respaldino');
-  // Al lado, el Excel para consultar; y en la ventana, quién exportó.
-  expect(existsSync(path.join(userData, 'prueba.xlsx'))).toBe(true);
-  await expect(exportDialog.getByRole('cell', { name: 'Exportó' })).toBeVisible();
+  // En la ventana, quién exportó. El Excel ya no se guarda al lado: tiene su propio botón.
+  expect(existsSync(path.join(userData, 'prueba.xlsx'))).toBe(false);
+  await expect(exportDialog.getByRole('cell', { name: 'Exportó respaldo' })).toBeVisible();
   await expect(exportDialog.getByRole('cell', { name: /parroco1/ })).toBeVisible();
+  await exportDialog.getByRole('button', { name: 'Cerrar' }).click();
+
+  // "Exportar Excel": las partidas de la parroquia, para consultar.
+  const excelFile = path.join(userData, 'partidas.xlsx');
+  await app!.evaluate(({ dialog }, file) => {
+    dialog.showSaveDialog = (async () => ({ canceled: false, filePath: file })) as typeof dialog.showSaveDialog;
+  }, excelFile);
+  await window.getByRole('button', { name: 'Exportar e importar' }).click();
+  const transfer = window.getByRole('dialog', { name: 'Exportar e importar' });
+  await transfer.getByRole('button', { name: /Exportar Excel/ }).click();
+  await expect(transfer.getByRole('status')).toContainText(/Excel guardado: \d+ partidas\. Archivo: partidas\.xlsx\./);
+  expect(existsSync(excelFile)).toBe(true);
+  await transfer.getByRole('button', { name: 'Cerrar exportar e importar' }).click();
   await app!.close();
 
   // Otra PC, vacía: restaura desde el login y entra con la misma cuenta.
