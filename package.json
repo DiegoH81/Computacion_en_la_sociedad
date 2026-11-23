@@ -1,5 +1,6 @@
 {
   "name": "computacion-en-la-sociedad",
+  "productName": "Registro Sacramental",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -70,7 +71,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": true
     }
   }
 }

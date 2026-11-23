@@ -78,7 +78,7 @@ cd worker; npm install; cd ..
 La app usa la primera dirección que encuentra, en este orden:
 
 1. La variable de entorno `PRELATURA_API_URL`.
-2. `%APPDATA%\computacion-en-la-sociedad\configuracion.json`: sirve para cambiarla en una sola PC.
+2. `%APPDATA%\Registro Sacramental\configuracion.json`: sirve para cambiarla en una sola PC.
 3. `resources/instalador/configuracion.json`: viene con el instalador y es la que usan todas las PCs.
 4. La compilada en la app (`VITE_WORKER_URL` en `.env.production.local`).
 5. `http://localhost:8787`.
@@ -156,7 +156,7 @@ node src/scripts/recuperar-admin.mjs --usuario=admin_general --remote --env=prue
 node src/scripts/recuperar-admin.mjs --usuario=admin_general --local                   # Worker local
 ```
 
-- Pone una **contraseña nueva aleatoria** y la muestra una sola vez.
+- Pone una contraseña nueva aleatoria y la muestra una sola vez.
 - Si la cuenta estaba deshabilitada, la habilita.
 - Con `--principal`, además le devuelve la marca de principal.
 - Queda anotado en "Modificaciones".

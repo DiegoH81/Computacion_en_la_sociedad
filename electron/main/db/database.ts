@@ -129,7 +129,7 @@ function move_with_extra_files(from: string, to: string): void
 	}
 }
 
-function remove_with_extra_files(file: string): void
+export function remove_with_extra_files(file: string): void
 {
 	for (const suffix of ['', '-wal', '-shm'])
 		rmSync(file + suffix, { force: true });

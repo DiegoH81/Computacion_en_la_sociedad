@@ -14,7 +14,13 @@ export const SYNC_KEYS =
 	notice: 'aviso',
 	key_registered: 'clave_registrada',
 	staff_history_cursor: 'cursor_historial',
+	data_version: 'version_datos',
 } as const;
+
+// Subirlo solo cuando un instalador trae datos incompatibles con los de antes (otro paquete
+// inicial, otros ids de usuario). Al abrir, una base con un número menor se borra y se vuelve
+// a cargar el paquete inicial. OJO: se pierden los cambios sin subir de esa PC.
+export const DATA_VERSION = 1;
 
 
 

@@ -1,7 +1,10 @@
 import { app, safeStorage } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { get_sync_value, set_sync_value } from '../sync/queue';
+import { DATA_VERSION, SYNC_KEYS } from '../utils/config';
 import { ServiceError } from '../utils/errors';
-import { local_paths, open_or_detect, type KeyStore, type LocalDatabase, type LocalPaths } from './database';
+import * as logger from '../utils/logger';
+import { local_paths, open_or_detect, remove_with_extra_files, type KeyStore, type LocalDatabase, type LocalPaths, type OpenResult } from './database';
 
 let database: LocalDatabase | null = null;
 let database_key: string | null = null;
@@ -48,12 +51,38 @@ export function database_paths(): LocalPaths
 // Open DB at startup
 
 
+function is_old_data(db: LocalDatabase): boolean
+{
+	const saved = Number(get_sync_value(db, SYNC_KEYS.data_version) ?? 0);
+	if (saved >= DATA_VERSION)
+		return false;
+
+	// A new empty DB has no number yet, but there is nothing to delete.
+	const has_users = db.prepare('SELECT COUNT(*) FROM usuarios').pluck().get() as number;
+	return has_users > 0;
+}
+
+// Delete a DB left by an older installer whose data no longer matches the server.
+function open_current_data(paths: LocalPaths): OpenResult
+{
+	const result = open_or_detect(paths, KEY_STORE);
+	if (result.status !== 'open' || !is_old_data(result.db))
+		return result;
+
+	logger.info('La base local es de una versión anterior de los datos: se borra y se carga el paquete inicial.');
+	result.db.close();
+	remove_with_extra_files(paths.database);
+
+	return open_or_detect(paths, KEY_STORE);
+}
+
 export function open_at_startup(): void
 {
-	const result = open_or_detect(database_paths(), KEY_STORE);
+	const result = open_current_data(database_paths());
 
 	if (result.status === 'open')
 	{
+		set_sync_value(result.db, SYNC_KEYS.data_version, String(DATA_VERSION));
 		database = result.db;
 		database_key = result.key;
 	}
@@ -87,6 +116,8 @@ export function database_needs_recovery(): boolean
 
 export function use_database(db: LocalDatabase, key: string): void
 {
+	// It was rebuilt from the server, so its data is current.
+	set_sync_value(db, SYNC_KEYS.data_version, String(DATA_VERSION));
 	database = db;
 	database_key = key;
 	needs_recovery = false;
